@@ -12,5 +12,4 @@ export * as Session from './session';
 
 // Cross-domain utilities and types
 export type { LiteratureItem } from './literature';
-export type { ResearchTreeNode, ResearchTree } from './research-tree';
 export type { ResearchSession, DialogueMessage } from './session';

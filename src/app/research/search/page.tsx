@@ -1,4 +1,4 @@
-import { MainLayout } from '@/components/features/layout';
+import { MainLayout } from '@/components/layout';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/components/ui';
 
 export default function SearchPage() {

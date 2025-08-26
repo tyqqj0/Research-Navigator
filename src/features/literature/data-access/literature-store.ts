@@ -56,7 +56,7 @@ interface LiteratureState {
 
 export const useLiteratureStore = create<LiteratureState>()(
     devtools(
-        (set, get) => ({
+        (set) => ({
             // 初始状态
             items: [],
             collections: [],

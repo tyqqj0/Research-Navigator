@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { SidebarProps } from '@/types';
+import { SidebarProps, SidebarItem } from '@/types';
 
 export const Sidebar: React.FC<SidebarProps> = ({
     collapsed = false,
@@ -27,14 +27,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setExpandedItems(newExpanded);
     };
 
-    const isActive = (item: any) => {
+    const isActive = (item: SidebarItem) => {
         if (item.path) {
             return pathname === item.path;
         }
         return false;
     };
 
-    const renderSidebarItem = (item: any, level = 0) => {
+    const renderSidebarItem = (item: SidebarItem, level = 0) => {
         const hasChildren = item.children && item.children.length > 0;
         const isExpanded = expandedItems.has(item.key);
         const active = isActive(item);
@@ -115,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {/* 渲染子项 */}
                 {hasChildren && isExpanded && !collapsed && (
                     <div className="mt-1">
-                        {item.children.map((child: any) => renderSidebarItem(child, level + 1))}
+                        {item.children?.map((child: SidebarItem) => renderSidebarItem(child, level + 1))}
                     </div>
                 )}
             </div>
@@ -158,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {/* 导航项 */}
             <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-                {items.map(item => renderSidebarItem(item))}
+                {items?.map(item => renderSidebarItem(item))}
             </nav>
         </aside>
     );

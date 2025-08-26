@@ -4,7 +4,7 @@
 
 'use client';
 
-import { Palette, Globe, Eye, Bug, Image } from 'lucide-react';
+import { Palette, Eye, Bug } from 'lucide-react';
 import {
     Card,
     CardContent,
@@ -64,7 +64,7 @@ export function UISettingsTab() {
                         <Label htmlFor="theme">主题模式</Label>
                         <Select
                             value={settings.theme}
-                            onValueChange={(value) => updateSettings({ theme: value as any })}
+                            onValueChange={(value: string) => updateSettings({ theme: value as 'light' | 'dark' | 'system' })}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="选择主题" />

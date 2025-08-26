@@ -2,5 +2,4 @@
 // 会话领域核心模块
 
 export * from './session-store';
-export * from './session-repository';
 export * from './session-types';

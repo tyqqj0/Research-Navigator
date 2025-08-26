@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
     Download,
     Upload,
@@ -25,7 +25,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -55,31 +55,36 @@ export function BackupSettingsTab() {
     const [backups, setBackups] = useState<BackupInfo[]>([]);
     const [backupLabel, setBackupLabel] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [stats, setStats] = useState<any>(null);
+    const [stats, setStats] = useState<{
+        totalProviders: number;
+        configuredProviders: number;
+        enabledFeatures: string[];
+        lastUpdated: string;
+    } | null>(null);
 
-    // 加载备份列表
-    useEffect(() => {
-        loadBackups();
-        loadStats();
-    }, []);
-
-    const loadBackups = async () => {
+    const loadBackups = useCallback(async () => {
         try {
             const backupList = await settingsRepository.getBackups();
             setBackups(backupList);
         } catch (error) {
             console.error('Failed to load backups:', error);
         }
-    };
+    }, []);
 
-    const loadStats = async () => {
+    const loadStats = useCallback(async () => {
         try {
             const settingsStats = await settingsRepository.getSettingsStats(settings);
             setStats(settingsStats);
         } catch (error) {
             console.error('Failed to load stats:', error);
         }
-    };
+    }, [settings]);
+
+    // 加载备份列表
+    useEffect(() => {
+        loadBackups();
+        loadStats();
+    }, [loadBackups, loadStats]);
 
     const handleCreateBackup = async () => {
         if (!backupLabel.trim()) return;
@@ -276,7 +281,7 @@ export function BackupSettingsTab() {
                                                 <AlertDialogHeader>
                                                     <AlertDialogTitle>恢复备份</AlertDialogTitle>
                                                     <AlertDialogDescription>
-                                                        确定要恢复备份 "{backup.label}" 吗？当前设置将被覆盖。
+                                                        确定要恢复备份 &ldquo;{backup.label}&rdquo; 吗？当前设置将被覆盖。
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
@@ -299,7 +304,7 @@ export function BackupSettingsTab() {
                                                 <AlertDialogHeader>
                                                     <AlertDialogTitle>删除备份</AlertDialogTitle>
                                                     <AlertDialogDescription>
-                                                        确定要删除备份 "{backup.label}" 吗？此操作无法撤销。
+                                                        确定要删除备份 &ldquo;{backup.label}&rdquo; 吗？此操作无法撤销。
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>

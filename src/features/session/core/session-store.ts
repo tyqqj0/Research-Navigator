@@ -127,10 +127,11 @@ export const useSessionStore = create<SessionState>()(
 
                     if (session) {
                         // Update last accessed time
-                        const updatedSession = {
-                            ...session,
-                            lastAccessedAt: new Date()
-                        };
+                        // Update last accessed time in store
+                        // const updatedSession = {
+                        //     ...session,
+                        //     lastAccessedAt: new Date()
+                        // };
                         get().updateSession(session.id, { lastAccessedAt: new Date() });
                     }
                 },
@@ -319,7 +320,7 @@ export const useSessionStore = create<SessionState>()(
                                 name: nextPhase,
                                 startedAt: new Date(),
                                 progress: 0,
-                                completedAt: currentPhase !== 'completed' ? undefined : new Date()
+                                completedAt: nextPhase === 'completed' ? new Date() : undefined
                             },
                             updatedAt: new Date()
                         };

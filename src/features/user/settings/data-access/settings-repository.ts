@@ -88,6 +88,7 @@ export class SettingsRepository {
             const backup = JSON.parse(backupData);
             // 移除备份信息，返回纯设置数据
             const { backupInfo, ...settings } = backup;
+            void backupInfo; // Explicitly mark as intentionally unused
 
             return settings as UserSettings;
         } catch (error) {
@@ -162,6 +163,7 @@ export class SettingsRepository {
                     if (this.validateImportedSettings(importedData)) {
                         // 移除导入信息，返回纯设置数据
                         const { exportInfo, backupInfo, ...settings } = importedData;
+                        void exportInfo; void backupInfo; // Explicitly mark as intentionally unused
                         resolve(settings as UserSettings);
                     } else {
                         console.error('Invalid settings format');
@@ -180,7 +182,7 @@ export class SettingsRepository {
     /**
      * 验证导入的设置格式
      */
-    private validateImportedSettings(data: any): boolean {
+    private validateImportedSettings(data: unknown): boolean {
         // 基础结构验证
         if (!data || typeof data !== 'object') {
             return false;
@@ -220,7 +222,7 @@ export class SettingsRepository {
         );
 
         const configuredProviders = aiProviders.filter(provider => {
-            const config = settings.ai[provider as keyof typeof settings.ai] as any;
+            const config = settings.ai[provider as keyof typeof settings.ai] as Record<string, unknown>;
             return config && (config.apiKey || config.apiProxy);
         });
 

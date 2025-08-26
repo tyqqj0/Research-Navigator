@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { cn } from '@/lib/utils';
-import { LayoutProps, SidebarItem } from '@/types';
+import { LayoutProps, SidebarItem, MenuActionItem } from '@/types';
 
 interface MainLayoutProps extends LayoutProps {
     sidebarItems?: SidebarItem[];
@@ -16,7 +16,7 @@ interface MainLayoutProps extends LayoutProps {
     user?: {
         name: string;
         avatar?: string;
-        menu?: any[];
+        menu?: MenuActionItem[];
     };
 }
 

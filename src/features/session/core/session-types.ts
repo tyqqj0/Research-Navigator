@@ -139,7 +139,7 @@ export interface SessionEvent {
     sessionId: string;
     type: 'created' | 'phase_changed' | 'node_added' | 'literature_added' | 'message_sent' | 'paused' | 'resumed' | 'completed';
 
-    data: Record<string, any>;
+    data: Record<string, unknown>;
     timestamp: Date;
 }
 
@@ -149,8 +149,8 @@ export interface SessionBackup {
 
     // Snapshot data
     sessionData: ResearchSession;
-    treeData?: any;  // Tree export data
-    literatureData?: any;  // Literature export data
+    treeData?: Record<string, unknown>;  // Tree export data
+    literatureData?: Record<string, unknown>;  // Literature export data
 
     // Backup metadata
     backupType: 'manual' | 'auto' | 'milestone';

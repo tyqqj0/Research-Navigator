@@ -1,0 +1,52 @@
+/**
+ * Global Types - 全局类型定义
+ */
+
+import { ReactNode } from 'react';
+
+// Layout Types
+export interface LayoutProps {
+    children: ReactNode;
+    className?: string;
+}
+
+export interface HeaderProps {
+    title?: string;
+    logo?: ReactNode;
+    actions?: ReactNode;
+    user?: {
+        name: string;
+        avatar?: string;
+        menu?: MenuActionItem[];
+    };
+    theme?: 'light' | 'dark';
+    className?: string;
+}
+
+export interface SidebarItem {
+    key: string;
+    label: string;
+    icon?: ReactNode;
+    path?: string;
+    children?: SidebarItem[];
+    disabled?: boolean;
+    badge?: string | number;
+}
+
+export interface SidebarProps {
+    collapsed?: boolean;
+    onCollapse?: (collapsed: boolean) => void;
+    width?: number;
+    theme?: 'light' | 'dark';
+    items?: SidebarItem[];
+    className?: string;
+}
+
+export interface MenuActionItem {
+    key: string;
+    label: string;
+    icon?: ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+    href?: string;
+}

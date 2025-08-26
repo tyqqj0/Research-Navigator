@@ -1,4 +1,4 @@
-import { MainLayout } from '@/components/features/layout';
+import { MainLayout } from '@/components/layout';
 import { Button, Card, CardContent, Input } from '@/components/ui';
 
 export default function ChatPage() {

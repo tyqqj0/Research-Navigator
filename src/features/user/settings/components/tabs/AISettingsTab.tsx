@@ -23,7 +23,7 @@ import {
     SelectTrigger,
     SelectValue
 } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
+
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -97,7 +97,7 @@ export function AISettingsTab() {
                             <Label htmlFor="provider">AI 提供商</Label>
                             <Select
                                 value={settings.provider}
-                                onValueChange={(value) => updateSettings({ provider: value as any })}
+                                onValueChange={(value: string) => updateSettings({ provider: value })}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="选择AI提供商" />
@@ -121,7 +121,7 @@ export function AISettingsTab() {
                             <Label htmlFor="mode">运行模式</Label>
                             <Select
                                 value={settings.mode}
-                                onValueChange={(value) => updateSettings({ mode: value as any })}
+                                onValueChange={(value: string) => updateSettings({ mode: value })}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="选择运行模式" />

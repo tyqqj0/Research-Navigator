@@ -117,7 +117,7 @@ export function deepClone<T>(obj: T): T {
 /**
  * 防抖函数
  */
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: unknown[]) => unknown>(
     func: T,
     wait: number,
     immediate = false
@@ -142,15 +142,15 @@ export function debounce<T extends (...args: any[]) => any>(
 /**
  * 节流函数
  */
-export function throttle<T extends (...args: any[]) => any>(
+export function throttle<T extends (...args: unknown[]) => unknown>(
     func: T,
     limit: number
 ): (...args: Parameters<T>) => void {
     let inThrottle: boolean;
 
-    return function executedFunction(...args: Parameters<T>) {
+    return (...args: Parameters<T>) => {
         if (!inThrottle) {
-            func.apply(this, args);
+            func(...args);
             inThrottle = true;
             setTimeout(() => (inThrottle = false), limit);
         }
@@ -339,15 +339,15 @@ export function sortBy<T>(
 /**
  * 获取嵌套对象属性值
  */
-export function get(obj: any, path: string, defaultValue?: any): any {
+export function get(obj: Record<string, unknown>, path: string, defaultValue?: unknown): unknown {
     const keys = path.split('.');
-    let result = obj;
+    let result: unknown = obj;
 
     for (const key of keys) {
         if (result == null || typeof result !== 'object') {
             return defaultValue;
         }
-        result = result[key];
+        result = (result as Record<string, unknown>)[key];
     }
 
     return result !== undefined ? result : defaultValue;
@@ -356,7 +356,7 @@ export function get(obj: any, path: string, defaultValue?: any): any {
 /**
  * 设置嵌套对象属性值
  */
-export function set(obj: any, path: string, value: any): void {
+export function set(obj: Record<string, unknown>, path: string, value: unknown): void {
     const keys = path.split('.');
     let current = obj;
 
@@ -365,7 +365,7 @@ export function set(obj: any, path: string, value: any): void {
         if (!(key in current) || typeof current[key] !== 'object') {
             current[key] = {};
         }
-        current = current[key];
+        current = current[key] as Record<string, unknown>;
     }
 
     current[keys[keys.length - 1]] = value;

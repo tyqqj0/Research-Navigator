@@ -4,7 +4,7 @@
 
 'use client';
 
-import { Search, Globe, Database, Settings2 } from 'lucide-react';
+import { Search, Settings2 } from 'lucide-react';
 import {
     Card,
     CardContent,
@@ -12,7 +12,7 @@ import {
     CardHeader,
     CardTitle
 } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -93,7 +93,7 @@ export function SearchSettingsTab() {
                                     <Label htmlFor="searchProvider">搜索引擎</Label>
                                     <Select
                                         value={settings.searchProvider}
-                                        onValueChange={(value) => updateSettings({ searchProvider: value as any })}
+                                        onValueChange={(value: string) => updateSettings({ searchProvider: value })}
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="选择搜索引擎" />
@@ -122,7 +122,7 @@ export function SearchSettingsTab() {
                                     <Label htmlFor="crawler">内容爬虫</Label>
                                     <Select
                                         value={settings.crawler}
-                                        onValueChange={(value) => updateSettings({ crawler: value as any })}
+                                        onValueChange={(value: string) => updateSettings({ crawler: value })}
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="选择爬虫" />

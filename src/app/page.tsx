@@ -1,6 +1,6 @@
 "use client";
 
-import { MainLayout } from '@/features/layout';
+import { MainLayout } from '@/components/layout';
 import {
   Button,
   Card,

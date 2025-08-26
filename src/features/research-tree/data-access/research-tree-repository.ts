@@ -153,9 +153,8 @@ export class ResearchTreeRepository {
     // MCTS iteration operations
     async getIterationsByTree(treeId: string): Promise<MCTSIteration[]> {
         return await db.iterations
-            .where('treeId')
-            .equals(treeId)
             .orderBy('iterationNumber')
+            .filter(iteration => iteration.treeId === treeId)
             .toArray();
     }
 
@@ -164,12 +163,12 @@ export class ResearchTreeRepository {
     }
 
     async getLastIteration(treeId: string): Promise<MCTSIteration | undefined> {
-        return await db.iterations
-            .where('treeId')
-            .equals(treeId)
+        const iterations = await db.iterations
             .orderBy('iterationNumber')
+            .filter(iteration => iteration.treeId === treeId)
             .reverse()
-            .first();
+            .toArray();
+        return iterations[0];
     }
 
     // Expansion operations

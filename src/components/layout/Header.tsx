@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HeaderProps } from '@/types';
@@ -12,7 +13,7 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
-import { SettingsDialog } from '@/features/user/settings';
+import { SettingsDialog } from '@/features/user/settings/components/SettingsDialog';
 
 export const Header: React.FC<HeaderProps> = ({
     title = 'Research Navigator',
@@ -74,9 +75,11 @@ export const Header: React.FC<HeaderProps> = ({
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" className="flex items-center space-x-2 h-auto p-2">
                                         {user.avatar ? (
-                                            <img
+                                            <Image
                                                 src={user.avatar}
                                                 alt={user.name}
+                                                width={32}
+                                                height={32}
                                                 className="h-8 w-8 rounded-full object-cover"
                                             />
                                         ) : (

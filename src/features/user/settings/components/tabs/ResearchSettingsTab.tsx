@@ -76,7 +76,7 @@ export function ResearchSettingsTab() {
                         <Label htmlFor="expansionStrategy">默认扩展策略</Label>
                         <Select
                             value={settings.defaultExpansionStrategy}
-                            onValueChange={(value) => updateSettings({ defaultExpansionStrategy: value as any })}
+                            onValueChange={(value: string) => updateSettings({ defaultExpansionStrategy: value })}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="选择扩展策略" />
@@ -107,7 +107,7 @@ export function ResearchSettingsTab() {
                         <Label htmlFor="maxTreeDepth">最大树深度</Label>
                         <div className="px-3">
                             <Slider
-                                value={[settings.maxTreeDepth]}
+                                value={[settings.maxTreeDepth || 10]}
                                 onValueChange={([value]) => updateSettings({ maxTreeDepth: value })}
                                 max={20}
                                 min={3}
@@ -200,7 +200,7 @@ export function ResearchSettingsTab() {
                         <Label htmlFor="autoSaveInterval">自动保存间隔 (秒)</Label>
                         <div className="px-3">
                             <Slider
-                                value={[settings.autoSaveInterval]}
+                                value={[settings.autoSaveInterval || 60]}
                                 onValueChange={([value]) => updateSettings({ autoSaveInterval: value })}
                                 max={300}
                                 min={10}
@@ -232,7 +232,7 @@ export function ResearchSettingsTab() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    {settings.maxTreeDepth > 15 && (
+                    {(settings.maxTreeDepth || 10) > 15 && (
                         <Alert>
                             <TreePine className="h-4 w-4" />
                             <AlertDescription>
@@ -251,7 +251,7 @@ export function ResearchSettingsTab() {
                         </Alert>
                     )}
 
-                    {settings.autoSaveInterval > 120 && (
+                    {(settings.autoSaveInterval || 60) > 120 && (
                         <Alert>
                             <Save className="h-4 w-4" />
                             <AlertDescription>

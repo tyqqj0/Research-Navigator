@@ -8,9 +8,6 @@ export * from './core';
 // export * from './integrations/literature-in-session';
 // export * from './integrations/research-in-session';
 
-// Layout Components
-export * from './layout';
-
 // Re-export commonly used types and utilities
 export type {
     ResearchSession,
@@ -22,8 +19,3 @@ export type {
 } from './core/session-types';
 
 export { useSessionStore } from './core/session-store';
-
-// Layout components
-export { MainLayout } from './layout/MainLayout';
-export { Header } from './layout/Header';
-export { Sidebar } from './layout/Sidebar';
