@@ -82,7 +82,7 @@ export interface SearchSettings {
 
 export interface UISettings {
     language: string;
-    theme: 'light' | 'dark' | 'system';
+    theme: 'light' | 'dark' | 'system' | 'custom';
     debug: 'enable' | 'disable';
     references: 'enable' | 'disable';
     citationImage: 'enable' | 'disable';

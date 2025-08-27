@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Image from 'next/image';
-import { Settings } from 'lucide-react';
+import { Settings, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { HeaderProps } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,6 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
-import { SettingsDialog } from '@/features/user/settings/components/SettingsDialog';
 
 export const Header: React.FC<HeaderProps> = ({
     title = 'Research Navigator',
@@ -23,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
     theme = 'light',
     className
 }) => {
-    const [settingsOpen, setSettingsOpen] = useState(false);
+    const router = useRouter();
     return (
         <header
             className={cn(
@@ -56,18 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                     )}
 
-                    {/* 设置按钮 */}
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setSettingsOpen(true)}
-                        className={cn(
-                            'h-8 w-8',
-                            theme === 'dark' && 'text-gray-300 hover:text-white'
-                        )}
-                    >
-                        <Settings className="h-4 w-4" />
-                    </Button>
+                    
 
                     {user && (
                         <div className="flex items-center space-x-3">
@@ -95,9 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
                                         )}>
                                             {user.name}
                                         </span>
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                        </svg>
+                                        <ChevronDown className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-56">
@@ -111,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
                                         使用帮助
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                                    <DropdownMenuItem onClick={() => router.push('/settings')}>
                                         <Settings className="mr-2 h-4 w-4" />
                                         设置
                                     </DropdownMenuItem>
@@ -125,12 +112,6 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
                 </div>
             </div>
-
-            {/* 设置对话框 */}
-            <SettingsDialog
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-            />
         </header>
     );
 };

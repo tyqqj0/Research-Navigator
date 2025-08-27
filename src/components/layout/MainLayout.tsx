@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { cn } from '@/lib/utils';
 import { LayoutProps, SidebarItem, MenuActionItem } from '@/types';
+import { useTheme } from '@/providers';
 
 interface MainLayoutProps extends LayoutProps {
     sidebarItems?: SidebarItem[];
@@ -32,20 +33,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     className
 }) => {
     const [collapsed, setCollapsed] = useState(sidebarCollapsed);
-    const [theme, setTheme] = useState<'light' | 'dark'>('light');
-
-    useEffect(() => {
-        // 检查系统主题偏好
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        setTheme(mediaQuery.matches ? 'dark' : 'light');
-
-        const handleChange = (e: MediaQueryListEvent) => {
-            setTheme(e.matches ? 'dark' : 'light');
-        };
-
-        mediaQuery.addEventListener('change', handleChange);
-        return () => mediaQuery.removeEventListener('change', handleChange);
-    }, []);
+    const { currentTheme } = useTheme();
 
     const handleSidebarCollapse = (newCollapsed: boolean) => {
         setCollapsed(newCollapsed);
@@ -200,15 +188,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                     path: '/settings/profile'
                 },
                 {
-                    key: 'preferences',
-                    label: '偏好设置',
-                    path: '/settings/preferences'
-                },
-                {
-                    key: 'integrations',
-                    label: '集成设置',
-                    path: '/settings/integrations'
+                    key: 'general',
+                    label: '通用设置',
+                    path: '/settings'
                 }
+
             ]
         }
     ];
@@ -225,7 +209,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 <Sidebar
                     collapsed={collapsed}
                     onCollapse={handleSidebarCollapse}
-                    theme={theme}
+                    theme={currentTheme}
                     items={activeSidebarItems}
                 />
             )}
@@ -237,7 +221,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                     title={headerTitle}
                     actions={headerActions}
                     user={user}
-                    theme={theme}
+                    theme={currentTheme}
                 />
 
                 {/* 主要内容 */}

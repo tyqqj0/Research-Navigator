@@ -1,26 +1,151 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ========== 全局主题CSS变量 ========== */
+/* 
+这些变量将由 ThemeProvider 动态设置
+不要在这里硬编码颜色值，改为使用主题系统
+*/
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+:root {
+  /* 字体系统 */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  
+  /* 默认主题变量 - 将被ThemeProvider覆盖 */
+  --color-background-primary: #ffffff;
+  --color-foreground-primary: #0f172a;
+  --color-accent: #3b82f6;
+  
+  /* 兼容性变量 - 保持向后兼容 */
+  --background: var(--color-background-primary);
+  --foreground: var(--color-foreground-primary);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ========== 应用主题 ========== */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-background-primary);
+  color: var(--color-foreground-primary);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ========== 主题工具类 ========== */
+/* 使用CSS变量的工具类，配合Tailwind使用 */
+
+.bg-theme-primary {
+  background-color: var(--color-background-primary);
+}
+
+.bg-theme-secondary {
+  background-color: var(--color-background-secondary);
+}
+
+.bg-theme-tertiary {
+  background-color: var(--color-background-tertiary);
+}
+
+.text-theme-primary {
+  color: var(--color-foreground-primary);
+}
+
+.text-theme-secondary {
+  color: var(--color-foreground-secondary);
+}
+
+.text-theme-tertiary {
+  color: var(--color-foreground-tertiary);
+}
+
+.border-theme-primary {
+  border-color: var(--color-border-primary);
+}
+
+.border-theme-secondary {
+  border-color: var(--color-border-secondary);
+}
+
+/* ========== 组件主题样式 ========== */
+
+/* Card 组件主题 */
+.card-themed {
+  background-color: var(--color-background-secondary);
+  border-color: var(--color-border-primary);
+  box-shadow: var(--shadow-md);
+}
+
+/* Button 组件主题 */
+.btn-themed-primary {
+  background-color: var(--color-accent);
+  color: var(--color-foreground-inverse);
+  border-color: var(--color-accent);
+}
+
+.btn-themed-secondary {
+  background-color: var(--color-background-secondary);
+  color: var(--color-foreground-primary);
+  border-color: var(--color-border-primary);
+}
+
+/* Input 组件主题 */
+.input-themed {
+  background-color: var(--color-background-primary);
+  color: var(--color-foreground-primary);
+  border-color: var(--color-border-primary);
+}
+
+.input-themed:focus {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+/* ========== 动画和过渡 ========== */
+* {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-in-out;
+}
+
+/* ========== 滚动条主题 ========== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-secondary);
+  border-radius: var(--radius-md);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}
+
+/* ========== 选择文本主题 ========== */
+::selection {
+  background-color: var(--color-accent);
+  color: var(--color-foreground-inverse);
+}
+
+/* ========== 调试样式 ========== */
+[data-theme] {
+  /* 确保主题属性被正确应用 */
+}
+
+/* 开发环境调试信息 */
+.theme-debug {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  padding: 8px 12px;
+  background: var(--color-background-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  z-index: 9999;
+  opacity: 0.8;
 }
