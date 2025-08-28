@@ -86,6 +86,42 @@ export interface UISettings {
     debug: 'enable' | 'disable';
     references: 'enable' | 'disable';
     citationImage: 'enable' | 'disable';
+
+    // 自定义主题配置
+    customTheme?: {
+        colorPresetName: string;  // 当前使用的颜色预设名称
+        isDarkMode: boolean;      // 是否为深色模式
+        customColors?: {          // 完全自定义的颜色（可选，覆盖预设）
+            // 背景色系统
+            background?: {
+                primary?: string;
+                secondary?: string;
+                tertiary?: string;
+                inverse?: string;
+            };
+            // 前景色/文本系统
+            foreground?: {
+                primary?: string;
+                secondary?: string;
+                tertiary?: string;
+                inverse?: string;
+            };
+            // 边框色系统
+            border?: {
+                primary?: string;
+                secondary?: string;
+                focus?: string;
+            };
+            // 功能色
+            accent?: string;
+            muted?: string;
+            destructive?: string;
+            success?: string;
+            warning?: string;
+            error?: string;
+            info?: string;
+        };
+    };
 }
 
 // ========== 研究设置 ==========

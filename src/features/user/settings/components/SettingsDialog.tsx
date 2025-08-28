@@ -37,7 +37,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 <DialogHeader className="px-6 py-4 border-b">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <Settings className="w-5 h-5 text-blue-600" />
+                            <Settings className="w-5 h-5 text-primary" />
                             <DialogTitle className="text-xl">设置</DialogTitle>
                         </div>
                         <Button

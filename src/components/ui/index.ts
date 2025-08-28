@@ -31,3 +31,7 @@ export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tool
 export { StatCard } from './stat-card';
 export { FeatureCard } from './feature-card';
 export { ActivityItem } from './activity-item';
+// export { ThemeShowcase } from './theme-showcase';
+
+// // Theme Utilities
+// export * from './theme-variants';

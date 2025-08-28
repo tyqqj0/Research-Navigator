@@ -5,7 +5,14 @@
  * 便于在 app/layout.tsx 中统一管理
  */
 
-export { ThemeProvider, useTheme, useThemeColors, useSystemTheme, getCSSVariable, setCSSVariable } from './ThemeProvider';
+export {
+    ThemeProvider as ThemeProvider,
+    useTheme as useTheme,
+    useSimpleThemeColors as useThemeColors,
+    useThemeCompat,
+    getSimpleCSSVariable as getCSSVariable,
+    setSimpleCSSVariable as setCSSVariable
+} from './ThemeProvider';
 
 // 未来可以添加更多提供者：
 // export { QueryClientProvider } from './QueryProvider';

@@ -64,7 +64,7 @@ export function ResearchSettingsTab() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <BookOpen className="w-5 h-5 text-blue-600" />
+                        <BookOpen className="w-5 h-5 text-primary" />
                         研究行为
                     </CardTitle>
                     <CardDescription>
@@ -131,7 +131,7 @@ export function ResearchSettingsTab() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-blue-600" />
+                        <Clock className="w-5 h-5 text-primary" />
                         时间管理
                     </CardTitle>
                     <CardDescription>
@@ -188,7 +188,7 @@ export function ResearchSettingsTab() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Save className="w-5 h-5 text-blue-600" />
+                        <Save className="w-5 h-5 text-primary" />
                         数据管理
                     </CardTitle>
                     <CardDescription>

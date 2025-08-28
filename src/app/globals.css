@@ -13,12 +13,49 @@
   
   /* 默认主题变量 - 将被ThemeProvider覆盖 */
   --color-background-primary: #ffffff;
-  --color-foreground-primary: #0f172a;
-  --color-accent: #3b82f6;
+  --color-background-secondary: #f8fafc;
+  --color-background-tertiary: #f1f5f9;
+  --color-background-inverse: #0f172a;
   
-  /* 兼容性变量 - 保持向后兼容 */
-  --background: var(--color-background-primary);
-  --foreground: var(--color-foreground-primary);
+  --color-foreground-primary: #0f172a;
+  --color-foreground-secondary: #475569;
+  --color-foreground-tertiary: #64748b;
+  --color-foreground-inverse: #f8fafc;
+  
+  --color-border-primary: #e2e8f0;
+  --color-border-secondary: #cbd5e1;
+  --color-border-focus: #3b82f6;
+  
+  --color-accent: #3b82f6;
+  --color-muted: #f1f5f9;
+  --color-destructive: #ef4444;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+  
+  /* 阴影变量 */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  
+  /* 圆角变量 */
+  --radius-none: 0;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+  
+  /* 间距变量 */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 0.75rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* 基础兼容性变量 */
 }
 
 /* ========== 应用主题 ========== */
@@ -29,73 +66,31 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* ========== 主题工具类 ========== */
-/* 使用CSS变量的工具类，配合Tailwind使用 */
+/* ========== shadcn/ui 兼容性变量 ========== */
+/* 这些变量将由 ThemeProvider 直接设置，不需要映射 */
 
-.bg-theme-primary {
-  background-color: var(--color-background-primary);
-}
-
-.bg-theme-secondary {
-  background-color: var(--color-background-secondary);
-}
-
-.bg-theme-tertiary {
-  background-color: var(--color-background-tertiary);
-}
-
-.text-theme-primary {
-  color: var(--color-foreground-primary);
-}
-
-.text-theme-secondary {
-  color: var(--color-foreground-secondary);
-}
-
-.text-theme-tertiary {
-  color: var(--color-foreground-tertiary);
-}
-
-.border-theme-primary {
-  border-color: var(--color-border-primary);
-}
-
-.border-theme-secondary {
-  border-color: var(--color-border-secondary);
-}
-
-/* ========== 组件主题样式 ========== */
-
-/* Card 组件主题 */
-.card-themed {
-  background-color: var(--color-background-secondary);
-  border-color: var(--color-border-primary);
-  box-shadow: var(--shadow-md);
-}
-
-/* Button 组件主题 */
-.btn-themed-primary {
-  background-color: var(--color-accent);
-  color: var(--color-foreground-inverse);
-  border-color: var(--color-accent);
-}
-
-.btn-themed-secondary {
-  background-color: var(--color-background-secondary);
-  color: var(--color-foreground-primary);
-  border-color: var(--color-border-primary);
-}
-
-/* Input 组件主题 */
-.input-themed {
-  background-color: var(--color-background-primary);
-  color: var(--color-foreground-primary);
-  border-color: var(--color-border-primary);
-}
-
-.input-themed:focus {
-  border-color: var(--color-border-focus);
-  box-shadow: 0 0 0 2px var(--color-accent);
+:root {
+  /* 默认的 shadcn/ui 变量 - 将被ThemeProvider覆盖 */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 217 91% 60%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 217 91% 60%;
+  --radius: 0.375rem;
 }
 
 /* ========== 动画和过渡 ========== */
@@ -130,10 +125,351 @@ body {
   color: var(--color-foreground-inverse);
 }
 
-/* ========== 调试样式 ========== */
-[data-theme] {
-  /* 确保主题属性被正确应用 */
+/* ========== 语义化主题CSS类系统 ========== */
+/* 
+这些类使用CSS变量，可以动态响应主题变化
+推荐在组件中使用这些类而不是Tailwind颜色类
+*/
+
+/* 主色调类 */
+.theme-primary {
+  background-color: var(--color-primary);
+  color: var(--color-background);
 }
+
+.theme-primary-soft {
+  background-color: color-mix(in srgb, var(--color-primary) 15%, var(--color-background) 85%);
+  color: var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent 70%);
+}
+
+.theme-primary-outline {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.theme-primary-ghost {
+  background-color: transparent;
+  color: var(--color-primary);
+}
+
+.theme-primary-ghost:hover {
+  background-color: var(--color-primary);
+  color: var(--color-background);
+  opacity: 0.1;
+}
+
+/* 状态色类 */
+.theme-success {
+  background-color: var(--color-success);
+  color: var(--color-background);
+}
+
+.theme-success-soft {
+  background-color: color-mix(in srgb, var(--color-success) 15%, var(--color-background) 85%);
+  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent 70%);
+}
+
+.theme-success-outline {
+  background-color: transparent;
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.theme-warning {
+  background-color: var(--color-warning);
+  color: var(--color-background);
+}
+
+.theme-warning-soft {
+  background-color: color-mix(in srgb, var(--color-warning) 15%, var(--color-background) 85%);
+  color: var(--color-warning);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent 70%);
+}
+
+.theme-error {
+  background-color: var(--color-error);
+  color: var(--color-background);
+}
+
+.theme-error-soft {
+  background-color: color-mix(in srgb, var(--color-error) 15%, var(--color-background) 85%);
+  color: var(--color-error);
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent 70%);
+}
+
+.theme-info {
+  background-color: var(--color-info);
+  color: var(--color-background);
+}
+
+/* 表面/背景类 */
+.theme-surface {
+  background-color: var(--color-background);
+  color: var(--color-text);
+}
+
+.theme-surface-secondary {
+  background-color: var(--color-background-secondary);
+  color: var(--color-text);
+}
+
+.theme-surface-muted {
+  background-color: var(--color-background-muted);
+  color: var(--color-text);
+}
+
+.theme-surface-elevated {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-surface-card {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+/* 文本类 */
+.theme-text {
+  color: var(--color-text);
+}
+
+.theme-text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.theme-text-muted {
+  color: var(--color-text-muted);
+}
+
+.theme-text-primary {
+  color: var(--color-primary);
+}
+
+.theme-text-primary {
+  color: var(--color-primary);
+}
+
+.theme-text-success {
+  color: var(--color-success);
+}
+
+.theme-text-warning {
+  color: var(--color-warning);
+}
+
+.theme-text-error {
+  color: var(--color-error);
+}
+
+/* 边框类 */
+.theme-border {
+  border-color: var(--color-border);
+}
+
+.theme-border-secondary {
+  border-color: var(--color-border-secondary);
+}
+
+.theme-border-primary {
+  border-color: var(--color-primary);
+}
+
+/* 常用组合类 */
+.theme-card {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.theme-button {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-button:active {
+  transform: translateY(0);
+}
+
+.theme-button-secondary {
+  background-color: var(--color-background-secondary);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-button-secondary:hover {
+  background-color: var(--color-background-muted);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-input {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.theme-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary), 0 0 0 0.125rem transparent;
+}
+
+.theme-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* 交互状态类 */
+.theme-interactive {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.theme-interactive:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-interactive:active {
+  transform: translateY(0);
+}
+
+/* 实用工具类 */
+.theme-divider {
+  border-top: 1px solid var(--color-border);
+}
+
+.theme-shadow-sm {
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-shadow-md {
+  box-shadow: var(--shadow-md);
+}
+
+.theme-shadow-lg {
+  box-shadow: var(--shadow-lg);
+}
+
+.theme-shadow-xl {
+  box-shadow: var(--shadow-xl);
+}
+
+
+/* ========== Icon 类 ========== */
+/* 
+  使用CSS自定义属性和@each-like写法批量生成icon颜色类
+  由于CSS不支持函数式生成，这里用SCSS伪代码说明批量生成方式，实际项目建议用SCSS或PostCSS插件自动生成
+*/
+
+/* 颜色映射表 */
+:root {
+  --icon-blue: #3b82f6;
+  --icon-green: #10b981;
+  --icon-yellow: #f59e0b;
+  --icon-red: #ef4444;
+  --icon-cyan: #3b82f6;
+  --icon-gray: #64748b;
+  --icon-purple: #8b5cf6;
+  --icon-pink: #ec4899;
+  --icon-orange: #f59e0b;
+}
+
+
+
+/* 下面为手写批量生成，实际建议用SCSS循环自动生成 */
+.theme-icon-blue         { background-color: var(--icon-blue); }
+.theme-icon-blue-soft    { background-color: color-mix(in srgb, var(--icon-blue) 50%, var(--color-background) 50%); }
+.theme-icon-blue-outline { background-color: transparent; }
+.theme-icon-blue-ghost   { background-color: transparent; }
+
+.theme-icon-green         { background-color: var(--icon-green); }
+.theme-icon-green-soft    { background-color: color-mix(in srgb, var(--icon-green) 50%, var(--color-background) 50%); }
+.theme-icon-green-outline { background-color: transparent; }
+.theme-icon-green-ghost   { background-color: transparent; }
+
+.theme-icon-yellow         { background-color: var(--icon-yellow); }
+.theme-icon-yellow-soft    { background-color: color-mix(in srgb, var(--icon-yellow) 50%, var(--color-background) 50%); }
+.theme-icon-yellow-outline { background-color: transparent; }
+.theme-icon-yellow-ghost   { background-color: transparent; }
+
+.theme-icon-red         { background-color: var(--icon-red); }
+.theme-icon-red-soft    { background-color: color-mix(in srgb, var(--icon-red) 50%, var(--color-background) 50%); }
+.theme-icon-red-outline { background-color: transparent; }
+.theme-icon-red-ghost   { background-color: transparent; }
+
+.theme-icon-cyan         { background-color: var(--icon-cyan); }
+.theme-icon-cyan-soft    { background-color: color-mix(in srgb, var(--icon-cyan) 50%, var(--color-background) 50%); }
+.theme-icon-cyan-outline { background-color: transparent; }
+.theme-icon-cyan-ghost   { background-color: transparent; }
+
+.theme-icon-gray         { background-color: var(--icon-gray); }
+.theme-icon-gray-soft    { background-color: color-mix(in srgb, var(--icon-gray) 50%, var(--color-background) 50%); }
+.theme-icon-gray-outline { background-color: transparent; }
+.theme-icon-gray-ghost   { background-color: transparent; }
+
+.theme-icon-purple         { background-color: var(--icon-purple); }
+.theme-icon-purple-soft    { background-color: color-mix(in srgb, var(--icon-purple) 50%, var(--color-background) 50%); }
+.theme-icon-purple-outline { background-color: transparent; }
+.theme-icon-purple-ghost   { background-color: transparent; }
+
+.theme-icon-pink         { background-color: var(--icon-pink); }
+.theme-icon-pink-soft    { background-color: color-mix(in srgb, var(--icon-pink) 50%, var(--color-background) 50%); }
+.theme-icon-pink-outline { background-color: transparent; }
+.theme-icon-pink-ghost   { background-color: transparent; }
+
+.theme-icon-orange         { background-color: var(--icon-orange); }
+.theme-icon-orange-soft    { background-color: color-mix(in srgb, var(--icon-orange) 50%, var(--color-background) 50%); }
+.theme-icon-orange-outline { background-color: transparent; }
+.theme-icon-orange-ghost   { background-color: transparent; } 
+
+/* 默认icon背景 */
+.theme-icon-background {
+  background-color: var(--color-text);
+}
+
+/* 
+  如果用SCSS，可以这样写（伪代码）：
+  $colors: (blue: #3b82f6, green: #10b981, yellow: #f59e0b, red: #ef4444, cyan: #3b82f6, gray: #64748b, purple: #8b5cf6, pink: #ec4899);
+  @each $name, $color in $colors {
+    .theme-icon-#{$name}         { background-color: $color; }
+    .theme-icon-#{$name}-soft    { background-color: color-mix(in srgb, $color 15%, var(--color-background) 85%); }
+    .theme-icon-#{$name}-outline { background-color: transparent; }
+    .theme-icon-#{$name}-ghost   { background-color: transparent; }
+  }
+*/
+
+
+
+/* ========== 调试样式 ========== */
 
 /* 开发环境调试信息 */
 .theme-debug {
@@ -149,3 +485,14 @@ body {
   z-index: 9999;
   opacity: 0.8;
 }
+
+/* 文本颜色类 - 用于StatCard等组件 */
+.theme-text-blue { color: var(--icon-blue); }
+.theme-text-green { color: var(--icon-green); }
+.theme-text-yellow { color: var(--icon-yellow); }
+.theme-text-red { color: var(--icon-red); }
+.theme-text-cyan { color: var(--icon-cyan); }
+.theme-text-gray { color: var(--icon-gray); }
+.theme-text-purple { color: var(--icon-purple); }
+.theme-text-pink { color: var(--icon-pink); }
+.theme-text-orange { color: var(--icon-orange); }

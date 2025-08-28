@@ -135,7 +135,12 @@ const defaultUISettings: UISettings = {
     theme: 'system',
     debug: 'disable',
     references: 'enable',
-    citationImage: 'enable'
+    citationImage: 'enable',
+    customTheme: {
+        colorPresetName: 'default',
+        isDarkMode: false,
+        customColors: undefined
+    }
 };
 
 const defaultResearchSettings: ResearchSettings = {

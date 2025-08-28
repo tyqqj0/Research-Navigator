@@ -23,14 +23,9 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import {
-    Collapsible,
-    CollapsibleContent,
-} from '@/components/ui/collapsible';
 
 import { useUISettings } from '../../data-access';
-import { useTheme } from '@/providers';
-import { ColorCustomizer } from './ColorCustomizer';
+import { ThemeSelector } from './ThemeSelector';
 
 const LANGUAGES = [
     { value: 'system', label: '跟随系统', flag: '🌐' },
@@ -43,120 +38,26 @@ const LANGUAGES = [
     { value: 'es', label: 'Español', flag: '🇪🇸' }
 ];
 
-const THEMES = [
-    { value: 'system', label: '跟随系统', icon: '🌐', description: '根据系统设置自动切换' },
-    { value: 'light', label: '浅色模式', icon: '☀️', description: '明亮清爽的界面' },
-    { value: 'dark', label: '深色模式', icon: '🌙', description: '护眼的暗色界面' },
-    { value: 'custom', label: '自定义主题', icon: '🎨', description: '自定义颜色和样式' }
-];
-
 export function UISettingsTab() {
     const { settings, updateSettings } = useUISettings();
-    const { currentTheme, userTheme, systemTheme, setTheme, isCustomTheme } = useTheme();
 
     return (
         <div className="space-y-6">
-            {/* 外观设置 */}
+            {/* 主题设置 */}
+            <ThemeSelector />
+
+            {/* 界面设置 */}
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Palette className="w-5 h-5 text-blue-600" />
-                        外观设置
+                        <Palette className="w-5 h-5 text-primary" />
+                        界面设置
                     </CardTitle>
                     <CardDescription>
-                        自定义界面外观和主题
+                        语言和其他界面选项
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="theme">主题模式</Label>
-                        <Select
-                            value={userTheme}
-                            onValueChange={(value: string) => setTheme(value as 'light' | 'dark' | 'system' | 'custom')}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="选择主题" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {THEMES.map(theme => (
-                                    <SelectItem key={theme.value} value={theme.value}>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-lg">{theme.icon}</span>
-                                            <div>
-                                                <div className="font-medium">{theme.label}</div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    {theme.description}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* 实时预览 - 紧凑版本 */}
-                    <div className="p-3 border rounded-lg bg-muted/20">
-                        <div className="flex items-center justify-between mb-2">
-                            <h4 className="text-sm font-medium">当前效果</h4>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span>{THEMES.find(t => t.value === userTheme)?.label}</span>
-                                {userTheme === 'system' && (
-                                    <span>({systemTheme})</span>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* 颜色示例 */}
-                        <div className="grid grid-cols-5 gap-2">
-                            <div className="text-center">
-                                <div className="w-6 h-6 rounded border mx-auto mb-1" style={{
-                                    backgroundColor: 'var(--color-background-primary)',
-                                    borderColor: 'var(--color-border-primary)'
-                                }}></div>
-                                <span className="text-xs text-muted-foreground">背景</span>
-                            </div>
-                            <div className="text-center">
-                                <div className="w-6 h-6 rounded border mx-auto mb-1" style={{
-                                    backgroundColor: 'var(--color-accent)'
-                                }}></div>
-                                <span className="text-xs text-muted-foreground">主色</span>
-                            </div>
-                            <div className="text-center">
-                                <div className="w-6 h-6 rounded border mx-auto mb-1" style={{
-                                    backgroundColor: 'var(--color-success)'
-                                }}></div>
-                                <span className="text-xs text-muted-foreground">成功</span>
-                            </div>
-                            <div className="text-center">
-                                <div className="w-6 h-6 rounded border mx-auto mb-1" style={{
-                                    backgroundColor: 'var(--color-warning)'
-                                }}></div>
-                                <span className="text-xs text-muted-foreground">警告</span>
-                            </div>
-                            <div className="text-center">
-                                <div className="w-6 h-6 rounded border mx-auto mb-1" style={{
-                                    backgroundColor: 'var(--color-error)'
-                                }}></div>
-                                <span className="text-xs text-muted-foreground">错误</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 自定义颜色 - 只在选择自定义主题时显示 */}
-                    {isCustomTheme && (
-                        <Collapsible open={true}>
-                            <CollapsibleContent className="space-y-0">
-                                <Separator />
-                                <div className="pt-4">
-                                    <ColorCustomizer className="border-0 shadow-none bg-transparent p-0" />
-                                </div>
-                            </CollapsibleContent>
-                        </Collapsible>
-                    )}
-
-                    <Separator />
-
                     <div className="space-y-2">
                         <Label htmlFor="language">界面语言</Label>
                         <Select
@@ -185,7 +86,7 @@ export function UISettingsTab() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Eye className="w-5 h-5 text-blue-600" />
+                        <Eye className="w-5 h-5 text-primary" />
                         功能设置
                     </CardTitle>
                     <CardDescription>

@@ -51,7 +51,7 @@ const MODEL_MODES = [
 const getStatusColor = (status: string) => {
     switch (status) {
         case 'stable': return 'bg-green-100 text-green-800';
-        case 'beta': return 'bg-blue-100 text-blue-800';
+        case 'beta': return 'bg-primary/10 text-primary';
         case 'experimental': return 'bg-orange-100 text-orange-800';
         default: return 'bg-gray-100 text-gray-800';
     }
@@ -84,7 +84,7 @@ export function AISettingsTab() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Bot className="w-5 h-5 text-blue-600" />
+                        <Bot className="w-5 h-5 text-primary" />
                         基础配置
                     </CardTitle>
                     <CardDescription>

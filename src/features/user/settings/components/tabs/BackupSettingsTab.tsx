@@ -164,7 +164,7 @@ export function BackupSettingsTab() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <FileText className="w-5 h-5 text-blue-600" />
+                            <FileText className="w-5 h-5 text-primary" />
                             设置概览
                         </CardTitle>
                         <CardDescription>
@@ -174,7 +174,7 @@ export function BackupSettingsTab() {
                     <CardContent>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="text-center p-3 bg-muted/20 rounded-lg">
-                                <div className="text-2xl font-bold text-blue-600">{stats.configuredProviders}</div>
+                                <div className="text-2xl font-bold text-primary">{stats.configuredProviders}</div>
                                 <div className="text-sm text-muted-foreground">已配置提供商</div>
                                 <div className="text-xs text-muted-foreground">/ {stats.totalProviders} 总计</div>
                             </div>
@@ -206,7 +206,7 @@ export function BackupSettingsTab() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Save className="w-5 h-5 text-blue-600" />
+                        <Save className="w-5 h-5 text-primary" />
                         创建备份
                     </CardTitle>
                     <CardDescription>
@@ -241,7 +241,7 @@ export function BackupSettingsTab() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <RotateCcw className="w-5 h-5 text-blue-600" />
+                        <RotateCcw className="w-5 h-5 text-primary" />
                         本地备份
                     </CardTitle>
                     <CardDescription>
@@ -330,7 +330,7 @@ export function BackupSettingsTab() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-blue-600" />
+                        <FileText className="w-5 h-5 text-primary" />
                         导入导出
                     </CardTitle>
                     <CardDescription>

@@ -56,7 +56,7 @@ export default function Home() {
               title="文献搜索"
               description="搜索最新研究"
               icon={<Search />}
-              iconColor="blue"
+              variant="blue"
               onClick={() => console.log('Navigate to search')}
             />
 
@@ -64,7 +64,7 @@ export default function Home() {
               title="我的文库"
               description="管理收藏文献"
               icon={<Book />}
-              iconColor="green"
+              variant="green"
               onClick={() => console.log('Navigate to library')}
             />
 
@@ -72,7 +72,7 @@ export default function Home() {
               title="数据分析"
               description="趋势与洞察"
               icon={<BarChart3 />}
-              iconColor="purple"
+              variant="purple"
               onClick={() => console.log('Navigate to analytics')}
             />
 
@@ -80,7 +80,7 @@ export default function Home() {
               title="AI 助手"
               description="智能分析助手"
               icon={<MessageCircle />}
-              iconColor="orange"
+              variant="orange"
               onClick={() => console.log('Navigate to chat')}
             />
           </div>
@@ -97,13 +97,13 @@ export default function Home() {
                     title="添加了新文献：Machine Learning in Healthcare"
                     timestamp="2小时前"
                     icon={<Plus />}
-                    iconColor="blue"
+                    variant="success"
                   />
                   <ActivityItem
                     title="完成了项目分析：AI Research Trends"
                     timestamp="昨天"
                     icon={<Check />}
-                    iconColor="green"
+                    variant="primary"
                   />
                 </div>
               </CardContent>
@@ -115,10 +115,10 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
-                  <StatCard value="156" label="收藏文献" color="blue" />
-                  <StatCard value="8" label="活跃项目" color="green" />
-                  <StatCard value="24" label="分析报告" color="purple" />
-                  <StatCard value="1.2k" label="引用数量" color="orange" />
+                  <StatCard value="156" label="收藏文献" variant="blue" />
+                  <StatCard value="8" label="活跃项目" variant="green" />
+                  <StatCard value="24" label="分析报告" variant="purple" />
+                  <StatCard value="1.2k" label="引用数量" variant="orange" />
                 </div>
               </CardContent>
             </Card>

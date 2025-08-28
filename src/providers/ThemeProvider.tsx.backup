@@ -1,0 +1,326 @@
+/**
+ * 主题提供者组件
+ * 
+ * 这个组件负责：
+ * 1. 监听用户设置中的主题配置
+ * 2. 监听系统主题变化（当设置为'system'时）
+ * 3. 应用CSS变量到DOM
+ * 4. 提供主题上下文给子组件
+ */
+
+'use client';
+
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import { useUISettings } from '@/features/user/settings/data-access';
+import {
+    themes,
+    generateCSSVariables,
+    createCustomTheme,
+    getColorPreset,
+    type ThemeName,
+    type ThemeConfig
+} from '@/lib/theme/theme-config';
+
+// ========== 上下文类型定义 ==========
+interface ThemeContextType {
+    // 当前应用的主题名称
+    currentTheme: ThemeName;
+    // 当前主题配置对象
+    themeConfig: ThemeConfig;
+    // 用户设置的主题（可能是'system'或'custom'）
+    userTheme: 'light' | 'dark' | 'system' | 'custom';
+    // 系统检测到的主题
+    systemTheme: 'light' | 'dark';
+    // 主题切换函数
+    setTheme: (theme: 'light' | 'dark' | 'system' | 'custom') => void;
+    // 是否正在加载
+    isLoading: boolean;
+    // 是否是自定义主题模式
+    isCustomTheme: boolean;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+// ========== 主题提供者组件 ==========
+interface ThemeProviderProps {
+    children: React.ReactNode;
+    defaultTheme?: 'light' | 'dark' | 'system' | 'custom';
+}
+
+export function ThemeProvider({ children }: ThemeProviderProps) {
+    // 从设置中获取用户主题偏好
+    const { settings, updateSettings } = useUISettings();
+
+    // 系统主题检测
+    const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>('light');
+    const [isLoading, setIsLoading] = useState(true);
+    const [isMounted, setIsMounted] = useState(false);
+
+    // 计算当前应该应用的主题和配置
+    const currentTheme: ThemeName = (() => {
+        if (settings.theme === 'system') return systemTheme;
+        if (settings.theme === 'custom') {
+            // 自定义主题基于用户选择的深浅模式
+            return settings.customTheme?.isDarkMode ? 'dark' : 'light';
+        }
+        return settings.theme;
+    })();
+
+    // 获取主题配置 - 使用useMemo来稳定引用
+    const themeConfig: ThemeConfig = useMemo(() => {
+        if (settings.theme === 'custom' && settings.customTheme) {
+            const preset = getColorPreset(settings.customTheme.colorPresetName);
+            if (preset) {
+                // 确保自定义颜色类型正确
+                const customColors = settings.customTheme.customColors;
+                const validCustomColors: Partial<ThemeConfig['colors']> | undefined = customColors ? {
+                    background: customColors.background ? {
+                        primary: customColors.background.primary || '',
+                        secondary: customColors.background.secondary || '',
+                        tertiary: customColors.background.tertiary || '',
+                        inverse: customColors.background.inverse || ''
+                    } : undefined,
+                    foreground: customColors.foreground ? {
+                        primary: customColors.foreground.primary || '',
+                        secondary: customColors.foreground.secondary || '',
+                        tertiary: customColors.foreground.tertiary || '',
+                        inverse: customColors.foreground.inverse || ''
+                    } : undefined,
+                    border: customColors.border ? {
+                        primary: customColors.border.primary || '',
+                        secondary: customColors.border.secondary || '',
+                        focus: customColors.border.focus || ''
+                    } : undefined,
+                    accent: customColors.accent,
+                    muted: customColors.muted,
+                    destructive: customColors.destructive,
+                    success: customColors.success,
+                    warning: customColors.warning,
+                    error: customColors.error,
+                    info: customColors.info
+                } : undefined;
+
+                return createCustomTheme(
+                    preset,
+                    settings.customTheme.isDarkMode,
+                    validCustomColors
+                );
+            }
+        }
+        return themes[currentTheme];
+    }, [settings.theme, settings.customTheme, currentTheme]);
+
+    const isCustomTheme = settings.theme === 'custom';
+
+    // ========== 客户端挂载检测 ==========
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    // ========== 系统主题检测 ==========
+    useEffect(() => {
+        if (!isMounted) return;
+
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+        // 初始检测
+        setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
+        setIsLoading(false);
+
+        // 监听变化
+        const handleChange = (e: MediaQueryListEvent) => {
+            setSystemTheme(e.matches ? 'dark' : 'light');
+        };
+
+        mediaQuery.addEventListener('change', handleChange);
+        return () => mediaQuery.removeEventListener('change', handleChange);
+    }, [isMounted]);
+
+    // ========== CSS变量应用 ==========
+    useEffect(() => {
+        // 调试日志 - 查看状态
+        if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 ThemeProvider 状态检查:', {
+                isLoading,
+                currentTheme,
+                userTheme: settings.theme,
+                systemTheme,
+                isMounted
+            });
+        }
+
+        if (isLoading || !isMounted) {
+            console.log('⏳ 跳过CSS变量应用:', {
+                isLoading,
+                isMounted
+            });
+            return;
+        }
+
+        if (!themeConfig) {
+            console.log('⏳ 主题配置未找到:', { currentTheme, settingsTheme: settings.theme });
+            return;
+        }
+
+        const variables = generateCSSVariables(themeConfig);
+        const root = document.documentElement;
+
+        // 应用CSS变量（自定义主题和标准主题都需要）
+        Object.entries(variables).forEach(([property, value]) => {
+            root.style.setProperty(property, value);
+        });
+
+        // 设置data-theme属性，供CSS选择器使用
+        const themeAttr = isCustomTheme ? 'custom' : currentTheme;
+        root.setAttribute('data-theme', themeAttr);
+
+        // 设置class，兼容Tailwind的dark:前缀
+        if (currentTheme === 'dark') {
+            root.classList.add('dark');
+            root.classList.remove('light');
+        } else {
+            root.classList.add('light');
+            root.classList.remove('dark');
+        }
+
+        // 为自定义主题添加额外的class
+        if (isCustomTheme) {
+            root.classList.add('theme-custom');
+        } else {
+            root.classList.remove('theme-custom');
+        }
+
+        // 调试日志
+        if (process.env.NODE_ENV === 'development') {
+            console.log('🎨 主题已应用:', {
+                userTheme: settings.theme,
+                systemTheme,
+                currentTheme,
+                isCustomTheme,
+                customTheme: settings.customTheme,
+                variablesCount: Object.keys(variables).length,
+                sampleVariables: {
+                    '--primary': variables['--primary'],
+                    '--destructive': variables['--destructive'],
+                    '--color-accent': variables['--color-accent']
+                }
+            });
+        }
+    }, [themeConfig, currentTheme, systemTheme, isLoading, isMounted, settings.theme, settings.customTheme, isCustomTheme]);
+
+    // ========== 主题切换函数 ==========
+    const setTheme = (theme: 'light' | 'dark' | 'system' | 'custom') => {
+        updateSettings({ theme });
+    };
+
+    // ========== 上下文值 ==========
+    const contextValue: ThemeContextType = {
+        currentTheme,
+        themeConfig: themeConfig,
+        userTheme: settings.theme,
+        systemTheme,
+        setTheme,
+        isLoading,
+        isCustomTheme
+    };
+
+    // 加载状态
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-white">
+                <div className="animate-pulse">
+                    <div className="w-8 h-8 bg-blue-600 rounded-full"></div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <ThemeContext.Provider value={contextValue}>
+            {children}
+        </ThemeContext.Provider>
+    );
+}
+
+// ========== 主题Hook ==========
+export function useTheme() {
+    const context = useContext(ThemeContext);
+
+    if (context === undefined) {
+        throw new Error('useTheme must be used within a ThemeProvider');
+    }
+
+    return context;
+}
+
+// ========== 主题工具函数 ==========
+
+/**
+ * 获取CSS变量值
+ */
+export function getCSSVariable(name: string): string {
+    if (typeof window === 'undefined') return '';
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/**
+ * 设置CSS变量值
+ */
+export function setCSSVariable(name: string, value: string): void {
+    if (typeof window === 'undefined') return;
+    document.documentElement.style.setProperty(name, value);
+}
+
+/**
+ * 主题颜色获取器
+ */
+export function useThemeColors() {
+    const { themeConfig } = useTheme();
+
+    return {
+        // 背景色
+        background: {
+            primary: getCSSVariable('--color-background-primary'),
+            secondary: getCSSVariable('--color-background-secondary'),
+            tertiary: getCSSVariable('--color-background-tertiary'),
+        },
+        // 前景色
+        foreground: {
+            primary: getCSSVariable('--color-foreground-primary'),
+            secondary: getCSSVariable('--color-foreground-secondary'),
+            tertiary: getCSSVariable('--color-foreground-tertiary'),
+        },
+        // 功能色
+        accent: getCSSVariable('--color-accent'),
+        success: getCSSVariable('--color-success'),
+        warning: getCSSVariable('--color-warning'),
+        error: getCSSVariable('--color-error'),
+        info: getCSSVariable('--color-info'),
+        // 完整配置
+        config: themeConfig.colors
+    };
+}
+
+/**
+ * 响应式主题检测
+ */
+export function useSystemTheme() {
+    const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>('light');
+
+    useEffect(() => {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+        setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
+
+        const handleChange = (e: MediaQueryListEvent) => {
+            setSystemTheme(e.matches ? 'dark' : 'light');
+        };
+
+        mediaQuery.addEventListener('change', handleChange);
+        return () => mediaQuery.removeEventListener('change', handleChange);
+    }, []);
+
+    return systemTheme;
+}
+
+export default ThemeProvider;

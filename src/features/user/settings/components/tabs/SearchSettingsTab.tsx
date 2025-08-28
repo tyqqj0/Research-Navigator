@@ -47,7 +47,7 @@ const CRAWLERS = [
 const getStatusColor = (status: string) => {
     switch (status) {
         case 'stable': return 'bg-green-100 text-green-800';
-        case 'beta': return 'bg-blue-100 text-blue-800';
+        case 'beta': return 'bg-primary/10 text-primary';
         case 'experimental': return 'bg-orange-100 text-orange-800';
         default: return 'bg-gray-100 text-gray-800';
     }
@@ -62,7 +62,7 @@ export function SearchSettingsTab() {
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <Search className="w-5 h-5 text-blue-600" />
+                        <Search className="w-5 h-5 text-primary" />
                         搜索配置
                     </CardTitle>
                     <CardDescription>
@@ -192,7 +192,7 @@ export function SearchSettingsTab() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                            <Settings2 className="w-5 h-5 text-blue-600" />
+                            <Settings2 className="w-5 h-5 text-primary" />
                             搜索引擎配置
                         </CardTitle>
                         <CardDescription>
