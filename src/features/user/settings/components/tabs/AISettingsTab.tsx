@@ -107,6 +107,7 @@ export function AISettingsTab() {
                                         <SelectItem key={provider.value} value={provider.value}>
                                             <div className="flex items-center justify-between w-full">
                                                 <span>{provider.label}</span>
+                                                
                                                 <Badge className={getStatusColor(provider.status)}>
                                                     {provider.status}
                                                 </Badge>
@@ -288,7 +289,7 @@ export function AISettingsTab() {
             </Card>
 
             {/* 安全设置 */}
-            <Card>
+            {/* <Card>
                 <CardHeader>
                     <CardTitle>安全设置</CardTitle>
                     <CardDescription>
@@ -306,7 +307,7 @@ export function AISettingsTab() {
                         />
                     </div>
                 </CardContent>
-            </Card>
+            </Card> */}
         </div>
     );
 }

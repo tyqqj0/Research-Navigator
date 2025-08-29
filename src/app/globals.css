@@ -132,7 +132,7 @@ body {
 */
 
 /* 主色调类 */
-.theme-primary {
+.theme-primary-background {
   background-color: var(--color-primary);
   color: var(--color-background);
 }
@@ -150,7 +150,8 @@ body {
 }
 
 .theme-primary-ghost {
-  background-color: transparent;
+  background-color: transparent 10%;
+  /* opacity: 0.1; */
   color: var(--color-primary);
 }
 
@@ -245,6 +246,53 @@ body {
 
 .theme-text-muted {
   color: var(--color-text-muted);
+}
+
+/* 新的主题文本类 - 使用标准化变量名 */
+.theme-text-primary {
+  color: var(--color-foreground-primary);
+}
+
+.theme-text-secondary {
+  color: var(--color-foreground-secondary);
+}
+
+.theme-text-tertiary {
+  color: var(--color-foreground-tertiary);
+}
+
+.theme-text-inverse {
+  color: var(--color-foreground-inverse);
+}
+
+/* 新的主题背景类 */
+.theme-background-primary {
+  background-color: var(--color-background-primary);
+}
+
+.theme-background-secondary {
+  background-color: var(--color-background-secondary);
+}
+
+.theme-background-tertiary {
+  background-color: var(--color-background-tertiary);
+}
+
+.theme-background-inverse {
+  background-color: var(--color-background-inverse);
+}
+
+/* 新的主题边框类 */
+.theme-border-primary {
+  border-color: var(--color-border-primary);
+}
+
+.theme-border-secondary {
+  border-color: var(--color-border-secondary);
+}
+
+.theme-border-focus {
+  border-color: var(--color-border-focus);
 }
 
 .theme-text-primary {
@@ -391,7 +439,7 @@ body {
 */
 
 /* 颜色映射表 */
-:root {
+  :root {
   --icon-blue: #3b82f6;
   --icon-green: #10b981;
   --icon-yellow: #f59e0b;

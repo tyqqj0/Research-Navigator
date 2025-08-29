@@ -33,5 +33,11 @@ export { FeatureCard } from './feature-card';
 export { ActivityItem } from './activity-item';
 // export { ThemeShowcase } from './theme-showcase';
 
+// Theme Components
+export { ThemePresetCard, ThemePresetGrid } from './theme-preset-card';
+export { ColorSwatch, ColorPalette, ColorGradient } from './color-palette';
+export { ThemeModeToggle, QuickThemeToggle } from './theme-mode-toggle';
+export { ThemePreview, ThemePreviewGrid } from './theme-preview';
+
 // // Theme Utilities
 // export * from './theme-variants';

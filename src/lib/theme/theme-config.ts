@@ -265,16 +265,28 @@ export function generateCSSVariables(theme: Theme): Record<string, string> {
         '--color-error': colors.error,
         '--color-info': colors.info,
 
-        '--color-background': colors.background,
+        // 使用与 globals.css 匹配的变量名
+        '--color-background-primary': colors.background,
         '--color-background-secondary': colors.backgroundSecondary,
-        '--color-background-muted': colors.backgroundMuted,
+        '--color-background-tertiary': colors.backgroundMuted,
+        '--color-background-inverse': theme.isDark ? '#ffffff' : '#0f172a',
 
+        '--color-foreground-primary': colors.text,
+        '--color-foreground-secondary': colors.textSecondary,
+        '--color-foreground-tertiary': colors.textMuted,
+        '--color-foreground-inverse': theme.isDark ? '#0f172a' : '#ffffff',
+
+        '--color-border-primary': colors.border,
+        '--color-border-secondary': colors.borderSecondary,
+        '--color-border-focus': colors.primary,
+
+        // 保留旧的变量名以兼容现有代码
+        '--color-background': colors.background,
+        '--color-background-muted': colors.backgroundMuted,
         '--color-text': colors.text,
         '--color-text-secondary': colors.textSecondary,
         '--color-text-muted': colors.textMuted,
-
         '--color-border': colors.border,
-        '--color-border-secondary': colors.borderSecondary,
 
         // ========== shadcn/ui 兼容性变量 ==========
         // 使用简单的颜色值而不是复杂的 HSL 转换
@@ -297,6 +309,17 @@ export function generateCSSVariables(theme: Theme): Record<string, string> {
         '--border': colors.border,
         '--input': colors.border,
         '--ring': colors.primary,
+
+        // ========== 图标颜色变量 ==========
+        '--icon-blue': colors.primary,
+        '--icon-green': colors.success,
+        '--icon-yellow': colors.warning,
+        '--icon-red': colors.error,
+        '--icon-cyan': colors.info,
+        '--icon-gray': colors.textSecondary,
+        '--icon-purple': '#8b5cf6',
+        '--icon-pink': '#ec4899',
+        '--icon-orange': '#f97316',
 
         // ========== 设计令牌 ==========
         '--radius': '0.375rem',

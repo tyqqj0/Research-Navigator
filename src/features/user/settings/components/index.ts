@@ -11,4 +11,4 @@ export { SearchSettingsTab } from './tabs/SearchSettingsTab';
 export { UISettingsTab } from './tabs/UISettingsTab';
 export { ResearchSettingsTab } from './tabs/ResearchSettingsTab';
 export { BackupSettingsTab } from './tabs/BackupSettingsTab';
-export { ThemeSelector } from './tabs/ThemeSelector';
+// export { ThemeSelector } from './tabs/ThemeSelector';
