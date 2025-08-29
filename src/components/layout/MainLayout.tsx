@@ -33,7 +33,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     className
 }) => {
     const [collapsed, setCollapsed] = useState(sidebarCollapsed);
-    const { currentTheme } = useTheme();
 
     const handleSidebarCollapse = (newCollapsed: boolean) => {
         setCollapsed(newCollapsed);
@@ -209,7 +208,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 <Sidebar
                     collapsed={collapsed}
                     onCollapse={handleSidebarCollapse}
-                    theme={currentTheme}
                     items={activeSidebarItems}
                 />
             )}
@@ -221,7 +219,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                     title={headerTitle}
                     actions={headerActions}
                     user={user}
-                    theme={currentTheme}
                 />
 
                 {/* 主要内容 */}

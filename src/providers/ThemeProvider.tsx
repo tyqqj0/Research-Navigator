@@ -113,8 +113,19 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     const applyTheme = useCallback((theme: Theme) => {
         if (typeof window === 'undefined') return;
 
+        console.log('🎨 [DEBUG] 应用主题:', theme);
+
         const variables = generateCSSVariables(theme);
         const root = document.documentElement;
+        // 记录应用前的状态
+        const beforeState = {
+            darkClass: root.classList.contains('dark'),
+            lightClass: root.classList.contains('light'),
+            dataTheme: root.getAttribute('data-theme'),
+            iconBlue: root.style.getPropertyValue('--icon-blue'),
+            iconGreen: root.style.getPropertyValue('--icon-green'),
+        };
+
 
         // 应用CSS变量
         Object.entries(variables).forEach(([property, value]) => {
@@ -128,25 +139,50 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
         // 为新系统添加标识
         root.classList.add('simplified-theme');
+        const afterState = {
+            darkClass: root.classList.contains('dark'),
+            lightClass: root.classList.contains('light'),
+            dataTheme: root.getAttribute('data-theme'),
+            iconBlue: root.style.getPropertyValue('--icon-blue'),
+            iconGreen: root.style.getPropertyValue('--icon-green'),
+        };
 
-        if (process.env.NODE_ENV === 'development') {
-            console.log('🎨 简化主题已应用:', {
-                theme: theme.name,
-                isDark: theme.isDark,
-                variablesCount: Object.keys(variables).length,
-                sampleVariables: {
-                    '--icon-blue': variables['--icon-blue'],
-                    '--icon-green': variables['--icon-green'],
-                    '--icon-yellow': variables['--icon-yellow'],
-                    '--icon-red': variables['--icon-red'],
-                    '--icon-cyan': variables['--icon-cyan'],
-                    '--icon-gray': variables['--icon-gray'],
-                    '--icon-purple': variables['--icon-purple'],
-                    '--icon-pink': variables['--icon-pink'],
-                    '--icon-orange': variables['--icon-orange'],
-                }
-            });
-        }
+        console.log('🎨 [DEBUG] 主题应用完成:', {
+            themeName: theme.name,
+            isDark: theme.isDark,
+            variablesCount: Object.keys(variables).length,
+            classChanges: {
+                before: beforeState,
+                after: afterState,
+                darkClassChanged: beforeState.darkClass !== afterState.darkClass,
+                colorChanged: beforeState.iconBlue !== afterState.iconBlue
+            },
+            iconColors: {
+                blue: variables['--icon-blue'],
+                green: variables['--icon-green'],
+                red: variables['--icon-red']
+            }
+        });
+
+        // if (process.env.NODE_ENV === 'development') {
+        //     console.log('🎨 简化主题已应用:', {
+        //         theme: theme.name,
+        //         isDark: theme.isDark,
+        //         variablesCount: Object.keys(variables).length,
+        //         iconColors: {
+        //             blue: variables['--icon-blue'],
+        //             green: variables['--icon-green'],
+        //             yellow: variables['--icon-yellow'],
+        //             red: variables['--icon-red'],
+        //             cyan: variables['--icon-cyan'],
+        //             gray: variables['--icon-gray'],
+        //             purple: variables['--icon-purple'],
+        //             pink: variables['--icon-pink'],
+        //             orange: variables['--icon-orange'],
+        //         },
+        //         note: `🌈 Icon颜色已自动适配${theme.isDark ? '深色' : '浅色'}模式`
+        //     });
+        // }
     }, []);
 
     // 应用当前主题
@@ -257,31 +293,31 @@ export function setSimpleCSSVariable(name: string, value: string): void {
 /**
  * 主题颜色获取器（简化版）
  */
-export function useSimpleThemeColors() {
-    const { theme } = useTheme();
+// export function useSimpleThemeColors() {
+//     const { theme } = useTheme();
 
-    return {
-        // 直接返回颜色值，无需复杂计算
-        primary: theme.colors.primary,
-        success: theme.colors.success,
-        warning: theme.colors.warning,
-        error: theme.colors.error,
-        info: theme.colors.info,
+//     return {
+//         // 直接返回颜色值，无需复杂计算
+//         primary: theme.colors.primary,
+//         success: theme.colors.success,
+//         warning: theme.colors.warning,
+//         error: theme.colors.error,
+//         info: theme.colors.info,
 
-        background: theme.colors.background,
-        backgroundSecondary: theme.colors.backgroundSecondary,
-        backgroundMuted: theme.colors.backgroundMuted,
+//         background: theme.colors.background,
+//         backgroundSecondary: theme.colors.backgroundSecondary,
+//         backgroundMuted: theme.colors.backgroundMuted,
 
-        text: theme.colors.text,
-        textSecondary: theme.colors.textSecondary,
-        textMuted: theme.colors.textMuted,
+//         text: theme.colors.text,
+//         textSecondary: theme.colors.textSecondary,
+//         textMuted: theme.colors.textMuted,
 
-        border: theme.colors.border,
-        borderSecondary: theme.colors.borderSecondary,
+//         border: theme.colors.border,
+//         borderSecondary: theme.colors.borderSecondary,
 
-        // 完整主题对象
-        theme: theme
-    };
-}
+//         // 完整主题对象
+//         theme: theme
+//     };
+// }
 
 export default ThemeProvider;

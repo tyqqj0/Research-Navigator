@@ -89,6 +89,11 @@ export function EnhancedThemeSelector({
         return colorPresets.find(p => p.name === currentPreset) || colorPresets[0];
     };
 
+    // 获取当前预设的深色模式
+    const getCurrentPresetDarkMode = (): boolean => {
+        return isDark || false;
+    };
+
     // 获取预设的主要颜色
     const getPresetColors = (preset: ColorPreset) => [
         { color: preset.colors.primary, label: '主色调', key: 'primary' },
@@ -167,6 +172,7 @@ export function EnhancedThemeSelector({
                                 presets={colorPresets}
                                 selectedPreset={currentPreset}
                                 onPresetChange={handlePresetChange}
+                                isDark={getCurrentPresetDarkMode()}
                             />
                         </div>
 

@@ -24,7 +24,7 @@ export default function Home() {
       <Button variant="outline">
         导入文献
       </Button>
-      <Button>
+      <Button variant="outline">
         <Plus className="mr-2 h-4 w-4" />
         新建项目
       </Button>
@@ -38,14 +38,14 @@ export default function Home() {
       user={user}
       showSidebar={true}
     >
-      <div className="p-6">
+      <div className="p-6 ">
         <div className="max-w-7xl mx-auto">
           {/* 欢迎区域 */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            <h1 className="text-3xl font-bold mb-2 theme-text">
               欢迎使用 Research Navigator
             </h1>
-            <p className="text-lg text-gray-600 dark:text-gray-400">
+            <p className="text-lg theme-text">
               您的智能研究助手，帮助您发现、管理和分析学术文献
             </p>
           </div>

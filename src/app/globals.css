@@ -12,6 +12,12 @@
   --font-mono: var(--font-geist-mono);
   
   /* 默认主题变量 - 将被ThemeProvider覆盖 */
+  --color-primary: #3b82f6;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
   --color-background-primary: #ffffff;
   --color-background-secondary: #f8fafc;
   --color-background-tertiary: #f1f5f9;
@@ -56,7 +62,30 @@
   --spacing-xl: 2rem;
   
   /* 基础兼容性变量 */
+
+    /* icon颜色变量 - 由ThemeProvider动态设置 */
+  --icon-blue: #3b82f6;    /* 默认值，将被覆盖 */
+  --icon-green: #10b981;   /* 默认值，将被覆盖 */
+  --icon-yellow: #f59e0b;  /* 默认值，将被覆盖 */
+  --icon-red: #ef4444;     /* 默认值，将被覆盖 */
+  --icon-cyan: #06b6d4;    /* 默认值，将被覆盖 */
+  --icon-gray: #64748b;    /* 默认值，将被覆盖 */
+  --icon-purple: #8b5cf6;  /* 默认值，将被覆盖 */
+  --icon-pink: #ec4899;    /* 默认值，将被覆盖 */
+  --icon-orange: #f97316;  /* 默认值，将被覆盖 */
 }
+
+/* 动态颜色映射表 */
+/* 
+这些icon颜色变量现在由ThemeProvider动态设置，支持自动的深浅模式切换
+- 浅色模式：使用标准颜色
+- 深色模式：使用更亮的变体以确保良好的可读性
+不要在这里硬编码颜色值，所有颜色都通过主题系统管理
+*/
+  /* :root {
+
+
+} */
 
 /* ========== 应用主题 ========== */
 body {
@@ -69,7 +98,7 @@ body {
 /* ========== shadcn/ui 兼容性变量 ========== */
 /* 这些变量将由 ThemeProvider 直接设置，不需要映射 */
 
-:root {
+  :root {
   /* 默认的 shadcn/ui 变量 - 将被ThemeProvider覆盖 */
   --background: 0 0% 100%;
   --foreground: 222 47% 11%;
@@ -133,7 +162,7 @@ body {
 
 /* 主色调类 */
 .theme-primary-background {
-  background-color: var(--color-primary);
+  background-color: var(--color-background-primary);
   color: var(--color-background);
 }
 
@@ -338,7 +367,125 @@ body {
 }
 
 .theme-card:hover {
+  /* transform: translateY(-1px); */
   box-shadow: var(--shadow-md);
+}
+
+.theme-card-blue {
+  background-color: var(--icon-blue);
+}
+.theme-card-blue-soft {
+  background-color: color-mix(in srgb, var(--icon-blue) 15%, var(--color-background) 85%);
+  border-color: color-mix(in srgb, var(--icon-blue) 30%, var(--color-border) 70%);
+}
+.theme-card-blue-outline {
+  background-color: transparent;
+  color: var(--icon-blue);
+}
+
+.theme-card-green {
+  background-color: var(--icon-green);
+}
+.theme-card-green-soft {
+  background-color: color-mix(in srgb, var(--icon-green) 15%, var(--color-background) 85%);
+  border-color: color-mix(in srgb, var(--icon-green) 30%, var(--color-border) 70%);
+}
+.theme-card-green-outline {
+  background-color: transparent;
+  color: var(--icon-green);
+}
+
+.theme-card-yellow {
+  background-color: var(--icon-yellow);
+}
+
+.theme-card-yellow-soft {
+  background-color: color-mix(in srgb, var(--icon-yellow) 15%, var(--color-background) 85%);
+  border-color: color-mix(in srgb, var(--icon-yellow) 30%, var(--color-border) 70%);
+}
+.theme-card-yellow-outline {
+  background-color: transparent;
+  color: var(--icon-yellow);
+}
+
+.theme-card-red {
+  background-color: var(--icon-red);
+}
+.theme-card-red-soft {
+  background-color: color-mix(in srgb, var(--icon-red) 15%, var(--color-background) 85%);
+  border-color: color-mix(in srgb, var(--icon-red) 30%, var(--color-border) 70%);
+}
+.theme-card-red-outline {
+  background-color: transparent;
+  color: var(--icon-red);
+}
+
+.theme-card-cyan {
+  background-color: var(--icon-cyan);
+}
+.theme-card-cyan-soft {
+  background-color: color-mix(in srgb, var(--icon-cyan) 15%, var(--color-background) 85%);
+  border-color: color-mix(in srgb, var(--icon-cyan) 30%, var(--color-border) 70%);
+}
+.theme-card-cyan-outline {
+  background-color: transparent;
+  color: var(--icon-cyan);
+}
+
+.theme-card-gray {
+  background-color: var(--icon-gray);
+}
+
+.theme-card-gray-soft {
+  background-color: color-mix(in srgb, var(--icon-gray) 15%, var(--color-background) 85%);
+  border-color: color-mix(in srgb, var(--icon-gray) 30%, var(--color-border) 70%);
+}
+
+.theme-card-gray-outline {
+  background-color: transparent;
+  color: var(--icon-gray);
+}
+
+.theme-card-purple {
+  background-color: var(--icon-purple);
+}
+
+.theme-card-purple-soft {
+  background-color: color-mix(in srgb, var(--icon-purple) 15%, var(--color-background) 85%);
+  border-color: color-mix(in srgb, var(--icon-purple) 30%, var(--color-border) 70%);
+}
+
+.theme-card-purple-outline {
+  background-color: transparent;
+  color: var(--icon-purple);
+}
+
+.theme-card-pink {
+  background-color: var(--icon-pink);
+}
+
+.theme-card-pink-soft {
+  background-color: color-mix(in srgb, var(--icon-pink) 15%, var(--color-background) 85%);
+  border-color: color-mix(in srgb, var(--icon-pink) 30%, var(--color-border) 70%);
+}
+
+.theme-card-pink-outline {
+  background-color: transparent;
+  color: var(--icon-pink);
+}
+
+.theme-card-orange {
+  background-color: var(--icon-orange);
+}
+
+.theme-card-orange-soft {
+  background-color: color-mix(in srgb, var(--icon-orange) 15%, var(--color-background) 85%);
+  border-color: color-mix(in srgb, var(--icon-orange) 30%, var(--color-border) 70%);
+}
+
+.theme-card-orange-outline {
+  background-color: transparent;
+  color: var(--icon-orange);
 }
 
 .theme-button {
@@ -438,66 +585,46 @@ body {
   由于CSS不支持函数式生成，这里用SCSS伪代码说明批量生成方式，实际项目建议用SCSS或PostCSS插件自动生成
 */
 
-/* 颜色映射表 */
-  :root {
-  --icon-blue: #3b82f6;
-  --icon-green: #10b981;
-  --icon-yellow: #f59e0b;
-  --icon-red: #ef4444;
-  --icon-cyan: #3b82f6;
-  --icon-gray: #64748b;
-  --icon-purple: #8b5cf6;
-  --icon-pink: #ec4899;
-  --icon-orange: #f59e0b;
-}
+
 
 
 
 /* 下面为手写批量生成，实际建议用SCSS循环自动生成 */
 .theme-icon-blue         { background-color: var(--icon-blue); }
 .theme-icon-blue-soft    { background-color: color-mix(in srgb, var(--icon-blue) 50%, var(--color-background) 50%); }
-.theme-icon-blue-outline { background-color: transparent; }
-.theme-icon-blue-ghost   { background-color: transparent; }
+
 
 .theme-icon-green         { background-color: var(--icon-green); }
 .theme-icon-green-soft    { background-color: color-mix(in srgb, var(--icon-green) 50%, var(--color-background) 50%); }
-.theme-icon-green-outline { background-color: transparent; }
-.theme-icon-green-ghost   { background-color: transparent; }
+
 
 .theme-icon-yellow         { background-color: var(--icon-yellow); }
 .theme-icon-yellow-soft    { background-color: color-mix(in srgb, var(--icon-yellow) 50%, var(--color-background) 50%); }
-.theme-icon-yellow-outline { background-color: transparent; }
-.theme-icon-yellow-ghost   { background-color: transparent; }
+
 
 .theme-icon-red         { background-color: var(--icon-red); }
 .theme-icon-red-soft    { background-color: color-mix(in srgb, var(--icon-red) 50%, var(--color-background) 50%); }
-.theme-icon-red-outline { background-color: transparent; }
-.theme-icon-red-ghost   { background-color: transparent; }
+
 
 .theme-icon-cyan         { background-color: var(--icon-cyan); }
 .theme-icon-cyan-soft    { background-color: color-mix(in srgb, var(--icon-cyan) 50%, var(--color-background) 50%); }
-.theme-icon-cyan-outline { background-color: transparent; }
-.theme-icon-cyan-ghost   { background-color: transparent; }
+
 
 .theme-icon-gray         { background-color: var(--icon-gray); }
 .theme-icon-gray-soft    { background-color: color-mix(in srgb, var(--icon-gray) 50%, var(--color-background) 50%); }
-.theme-icon-gray-outline { background-color: transparent; }
-.theme-icon-gray-ghost   { background-color: transparent; }
+
 
 .theme-icon-purple         { background-color: var(--icon-purple); }
 .theme-icon-purple-soft    { background-color: color-mix(in srgb, var(--icon-purple) 50%, var(--color-background) 50%); }
-.theme-icon-purple-outline { background-color: transparent; }
-.theme-icon-purple-ghost   { background-color: transparent; }
+
 
 .theme-icon-pink         { background-color: var(--icon-pink); }
 .theme-icon-pink-soft    { background-color: color-mix(in srgb, var(--icon-pink) 50%, var(--color-background) 50%); }
-.theme-icon-pink-outline { background-color: transparent; }
-.theme-icon-pink-ghost   { background-color: transparent; }
+
 
 .theme-icon-orange         { background-color: var(--icon-orange); }
 .theme-icon-orange-soft    { background-color: color-mix(in srgb, var(--icon-orange) 50%, var(--color-background) 50%); }
-.theme-icon-orange-outline { background-color: transparent; }
-.theme-icon-orange-ghost   { background-color: transparent; } 
+
 
 /* 默认icon背景 */
 .theme-icon-background {

@@ -20,15 +20,13 @@ export const Header: React.FC<HeaderProps> = ({
     logo,
     actions,
     user,
-    theme = 'light',
     className
 }) => {
     const router = useRouter();
     return (
         <header
             className={cn(
-                'h-16 border-b border-gray-200 bg-white shadow-sm',
-                theme === 'dark' && 'border-gray-700 bg-gray-900',
+                'h-16 border-b border-gray-200 bg-white shadow-sm theme-primary-background',
                 className
             )}
         >
@@ -41,8 +39,8 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                     )}
                     <h1 className={cn(
-                        'text-xl font-semibold text-gray-900',
-                        theme === 'dark' && 'text-white'
+                        'text-xl font-semibold',
+                        'theme-primary-background'
                     )}>
                         {title}
                     </h1>
@@ -56,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                     )}
 
-                    
+
 
                     {user && (
                         <div className="flex items-center space-x-3">
@@ -73,14 +71,15 @@ export const Header: React.FC<HeaderProps> = ({
                                             />
                                         ) : (
                                             <div className={cn(
-                                                'h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium'
+                                                'h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-medium',
+                                                'theme-icon-blue'
                                             )}>
                                                 {user.name.charAt(0).toUpperCase()}
                                             </div>
                                         )}
                                         <span className={cn(
-                                            'text-sm font-medium text-gray-700',
-                                            theme === 'dark' && 'text-gray-300'
+                                            'text-sm font-medium',
+                                            'theme-primary-background'
                                         )}>
                                             {user.name}
                                         </span>

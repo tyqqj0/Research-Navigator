@@ -46,7 +46,7 @@ export function StatCard({
                 <span className={cn(statCardVariants({ variant }))}>
                     {value}
                 </span>
-                <div className="text-sm text-theme-text-secondary">
+                <div className="text-sm" style={{ color: 'var(--color-foreground-secondary)' }}>
                     {label}
                 </div>
             </CardContent>

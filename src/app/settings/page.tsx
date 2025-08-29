@@ -12,18 +12,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useRouter } from 'next/navigation';
 
-import { AISettingsTab } from '@/features/user/settings/components/tabs/AISettingsTab';
-import { SearchSettingsTab } from '@/features/user/settings/components/tabs/SearchSettingsTab';
-import { UISettingsTab } from '@/features/user/settings/components/tabs/UISettingsTab';
-import { ResearchSettingsTab } from '@/features/user/settings/components/tabs/ResearchSettingsTab';
-import { BackupSettingsTab } from '@/features/user/settings/components/tabs/BackupSettingsTab';
+import { AISettingsTab, SearchSettingsTab, UISettingsTab, ResearchSettingsTab, BackupSettingsTab } from '@/features/user/settings';
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState('ai');
     const router = useRouter();
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background theme-primary-background">
             {/* 顶部导航栏 */}
             <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="container flex items-center justify-between h-16 px-4">
@@ -55,32 +51,32 @@ export default function SettingsPage() {
                                     <TabsList className="w-full flex-col h-auto p-1 bg-muted/50">
                                         <TabsTrigger
                                             value="ai"
-                                            className="w-full justify-start px-3 py-2 text-left"
+                                            className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             🤖 AI设置
                                         </TabsTrigger>
                                         <TabsTrigger
                                             value="search"
-                                            className="w-full justify-start px-3 py-2 text-left"
+                                            className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             🔍 搜索设置
                                         </TabsTrigger>
                                         <TabsTrigger
                                             value="ui"
-                                            className="w-full justify-start px-3 py-2 text-left"
+                                            className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             🎨 界面设置
                                         </TabsTrigger>
                                         <TabsTrigger
                                             value="research"
-                                            className="w-full justify-start px-3 py-2 text-left"
+                                            className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             📚 研究设置
                                         </TabsTrigger>
                                         <Separator className="my-2" />
                                         <TabsTrigger
                                             value="backup"
-                                            className="w-full justify-start px-3 py-2 text-left"
+                                            className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             💾 备份管理
                                         </TabsTrigger>

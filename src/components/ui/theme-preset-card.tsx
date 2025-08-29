@@ -11,6 +11,7 @@ import { Card, CardContent } from './card';
 import { Badge } from './badge';
 import { cn } from '@/lib/utils';
 import type { ColorPreset } from '@/lib/theme/theme-config';
+import { getColorForTheme } from '@/lib/theme/theme-config';
 
 interface ThemePresetCardProps {
     preset: ColorPreset;
@@ -18,6 +19,7 @@ interface ThemePresetCardProps {
     onSelect: () => void;
     className?: string;
     showPreview?: boolean;
+    isDark?: boolean;
 }
 
 export function ThemePresetCard({
@@ -25,7 +27,8 @@ export function ThemePresetCard({
     isSelected,
     onSelect,
     className,
-    showPreview = true
+    showPreview = true,
+    isDark = false
 }: ThemePresetCardProps) {
     return (
         <Card
@@ -70,19 +73,19 @@ export function ThemePresetCard({
                             <div className="flex gap-1">
                                 <div
                                     className="w-4 h-4 rounded-full border border-border"
-                                    style={{ backgroundColor: preset.colors.primary }}
+                                    style={{ backgroundColor: isDark ? getColorForTheme(preset.colors.primary) : preset.colors.primary }}
                                 />
                                 <div
                                     className="w-4 h-4 rounded-full border border-border"
-                                    style={{ backgroundColor: preset.colors.success }}
+                                    style={{ backgroundColor: isDark ? getColorForTheme(preset.colors.success) : preset.colors.success }}
                                 />
                                 <div
                                     className="w-4 h-4 rounded-full border border-border"
-                                    style={{ backgroundColor: preset.colors.warning }}
+                                    style={{ backgroundColor: isDark ? getColorForTheme(preset.colors.warning) : preset.colors.warning }}
                                 />
                                 <div
                                     className="w-4 h-4 rounded-full border border-border"
-                                    style={{ backgroundColor: preset.colors.error }}
+                                    style={{ backgroundColor: isDark ? getColorForTheme(preset.colors.error) : preset.colors.error }}
                                 />
                             </div>
                         </div>
@@ -91,15 +94,15 @@ export function ThemePresetCard({
                         <div className="grid grid-cols-3 gap-1 h-8 rounded overflow-hidden border border-border">
                             <div
                                 className="flex-1"
-                                style={{ backgroundColor: preset.colors.background }}
+                                style={{ backgroundColor: isDark ? getColorForTheme(preset.colors.background) : preset.colors.background }}
                             />
                             <div
                                 className="flex-1"
-                                style={{ backgroundColor: preset.colors.backgroundSecondary }}
+                                style={{ backgroundColor: isDark ? getColorForTheme(preset.colors.borderSecondary) : preset.colors.backgroundSecondary }}
                             />
                             <div
                                 className="flex-1"
-                                style={{ backgroundColor: preset.colors.backgroundMuted }}
+                                style={{ backgroundColor: isDark ? getColorForTheme(preset.colors.primary) : preset.colors.backgroundMuted }}
                             />
                         </div>
                     </div>
@@ -114,13 +117,15 @@ interface ThemePresetGridProps {
     selectedPreset: string;
     onPresetChange: (presetName: string) => void;
     className?: string;
+    isDark?: boolean;
 }
 
 export function ThemePresetGrid({
     presets,
     selectedPreset,
     onPresetChange,
-    className
+    className,
+    isDark = false
 }: ThemePresetGridProps) {
     return (
         <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4", className)}>
@@ -130,6 +135,7 @@ export function ThemePresetGrid({
                     preset={preset}
                     isSelected={selectedPreset === preset.name}
                     onSelect={() => onPresetChange(preset.name)}
+                    isDark={isDark}
                 />
             ))}
         </div>

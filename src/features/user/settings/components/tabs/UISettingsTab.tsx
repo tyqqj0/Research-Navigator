@@ -5,6 +5,7 @@
 
 'use client';
 
+import React from 'react';
 import {
     Globe,
     Eye,
@@ -14,7 +15,9 @@ import {
     Link,
     Sparkles,
     Settings,
-    Info
+    Info,
+    Palette,
+    Sliders
 } from 'lucide-react';
 import {
     Card,
@@ -32,7 +35,8 @@ import {
     Separator,
     Badge,
     Alert,
-    AlertDescription
+    AlertDescription,
+    Slider
 } from '@/components/ui';
 
 
@@ -63,7 +67,9 @@ export function UISettingsTab() {
 
             {/* 语言和本地化设置 */}
             <Card className="overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+                {/* 测试theme-card-blue颜色是否刷新 */}
+                {/* <div className="theme-card-blue">   123123123</div> */}
+                <CardHeader variant="blue" animated={true}>
                     <CardTitle className="flex items-center gap-2">
                         <Languages className="w-5 h-5 text-blue-600" />
                         语言设置
@@ -116,7 +122,7 @@ export function UISettingsTab() {
 
             {/* 界面功能设置 */}
             <Card className="overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20">
+                <CardHeader variant="green" animated={true}>
                     <CardTitle className="flex items-center gap-2">
                         <Eye className="w-5 h-5 text-green-600" />
                         界面功能
@@ -193,7 +199,7 @@ export function UISettingsTab() {
 
             {/* 开发者设置 */}
             <Card className="overflow-hidden border-orange-200 dark:border-orange-800">
-                <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20">
+                <CardHeader variant="orange" animated={true}>
                     <CardTitle className="flex items-center gap-2">
                         <Bug className="w-5 h-5 text-orange-600" />
                         开发者选项
