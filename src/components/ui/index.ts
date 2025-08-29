@@ -18,6 +18,7 @@ export { ResizableHandle, ResizablePanel, ResizablePanelGroup } from './resizabl
 export { ScrollArea, ScrollBar } from './scroll-area';
 export { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectScrollDownButton, SelectScrollUpButton, SelectSeparator, SelectTrigger, SelectValue } from './select';
 export { Separator } from './separator';
+export { Sidebar, sidebarVariants, sidebarItemVariants, collapseButtonVariants, type SidebarItem } from './sidebar';
 export { Skeleton } from './skeleton';
 export { Slider } from './slider';
 export { Toaster } from './sonner';

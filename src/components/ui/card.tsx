@@ -28,7 +28,7 @@ const cardHeaderVariants = cva(
         default: "bg-background",
         blue: "theme-card-blue-soft",
         green: "theme-card-green-soft",
-        purple: "theme-card-purple-soft", 
+        purple: "theme-card-purple-soft",
         orange: "theme-card-orange-soft",
         red: "theme-card-red-soft",
         gray: "theme-card-gray-soft",

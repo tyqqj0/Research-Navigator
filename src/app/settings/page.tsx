@@ -19,7 +19,7 @@ export default function SettingsPage() {
     const router = useRouter();
 
     return (
-        <div className="min-h-screen bg-background theme-primary-background">
+        <div className="min-h-screen bg-background theme-text">
             {/* 顶部导航栏 */}
             <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="container flex items-center justify-between h-16 px-4">

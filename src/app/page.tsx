@@ -96,13 +96,13 @@ export default function Home() {
                   <ActivityItem
                     title="添加了新文献：Machine Learning in Healthcare"
                     timestamp="2小时前"
-                    icon={<Plus />}
+                    icon={<Plus className="h-4 w-4" />}
                     variant="success"
                   />
                   <ActivityItem
                     title="完成了项目分析：AI Research Trends"
                     timestamp="昨天"
-                    icon={<Check />}
+                    icon={<Check className="h-4 w-4" />}
                     variant="primary"
                   />
                 </div>

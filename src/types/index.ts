@@ -23,24 +23,7 @@ export interface HeaderProps {
     className?: string;
 }
 
-export interface SidebarItem {
-    key: string;
-    label: string;
-    icon?: ReactNode;
-    path?: string;
-    children?: SidebarItem[];
-    disabled?: boolean;
-    badge?: string | number;
-}
-
-export interface SidebarProps {
-    collapsed?: boolean;
-    onCollapse?: (collapsed: boolean) => void;
-    width?: number;
-    theme?: 'light' | 'dark';
-    items?: SidebarItem[];
-    className?: string;
-}
+// Sidebar types are now exported from @/components/ui/sidebar
 
 export interface MenuActionItem {
     key: string;

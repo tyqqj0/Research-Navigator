@@ -2,10 +2,11 @@
 
 import React, { useState } from 'react';
 import { Header } from './Header';
-import { Sidebar } from './Sidebar';
+import { Sidebar, type SidebarItem } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { LayoutProps, SidebarItem, MenuActionItem } from '@/types';
+import { LayoutProps, MenuActionItem } from '@/types';
 import { useTheme } from '@/providers';
+import { Home } from 'lucide-react';
 
 interface MainLayoutProps extends LayoutProps {
     sidebarItems?: SidebarItem[];
@@ -45,10 +46,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             key: 'dashboard',
             label: '仪表板',
             icon: (
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v0M8 5a2 2 0 012-2h4a2 2 0 012 2v0" />
-                </svg>
+                 <Home className="w-5 h-5" />
             ),
             path: '/'
         },
@@ -200,7 +198,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
     return (
         <div className={cn(
-            'flex h-screen bg-gray-50 dark:bg-gray-900',
+            'flex h-screen theme-background-primary',
             className
         )}>
             {/* 侧边栏 */}
@@ -213,7 +211,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             )}
 
             {/* 主内容区域 */}
-            <div className="flex flex-col flex-1 min-w-0">
+            <div className="flex flex-col flex-1 min-w-0 theme-text">
                 {/* 头部 */}
                 <Header
                     title={headerTitle}

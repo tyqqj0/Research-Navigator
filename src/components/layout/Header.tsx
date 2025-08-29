@@ -40,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
                     <h1 className={cn(
                         'text-xl font-semibold',
-                        'theme-primary-background'
+                        'theme-text-primary'
                     )}>
                         {title}
                     </h1>
@@ -79,7 +79,7 @@ export const Header: React.FC<HeaderProps> = ({
                                         )}
                                         <span className={cn(
                                             'text-sm font-medium',
-                                            'theme-primary-background'
+                                            // 'theme-primary-background'
                                         )}>
                                             {user.name}
                                         </span>
