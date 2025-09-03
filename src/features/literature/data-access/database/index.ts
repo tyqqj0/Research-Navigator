@@ -1,11 +1,22 @@
 /**
- * 📚 Literature Database - 数据库层统一导出
+ * 📚 Literature Database Layer - 统一导出
  * 
- * 提供: 数据库实例、配置、工具函数
+ * 架构说明: 这是Literature领域的数据库层统一入口
+ * 设计原则: 提供标准化的数据库访问接口
  */
 
-// 🏪 主数据库导出
+// 🗄️ 原始数据库实例 (向后兼容)
 export { LiteratureDatabase, literatureDB } from './literature-database';
+
+// 🚀 增强版数据库实例 (推荐使用)
+export {
+    enhancedLiteratureDB,
+    EnhancedLiteratureDatabase,
+    type DatabaseStatistics
+} from './enhanced-literature-database';
+
+// 🎯 默认导出 - 使用增强版数据库
+export { enhancedLiteratureDB as default } from './enhanced-literature-database';
 
 // 📊 数据库配置常量
 export const DATABASE_CONFIG = {

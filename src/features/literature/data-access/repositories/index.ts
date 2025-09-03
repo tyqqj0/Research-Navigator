@@ -8,8 +8,16 @@
 // 🏗️ 基础仓储抽象
 export { BaseRepository, type IBaseRepository, QueryBuilder } from './base-repository';
 
-// 📚 文献仓储
+// 📚 文献仓储 (原版 + 增强版)
 export { LiteratureRepository, literatureRepository } from './literature-repository';
+export {
+    EnhancedLiteratureRepository,
+    enhancedLiteratureRepository,
+    type LiteratureOperationResult,
+    type BulkLiteratureResult,
+    type SimilarityResult,
+    type LiteratureStatistics
+} from './enhanced-literature-repository';
 
 // 👤 用户元数据仓储
 export { UserMetaRepository, userMetaRepository } from './user-meta-repository';
@@ -24,6 +32,7 @@ export { CollectionRepository, collectionRepository } from './collection-reposit
 export class LiteratureDomainRepositories {
     constructor(
         public readonly literature = literatureRepository,
+        public readonly enhancedLiterature = enhancedLiteratureRepository,
         public readonly userMeta = userMetaRepository,
         public readonly citation = citationRepository,
         public readonly collection = collectionRepository
