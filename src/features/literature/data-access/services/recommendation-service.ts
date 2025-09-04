@@ -16,7 +16,7 @@
  */
 
 import {
-    enhancedLiteratureRepository,
+    LiteratureRepository,
     userMetaRepository,
     citationRepository,
     collectionRepository,
@@ -155,7 +155,7 @@ export class RecommendationService {
     };
 
     constructor(
-        private readonly literatureRepo = enhancedLiteratureRepository,
+        private readonly literatureRepo = LiteratureRepository,
         private readonly userMetaRepo = userMetaRepository,
         private readonly citationRepo = citationRepository,
         private readonly collectionRepo = collectionRepository
@@ -244,13 +244,13 @@ export class RecommendationService {
      */
     @withErrorBoundary('getCitationNetworkRecommendations', 'service')
     async getCitationNetworkRecommendations(
-        literatureId: string,
+        lid: string,
         userId?: string,
         limit: number = 10
     ): Promise<RecommendedLiterature[]> {
         try {
             // 1. 获取引文网络
-            const citationStats = await this.citationRepo.getBidirectionalCitations(literatureId);
+            const citationStats = await this.citationRepo.getBidirectionalCitations(lid);
 
             // 2. 分析引文模式
             const recommendations: RecommendedLiterature[] = [];
@@ -288,7 +288,7 @@ export class RecommendationService {
             throw ErrorHandler.handle(error, {
                 operation: 'service.getCitationNetworkRecommendations',
                 layer: 'service',
-                entityId: literatureId,
+                entityId: lid,
                 userId,
             });
         }
@@ -322,7 +322,7 @@ export class RecommendationService {
                     .slice(0, limit / 3);
 
                 for (const meta of highRatedItems) {
-                    const item = await this.literatureRepo.findByLid(meta.literatureId);
+                    const item = await this.literatureRepo.findByLid(meta.lid);
                     if (item) {
                         recommendations.push({
                             item,
@@ -559,7 +559,7 @@ export class RecommendationService {
             }
 
             // 获取文献信息来统计作者和来源
-            const literature = await this.literatureRepo.findByLid(meta.literatureId);
+            const literature = await this.literatureRepo.findByLid(meta.lid);
             if (literature) {
                 // 统计作者
                 for (const author of literature.authors) {

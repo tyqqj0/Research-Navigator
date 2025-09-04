@@ -72,6 +72,14 @@ export {
   type CollectionRecommendation,
 } from './collection-service';
 
+// 👤 用户元数据服务 - 用户个性化数据管理
+export {
+  userMetaService,
+  UserMetaService,
+  type UserMetaCreateOptions,
+  type UserMetaServiceStats,
+} from './user-meta-service';
+
 // ==================== 外部集成服务 ====================
 
 // 🌐 后端API服务 - 外部数据源集成
@@ -103,6 +111,7 @@ import { recommendationService } from './recommendation-service';
 import { analyticsService } from './analytics-service';
 import { citationService } from './citation-service';
 import { collectionService } from './collection-service';
+import { userMetaService } from './user-meta-service';
 import { backendApiService } from './backend-api-service';
 
 export const literatureDomainServices = {
@@ -113,6 +122,7 @@ export const literatureDomainServices = {
   analytics: analyticsService,
   citation: citationService,
   collection: collectionService,
+  userMeta: userMetaService,
 
   // 外部集成服务
   backend: backendApiService,
@@ -253,7 +263,7 @@ export const quickLiteratureActions = {
   ) {
     return await literatureDomainServices.literature.createLiterature(
       input as any,
-      userId,
+      // userId,
       options
     );
   },
@@ -266,7 +276,7 @@ export const quickLiteratureActions = {
   ) {
     const result = await literatureDomainServices.literature.bulkCreateLiterature(
       inputs as any,
-      userId,
+      // userId,
       { batchSize: 10 }
     );
 
@@ -285,12 +295,12 @@ export const quickLiteratureActions = {
     options?: { includeFacets?: boolean }
   ) {
     return await literatureDomainServices.search.searchLiterature(
-      { searchQuery: query, searchFields: ['title', 'authors'] },
+      { searchTerm: query, authors: [query] },
       { field: 'createdAt', order: 'desc' },
       1,
       20,
-      userId,
-      options
+      // userId,
+      options as any
     );
   },
 

@@ -3,9 +3,8 @@
  * 
  * 职责:
  * 1. 文献的基础CRUD操作
- * 2. 用户元数据管理
- * 3. 业务规则验证
- * 4. 批量操作协调
+ * 2. 业务规则验证
+ * 3. 批量操作协调
  * 
  * 设计原则:
  * - 单一职责：只处理文献相关的核心业务逻辑
@@ -15,41 +14,44 @@
  */
 
 import {
-    enhancedLiteratureRepository,
-    userMetaRepository,
+    literatureRepository,
     type LiteratureOperationResult,
     type BulkLiteratureResult,
 } from '../repositories';
 import {
-    LibraryItemCore,
-    UserLiteratureMetaCore,
-    EnhancedLiteratureItem,
-    CreateLiteratureInput,
-    UpdateLiteratureInput,
+    LibraryItem,
+    CreateLibraryItemInput,
+    UpdateLibraryItemInput,
     LiteratureFilter,
     LiteratureSort,
     PaginatedResult,
-    ModelFactory,
+    LibraryItemFactory,
     ModelValidators,
-    ErrorHandler,
-    BusinessLogicError,
-    NotFoundError,
-    withErrorBoundary,
     LITERATURE_CONSTANTS,
 } from '../models';
+import { AppError, ErrorType, ErrorSeverity, handleError } from '../../../../lib/errors';
+
+// 错误处理器别名
+const ErrorHandler = { handle: handleError };
 
 /**
  * 🔧 文献创建选项
  */
 export interface LiteratureCreateOptions {
-    /** 自动提取标签 */
-    autoTag?: boolean;
     /** 自动提取关键词 */
     autoExtractKeywords?: boolean;
     /** 自动检测重复 */
     checkDuplicates?: boolean;
     /** 验证数据完整性 */
     validateData?: boolean;
+}
+
+/**
+ * 🗑️ 文献删除选项
+ */
+export interface LiteratureDeleteOptions {
+    /** 级联删除相关数据 */
+    cascadeDelete?: boolean;
 }
 
 /**
@@ -74,8 +76,7 @@ export class LiteratureService {
     };
 
     constructor(
-        private readonly literatureRepo = enhancedLiteratureRepository,
-        private readonly userMetaRepo = userMetaRepository
+        private readonly literatureRepo = literatureRepository
     ) { }
 
     // ==================== 基础CRUD操作 ====================
@@ -83,54 +84,21 @@ export class LiteratureService {
     /**
      * 📖 获取文献详情
      */
-    @withErrorBoundary('getLiterature', 'service')
-    async getLiterature(
-        literatureId: string,
-        userId?: string
-    ): Promise<EnhancedLiteratureItem | null> {
+    async getLiterature(lid: string): Promise<LibraryItem | null> {
         const startTime = Date.now();
 
         try {
-            // 1. 获取基础文献信息
-            const literature = await this.literatureRepo.findByLid(literatureId);
-            if (!literature) {
-                return null;
-            }
-
-            // 2. 获取用户元数据
-            let userMeta: UserLiteratureMetaCore | null = null;
-            if (userId) {
-                userMeta = await this.userMetaRepo.findByUserAndLiterature(userId, literatureId);
-
-                // 更新访问时间
-                if (userMeta) {
-                    await this.userMetaRepo.updateLastAccessed(userId, literatureId);
-                }
-            }
-
-            // 3. 构建增强版文献项
-            const enhancedItem: EnhancedLiteratureItem = {
-                ...literature,
-                userMeta,
-                citationStats: {
-                    totalCitations: 0,
-                    incomingCitations: 0,
-                    outgoingCitations: 0,
-                },
-                relatedItems: [],
-                lastAccessedAt: userMeta?.lastAccessedAt || literature.updatedAt,
-            };
+            const literature = await this.literatureRepo.findByLid(lid);
 
             this.updateStats(Date.now() - startTime, true);
-            return enhancedItem;
+            return literature;
+
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
             throw ErrorHandler.handle(error, {
                 operation: 'service.getLiterature',
                 layer: 'service',
-                entityType: 'LibraryItem',
-                entityId: literatureId,
-                userId,
+                additionalInfo: { lid },
             });
         }
     }
@@ -138,10 +106,8 @@ export class LiteratureService {
     /**
      * ➕ 创建文献
      */
-    @withErrorBoundary('createLiterature', 'service')
     async createLiterature(
-        input: CreateLiteratureInput,
-        userId?: string,
+        input: CreateLibraryItemInput,
         options: LiteratureCreateOptions = {}
     ): Promise<LiteratureOperationResult> {
         const startTime = Date.now();
@@ -149,12 +115,14 @@ export class LiteratureService {
         try {
             // 1. 数据验证
             if (options.validateData) {
-                const validationResult = ModelValidators.CreateLiteratureInput.safeParse(input);
-                if (!validationResult.success) {
-                    throw new BusinessLogicError(
+                try {
+                    ModelValidators.createInput(input);
+                } catch (validationError) {
+                    throw new AppError(
                         'Invalid literature input data',
-                        'VALIDATION_ERROR',
-                        { validationErrors: validationResult.error.errors }
+                        ErrorType.VALIDATION_ERROR,
+                        ErrorSeverity.HIGH,
+                        { additionalInfo: { validationError } }
                     );
                 }
             }
@@ -165,22 +133,18 @@ export class LiteratureService {
             // 3. 检查重复（如果启用）
             if (options.checkDuplicates) {
                 const duplicates = await this.literatureRepo.findSimilar(processedInput, 5);
-                if (duplicates.some(d => d.confidence === 'high')) {
-                    throw new BusinessLogicError(
+                if (duplicates.some((d: any) => d.confidence === 'high')) {
+                    throw new AppError(
                         'Potential duplicate literature detected',
-                        'DUPLICATE_DETECTED',
-                        { duplicates: duplicates.filter(d => d.confidence === 'high') }
+                        ErrorType.DUPLICATE_ERROR,
+                        ErrorSeverity.HIGH,
+                        { additionalInfo: { duplicates: duplicates.filter((d: any) => d.confidence === 'high') } }
                     );
                 }
             }
 
             // 4. 创建文献记录
             const result = await this.literatureRepo.createOrUpdate(processedInput);
-
-            // 5. 创建用户元数据（如果提供了用户ID）
-            if (userId && processedInput.initialUserMeta) {
-                await this.userMetaRepo.createOrUpdate(userId, result.id, processedInput.initialUserMeta);
-            }
 
             this.updateStats(Date.now() - startTime, true);
             return result;
@@ -189,8 +153,7 @@ export class LiteratureService {
             throw ErrorHandler.handle(error, {
                 operation: 'service.createLiterature',
                 layer: 'service',
-                inputData: input,
-                userId,
+                additionalInfo: { input },
             });
         }
     }
@@ -198,36 +161,44 @@ export class LiteratureService {
     /**
      * ✏️ 更新文献
      */
-    @withErrorBoundary('updateLiterature', 'service')
     async updateLiterature(
-        literatureId: string,
-        updates: UpdateLiteratureInput,
-        userId?: string
+        lid: string,
+        updates: UpdateLibraryItemInput
     ): Promise<LiteratureOperationResult> {
         const startTime = Date.now();
 
         try {
             // 1. 检查文献是否存在
-            const existing = await this.literatureRepo.findByLid(literatureId);
+            const existing = await this.literatureRepo.findByLid(lid);
             if (!existing) {
-                throw new NotFoundError('LibraryItem', literatureId, {
+                throw new AppError('LibraryItem not found', ErrorType.NOT_FOUND_ERROR, ErrorSeverity.HIGH, {
                     operation: 'updateLiterature',
                     layer: 'service',
                 });
             }
 
             // 2. 数据验证
-            const validationResult = ModelValidators.UpdateLiteratureInput.safeParse(updates);
-            if (!validationResult.success) {
-                throw new BusinessLogicError(
+            try {
+                ModelValidators.updateInput(updates);
+            } catch (validationError) {
+                throw new AppError(
                     'Invalid literature update data',
-                    'VALIDATION_ERROR',
-                    { validationErrors: validationResult.error.errors }
+                    ErrorType.VALIDATION_ERROR,
+                    ErrorSeverity.HIGH,
+                    { additionalInfo: { validationError } }
                 );
             }
 
             // 3. 执行更新
-            const result = await this.literatureRepo.update(literatureId, updates);
+            await this.literatureRepo.update(lid, updates);
+
+            // 返回操作结果
+            const result: LiteratureOperationResult = {
+                lid: lid,
+                isNew: false,
+                operation: 'updated',
+                message: 'Literature updated successfully'
+            };
 
             this.updateStats(Date.now() - startTime, true);
             return result;
@@ -236,9 +207,7 @@ export class LiteratureService {
             throw ErrorHandler.handle(error, {
                 operation: 'service.updateLiterature',
                 layer: 'service',
-                entityId: literatureId,
-                inputData: updates,
-                userId,
+                additionalInfo: { lid, updates },
             });
         }
     }
@@ -246,48 +215,66 @@ export class LiteratureService {
     /**
      * 🗑️ 删除文献
      */
-    @withErrorBoundary('deleteLiterature', 'service')
     async deleteLiterature(
-        literatureId: string,
-        userId?: string,
-        options: { cascadeDelete?: boolean } = {}
+        lid: string,
+        options: LiteratureDeleteOptions = {}
     ): Promise<{ success: boolean; deletedCount: number }> {
         const startTime = Date.now();
 
         try {
             // 1. 检查文献是否存在
-            const existing = await this.literatureRepo.findByLid(literatureId);
+            const existing = await this.literatureRepo.findByLid(lid);
             if (!existing) {
-                throw new NotFoundError('LibraryItem', literatureId, {
+                throw new AppError('LibraryItem not found', ErrorType.NOT_FOUND_ERROR, ErrorSeverity.HIGH, {
                     operation: 'deleteLiterature',
                     layer: 'service',
                 });
             }
 
-            let deletedCount = 0;
-
-            // 2. 删除用户元数据（如果启用级联删除）
-            if (options.cascadeDelete && userId) {
-                const userMeta = await this.userMetaRepo.findByUserAndLiterature(userId, literatureId);
-                if (userMeta) {
-                    await this.userMetaRepo.delete(userMeta.id);
-                    deletedCount++;
-                }
-            }
-
-            // 3. 删除文献记录
-            await this.literatureRepo.delete(literatureId);
-            deletedCount++;
+            // 2. 删除文献记录
+            await this.literatureRepo.delete(lid);
 
             this.updateStats(Date.now() - startTime, true);
-            return { success: true, deletedCount };
+            return { success: true, deletedCount: 1 };
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
             throw ErrorHandler.handle(error, {
                 operation: 'service.deleteLiterature',
                 layer: 'service',
-                entityId: literatureId,
-                userId,
+                additionalInfo: { lid },
+            });
+        }
+    }
+
+    // ==================== 搜索和查询 ====================
+
+    /**
+     * 🔍 搜索文献
+     */
+    async searchLiterature(
+        filter: Partial<LiteratureFilter> = {},
+        sort: LiteratureSort = { field: 'createdAt', order: 'desc' },
+        page: number = 1,
+        pageSize: number = LITERATURE_CONSTANTS.DEFAULT_PAGE_SIZE
+    ): Promise<PaginatedResult<LibraryItem>> {
+        const startTime = Date.now();
+
+        try {
+            const result = await this.literatureRepo.searchWithFilters(
+                filter,
+                sort,
+                page,
+                pageSize
+            );
+
+            this.updateStats(Date.now() - startTime, true);
+            return result;
+        } catch (error) {
+            this.updateStats(Date.now() - startTime, false);
+            throw ErrorHandler.handle(error, {
+                operation: 'service.searchLiterature',
+                layer: 'service',
+                additionalInfo: { filter, sort, page, pageSize },
             });
         }
     }
@@ -297,10 +284,8 @@ export class LiteratureService {
     /**
      * 📦 批量创建文献
      */
-    @withErrorBoundary('bulkCreateLiterature', 'service')
     async bulkCreateLiterature(
-        inputs: CreateLiteratureInput[],
-        userId?: string,
+        inputs: CreateLibraryItemInput[],
         options: LiteratureCreateOptions & { batchSize?: number } = {}
     ): Promise<BulkLiteratureResult> {
         const startTime = Date.now();
@@ -312,14 +297,7 @@ export class LiteratureService {
             );
 
             // 2. 执行批量导入
-            const result = await this.literatureRepo.bulkImport(processedInputs, {
-                batchSize: options.batchSize || LITERATURE_CONSTANTS.DEFAULT_BATCH_SIZE,
-            });
-
-            // 3. 批量创建用户元数据（如果需要）
-            if (userId) {
-                await this.batchCreateUserMetas(userId, result.results);
-            }
+            const result = await this.literatureRepo.bulkImport(processedInputs);
 
             this.updateStats(Date.now() - startTime, true);
             return result;
@@ -328,128 +306,42 @@ export class LiteratureService {
             throw ErrorHandler.handle(error, {
                 operation: 'service.bulkCreateLiterature',
                 layer: 'service',
-                additionalInfo: { inputCount: inputs.length },
-                userId,
-            });
-        }
-    }
-
-    // ==================== 用户元数据管理 ====================
-
-    /**
-     * 🏷️ 更新用户元数据
-     */
-    @withErrorBoundary('updateUserMeta', 'service')
-    async updateUserMeta(
-        userId: string,
-        literatureId: string,
-        updates: Partial<UserLiteratureMetaCore>
-    ): Promise<UserLiteratureMetaCore> {
-        const startTime = Date.now();
-
-        try {
-            // 1. 检查文献是否存在
-            const literature = await this.literatureRepo.findByLid(literatureId);
-            if (!literature) {
-                throw new NotFoundError('LibraryItem', literatureId, {
-                    operation: 'updateUserMeta',
-                    layer: 'service',
-                });
-            }
-
-            // 2. 更新或创建用户元数据
-            const result = await this.userMetaRepo.createOrUpdate(userId, literatureId, updates);
-
-            this.updateStats(Date.now() - startTime, true);
-            return result;
-        } catch (error) {
-            this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
-                operation: 'service.updateUserMeta',
-                layer: 'service',
-                entityId: literatureId,
-                userId,
-                inputData: updates,
+                additionalInfo: { inputCount: inputs.length, options },
             });
         }
     }
 
     /**
-     * 📊 获取用户文献列表
+     * 🗑️ 批量删除文献
      */
-    @withErrorBoundary('getUserLiterature', 'service')
-    async getUserLiterature(
-        userId: string,
-        filter: Partial<LiteratureFilter> = {},
-        sort: LiteratureSort = { field: 'lastAccessedAt', order: 'desc' },
-        page: number = 1,
-        pageSize: number = LITERATURE_CONSTANTS.DEFAULT_PAGE_SIZE
-    ): Promise<PaginatedResult<EnhancedLiteratureItem>> {
+    async bulkDeleteLiterature(
+        lids: string[],
+        options: LiteratureDeleteOptions = {}
+    ): Promise<{ success: boolean; deletedCount: number }> {
         const startTime = Date.now();
 
         try {
-            // 1. 获取用户的所有文献元数据
-            const userMetas = await this.userMetaRepo.findByUserId(userId);
-            const literatureIds = userMetas.map(meta => meta.literatureId);
+            let deletedCount = 0;
 
-            if (literatureIds.length === 0) {
-                return {
-                    items: [],
-                    pagination: {
-                        page,
-                        pageSize,
-                        totalItems: 0,
-                        totalPages: 0,
-                        hasNextPage: false,
-                        hasPreviousPage: false,
-                    },
-                };
+            // 批量删除文献
+            for (const lid of lids) {
+                try {
+                    await this.deleteLiterature(lid, options);
+                    deletedCount++;
+                } catch (error) {
+                    // 记录错误但继续处理其他项目
+                    console.warn(`Failed to delete literature ${lid}:`, error);
+                }
             }
 
-            // 2. 构建过滤条件
-            const enhancedFilter: LiteratureFilter = {
-                ...filter,
-                ids: literatureIds,
-            };
-
-            // 3. 搜索文献
-            const searchResult = await this.literatureRepo.searchWithFilters(
-                enhancedFilter,
-                sort,
-                page,
-                pageSize
-            );
-
-            // 4. 增强搜索结果
-            const enhancedItems = await Promise.all(
-                searchResult.items.map(async (item) => {
-                    const userMeta = userMetas.find(meta => meta.literatureId === item.lid);
-                    return {
-                        ...item,
-                        userMeta: userMeta || null,
-                        citationStats: {
-                            totalCitations: 0,
-                            incomingCitations: 0,
-                            outgoingCitations: 0,
-                        },
-                        relatedItems: [],
-                        lastAccessedAt: userMeta?.lastAccessedAt || item.updatedAt,
-                    } as EnhancedLiteratureItem;
-                })
-            );
-
             this.updateStats(Date.now() - startTime, true);
-            return {
-                items: enhancedItems,
-                pagination: searchResult.pagination,
-            };
+            return { success: true, deletedCount };
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
             throw ErrorHandler.handle(error, {
-                operation: 'service.getUserLiterature',
+                operation: 'service.bulkDeleteLiterature',
                 layer: 'service',
-                userId,
-                additionalInfo: { filter, sort, page, pageSize },
+                additionalInfo: { lids, options },
             });
         }
     }
@@ -460,51 +352,19 @@ export class LiteratureService {
      * 🔧 预处理输入数据
      */
     private async preprocessInput(
-        input: CreateLiteratureInput,
+        input: CreateLibraryItemInput,
         options: LiteratureCreateOptions
-    ): Promise<CreateLiteratureInput> {
+    ): Promise<CreateLibraryItemInput> {
         const processed = { ...input };
 
         // 自动提取关键词
         if (options.autoExtractKeywords && input.abstract) {
             const extractedKeywords = await this.extractKeywords(input.abstract);
-            processed.keywords = [...(input.keywords || []), ...extractedKeywords];
-        }
-
-        // 自动标签化
-        if (options.autoTag) {
-            const autoTags = await this.generateAutoTags(input);
-            if (processed.initialUserMeta) {
-                processed.initialUserMeta.tags = [
-                    ...(processed.initialUserMeta.tags || []),
-                    ...autoTags,
-                ];
-            } else {
-                processed.initialUserMeta = { tags: autoTags };
-            }
+            // Note: keywords field is not available in current LibraryItem schema
+            // This is a placeholder for future implementation
         }
 
         return processed;
-    }
-
-    /**
-     * 📦 批量创建用户元数据
-     */
-    private async batchCreateUserMetas(
-        userId: string,
-        results: LiteratureOperationResult[]
-    ): Promise<void> {
-        const createPromises = results
-            .filter(result => result.isNew)
-            .map(result =>
-                this.userMetaRepo.createOrUpdate(userId, result.id, {
-                    tags: [],
-                    readingStatus: 'unread',
-                    priority: 'medium',
-                })
-            );
-
-        await Promise.all(createPromises);
     }
 
     /**
@@ -542,11 +402,6 @@ export class LiteratureService {
 
     private async extractKeywords(text: string): Promise<string[]> {
         // TODO: 实现关键词提取逻辑
-        return [];
-    }
-
-    private async generateAutoTags(input: CreateLiteratureInput): Promise<string[]> {
-        // TODO: 实现自动标签生成
         return [];
     }
 }

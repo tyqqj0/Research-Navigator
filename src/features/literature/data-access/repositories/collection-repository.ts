@@ -19,7 +19,7 @@ import {
     CollectionOperation,
     SmartCollectionResult,
     CollectionSchema
-} from '../types';
+} from '../models';
 import type { Table } from 'dexie';
 
 /**

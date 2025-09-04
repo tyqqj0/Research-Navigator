@@ -17,7 +17,7 @@ import {
     CitationQuery,
     CitationStats,
     CitationSchema
-} from '../types';
+} from '../models';
 import type { Table } from 'dexie';
 
 /**

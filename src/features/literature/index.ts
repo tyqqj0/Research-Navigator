@@ -10,27 +10,27 @@
  */
 
 import type {
-    LibraryItemCore,
+    LibraryItem,
     UserLiteratureMetaCore,
     CreateLiteratureInput,
     UpdateLiteratureInput,
     LiteratureFilter,
     LiteratureSort,
-    EnhancedLiteratureItem,
+    EnhancedLibraryItem,
 } from './data-access/models';
 
 import type {
-    EnhancedLiteratureSearchResult,
+    EnhancedSearchResult,
     UserLiteratureStatistics,
     RecommendationResult,
 } from './data-access/services';
 
 import type {
-    LiteratureStoreState,
+    UnifiedLiteratureStoreState,
 } from './data-access/stores';
 
 import {
-    useEnhancedLiteratureStore,
+    useUnifiedLiteratureStore,
     useLiteratureData,
     useLiteratureActions,
     useLiteratureUser,
@@ -38,18 +38,18 @@ import {
 } from './data-access/stores';
 
 import {
-    enhancedLiteratureService,
+    unifiedLiteratureService,
 } from './data-access/services';
 
 // ==================== 核心类型导出 ====================
 
 // 🎯 基础数据类型
 export type {
-    LibraryItemCore,
+    LibraryItem,
     UserLiteratureMetaCore,
     CitationCore,
     CollectionCore,
-    EnhancedLiteratureItem,
+    EnhancedLibraryItem,
     CreateLiteratureInput,
     UpdateLiteratureInput,
     LiteratureFilter,
@@ -95,7 +95,7 @@ export {
 
 // 🏗️ 仓储层 - 数据访问（仅在特殊情况下使用）
 export {
-    enhancedLiteratureRepository,
+    LiteratureRepository,
 } from './data-access/repositories';
 
 // ==================== 便利接口 ====================
@@ -227,10 +227,10 @@ export class LiteratureFeature {
      * 📝 更新用户元数据
      */
     async updateUserMeta(
-        literatureId: string,
+        lid: string,
         updates: Partial<UserLiteratureMetaCore>
     ): Promise<void> {
-        return this.store.updateUserMeta(literatureId, updates);
+        return this.store.updateUserMeta(lid, updates);
     }
 
     /**
@@ -245,8 +245,8 @@ export class LiteratureFeature {
     /**
      * 🤖 获取推荐
      */
-    async getRecommendations(literatureId: string, force?: boolean): Promise<RecommendationResult> {
-        return this.store.getRecommendations(literatureId, force);
+    async getRecommendations(lid: string, force?: boolean): Promise<RecommendationResult> {
+        return this.store.getRecommendations(lid, force);
     }
 
     /**

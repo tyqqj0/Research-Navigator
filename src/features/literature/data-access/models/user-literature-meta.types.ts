@@ -14,7 +14,7 @@ export const UserLiteratureMetaSchema = z.object({
 
     // 👤 关联信息
     userId: z.string(), // 这个元数据属于哪个用户
-    literatureId: z.string().uuid(), // 关联的文献ID (对应LibraryItem.id)
+    lid: z.string().uuid(), // 关联的文献ID (对应LibraryItem.id)
 
     // 🏷️ 用户标签
     tags: z.array(z.string()).default([]),
@@ -74,16 +74,11 @@ export type CreateUserLiteratureMetaInput = Omit<
 >;
 
 export type UpdateUserLiteratureMetaInput = Partial<
-    Omit<UserLiteratureMeta, 'id' | 'userId' | 'literatureId' | 'createdAt'>
+    Omit<UserLiteratureMeta, 'id' | 'userId' | 'lid' | 'createdAt'>
 >;
 
-// 🔄 组合类型 - 包含用户元数据的增强文献
-export type EnhancedLibraryItem = {
-    // 核心文献数据
-    literature: import('./library-item.types').LibraryItem;
-    // 用户元数据
-    userMeta?: UserLiteratureMeta;
-};
+// 注意：EnhancedLibraryItem 已移动到 composition.types.ts
+// 这是为了更好地组织跨域组合类型
 
 // 📊 统计类型
 export type UserLiteratureStats = {

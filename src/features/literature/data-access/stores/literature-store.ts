@@ -13,7 +13,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector, devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import {
-    EnhancedLiteratureItem,
+    EnhancedLibraryItem,
     LibraryItemCore,
     UserLiteratureMetaCore,
     LiteratureFilter,

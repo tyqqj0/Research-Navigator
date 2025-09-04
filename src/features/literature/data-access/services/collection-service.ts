@@ -16,19 +16,18 @@
 
 import {
     collectionRepository,
-    enhancedLiteratureRepository,
+    literatureRepository,
     userMetaRepository,
 } from '../repositories';
 import {
-    LibraryItemCore,
-    UserLiteratureMetaCore,
-    ErrorHandler,
+    LibraryItem,
+    UserLiteratureMeta,
 } from '../models';
 import {
     Collection,
     CollectionType,
-} from '../types';
-
+} from '../models';
+import { handleError } from '../../../../lib/errors';
 /**
  * 📂 集合创建输入
  */
@@ -101,7 +100,7 @@ export interface CollectionStatistics {
  */
 export interface CollectionRecommendation {
     suggestedItems: Array<{
-        item: LibraryItemCore;
+        item: LibraryItem;
         relevanceScore: number;
         reasons: string[];
     }>;
@@ -137,7 +136,7 @@ export class CollectionService {
 
     constructor(
         private readonly collectionRepo = collectionRepository,
-        private readonly literatureRepo = enhancedLiteratureRepository,
+        private readonly literatureRepo = literatureRepository,
         private readonly userMetaRepo = userMetaRepository
     ) { }
 
@@ -169,6 +168,15 @@ export class CollectionService {
                 depth: 0,
                 itemCount: input.initialItems?.length || 0,
                 smartRule: input.rules as any,
+                createdAt: new Date(),
+                settings: {
+                    sortBy: 'title',
+                    sortOrder: 'asc',
+                    autoArchive: false,
+                    notifyOnUpdate: false,
+                },
+                isArchived: false,
+                expiresAt: undefined,
             });
 
             // 3. 获取创建的集合对象
@@ -194,11 +202,11 @@ export class CollectionService {
             return createdCollection;
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.createCollection',
                 layer: 'service',
                 userId,
-                inputData: input,
+                additionalInfo: { input },
             });
         }
     }
@@ -236,7 +244,7 @@ export class CollectionService {
             return enhancedCollections;
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.getUserCollections',
                 layer: 'service',
                 userId,
@@ -252,7 +260,7 @@ export class CollectionService {
         userId: string,
         includeItems: boolean = true
     ): Promise<Collection & {
-        items?: LibraryItemCore[];
+        items?: LibraryItem[];
         statistics?: CollectionStatistics;
     }> {
         const startTime = Date.now();
@@ -283,10 +291,10 @@ export class CollectionService {
             return result;
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.getCollection',
                 layer: 'service',
-                entityId: collectionId,
+                additionalInfo: { collectionId },
                 userId,
             });
         }
@@ -316,7 +324,7 @@ export class CollectionService {
             const errors: string[] = [];
 
             for (const itemId of itemIds) {
-                const item = await this.literatureRepo.findByLid(itemId);
+                const item = await this.literatureRepo.findById(itemId);
                 if (item) {
                     validItems.push(itemId);
                 } else {
@@ -348,12 +356,11 @@ export class CollectionService {
             };
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.addItemsToCollection',
                 layer: 'service',
-                entityId: collectionId,
+                additionalInfo: { collectionId },
                 userId,
-                additionalInfo: { itemIds },
             });
         }
     }
@@ -398,12 +405,11 @@ export class CollectionService {
             return { removed, notFound };
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.removeItemsFromCollection',
                 layer: 'service',
-                entityId: collectionId,
+                additionalInfo: { collectionId },
                 userId,
-                additionalInfo: { itemIds },
             });
         }
     }
@@ -442,11 +448,11 @@ export class CollectionService {
             };
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.generateCollectionRecommendations',
                 layer: 'service',
                 userId,
-                entityId: basedOnCollection,
+                additionalInfo: { basedOnCollection },
             });
         }
     }
@@ -500,10 +506,10 @@ export class CollectionService {
             };
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.updateSmartCollection',
                 layer: 'service',
-                entityId: collectionId,
+                additionalInfo: { collectionId },
                 userId,
             });
         }
@@ -552,13 +558,13 @@ export class CollectionService {
         return [];
     }
 
-    private async getCollectionItems(collectionId: string): Promise<LibraryItemCore[]> {
+    private async getCollectionItems(collectionId: string): Promise<LibraryItem[]> {
         const collection = await this.collectionRepo.findById(collectionId);
         if (!collection) return [];
 
-        const items: LibraryItemCore[] = [];
+        const items: LibraryItem[] = [];
         for (const itemId of collection.literatureIds) {
-            const item = await this.literatureRepo.findByLid(itemId);
+            const item = await this.literatureRepo.findById(itemId);
             if (item) {
                 items.push(item);
             }
@@ -573,7 +579,7 @@ export class CollectionService {
     ): Promise<CollectionStatistics> {
         const items = await this.getCollectionItems(collection.id);
         const userMetas = await this.userMetaRepo.findByUserId(userId);
-        const userMetaMap = new Map(userMetas.map(meta => [meta.literatureId, meta]));
+        const userMetaMap = new Map(userMetas.map(meta => [meta.lid, meta]));
 
         // 阅读进度统计
         const readingProgress = { unread: 0, reading: 0, completed: 0 };
@@ -692,7 +698,7 @@ export class CollectionService {
 
     // ==================== 占位符方法（需要具体实现） ====================
 
-    private async analyzeUserPreferences(userMetas: UserLiteratureMetaCore[]) {
+    private async analyzeUserPreferences(userMetas: UserLiteratureMeta[]) {
         // 简化实现：分析用户偏好
         return {
             topTags: [],

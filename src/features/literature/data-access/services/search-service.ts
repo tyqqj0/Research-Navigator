@@ -15,30 +15,29 @@
  */
 
 import {
-    enhancedLiteratureRepository,
+    literatureRepository,
     userMetaRepository,
     citationRepository,
 } from '../repositories';
 import {
-    LibraryItemCore,
-    EnhancedLiteratureItem,
+    LibraryItem,
+    EnhancedLibraryItem,
     LiteratureFilter,
     LiteratureSort,
-    PaginatedResult,
-    ErrorHandler,
-    withErrorBoundary,
-    LITERATURE_CONSTANTS,
+    LiteratureSearchResult,
 } from '../models';
+
+import { handleError } from '../../../../lib/errors';
 
 /**
  * 🎯 增强版搜索结果
  */
-export interface EnhancedSearchResult extends PaginatedResult<EnhancedLiteratureItem> {
+export interface EnhancedSearchResult extends LiteratureSearchResult {
     facets?: SearchFacets;
     suggestions?: SearchSuggestions;
     appliedFilters: LiteratureFilter;
     executionTime: number;
-    searchQuery?: string;
+    searchTerm?: string;
 }
 
 /**
@@ -120,7 +119,7 @@ export class SearchService {
     private queryLog = new Map<string, number>();
 
     constructor(
-        private readonly literatureRepo = enhancedLiteratureRepository,
+        private readonly literatureRepo = literatureRepository,
         private readonly userMetaRepo = userMetaRepository,
         private readonly citationRepo = citationRepository
     ) { }
@@ -132,10 +131,10 @@ export class SearchService {
      */
     // @withErrorBoundary('searchLiterature', 'service')
     async searchLiterature(
-        filter: LiteratureFilter = { searchFields: ['title', 'authors'] },
+        filter: LiteratureFilter = {},
         sort: LiteratureSort = { field: 'createdAt', order: 'desc' },
         page: number = 1,
-        pageSize: number = LITERATURE_CONSTANTS.DEFAULT_PAGE_SIZE,
+        pageSize: number = 20,
         userId?: string,
         options: SearchOptions = {}
     ): Promise<EnhancedSearchResult> {
@@ -177,18 +176,20 @@ export class SearchService {
             // 7. 生成搜索建议（如果需要）
             let suggestions: SearchSuggestions | undefined;
             if (options.enableSmartSuggestions) {
-                suggestions = await this.generateSuggestions(filter, searchResult, userId);
+                suggestions = await this.generateSuggestions(filter, searchResult as any, userId);
             }
 
             // 8. 构建结果
             const result: EnhancedSearchResult = {
                 items: enhancedItems,
-                pagination: searchResult.pagination,
+                total: searchResult.total,
+                page: searchResult.page,
+                pageSize: searchResult.pageSize,
                 facets,
                 suggestions,
                 appliedFilters: processedFilter,
                 executionTime: Date.now() - startTime,
-                searchQuery: filter.searchQuery,
+                searchTerm: filter.searchTerm,
             };
 
             // 9. 缓存结果
@@ -197,13 +198,13 @@ export class SearchService {
             }
 
             // 10. 记录查询
-            this.recordQuery(filter.searchQuery);
+            this.recordQuery(filter.searchTerm);
 
             this.updateStats(Date.now() - startTime, true, false);
             return result;
         } catch (error) {
             this.updateStats(Date.now() - startTime, false, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.searchLiterature',
                 layer: 'service',
                 additionalInfo: { filter, sort, page, pageSize },
@@ -220,11 +221,10 @@ export class SearchService {
         query: string,
         limit: number = 10,
         userId?: string
-    ): Promise<Array<Pick<EnhancedLiteratureItem, 'lid' | 'title' | 'authors' | 'year' | 'source'>>> {
+    ): Promise<Array<Pick<LibraryItem, 'lid' | 'title' | 'authors' | 'year' | 'source'>>> {
         try {
             const filter: LiteratureFilter = {
-                searchQuery: query,
-                searchFields: ['title', 'authors'],
+                searchTerm: query,
             };
 
             const result = await this.literatureRepo.searchWithFilters(
@@ -234,7 +234,7 @@ export class SearchService {
                 limit
             );
 
-            return result.items.map(item => ({
+            return result.items.map((item: any) => ({
                 lid: item.lid,
                 title: item.title,
                 authors: item.authors,
@@ -242,7 +242,7 @@ export class SearchService {
                 source: item.source,
             }));
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.quickSearch',
                 layer: 'service',
                 additionalInfo: { query, limit },
@@ -302,7 +302,7 @@ export class SearchService {
 
             return suggestions.slice(0, limit);
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.autocomplete',
                 layer: 'service',
                 additionalInfo: { query, field, limit },
@@ -316,14 +316,14 @@ export class SearchService {
      * ⚡ 增强搜索结果
      */
     private async enhanceSearchResults(
-        items: LibraryItemCore[],
+        items: LibraryItem[],
         userId?: string
-    ): Promise<EnhancedLiteratureItem[]> {
+    ): Promise<EnhancedLibraryItem[]> {
         // 1. 批量获取用户元数据（如果有用户ID）
         let userMetasMap = new Map<string, any>();
         if (userId) {
             const userMetas = await this.userMetaRepo.findByUserId(userId);
-            userMetasMap = new Map(userMetas.map(meta => [meta.literatureId, meta]));
+            userMetasMap = new Map(userMetas.map(meta => [meta.lid, meta]));
         }
 
         // 2. 批量获取引文统计
@@ -332,15 +332,8 @@ export class SearchService {
 
         // 3. 增强每个项目
         return items.map(item => ({
-            ...item,
-            userMeta: userMetasMap.get(item.lid) || null,
-            citationStats: citationStatsMap.get(item.lid) || {
-                totalCitations: 0,
-                incomingCitations: 0,
-                outgoingCitations: 0,
-            },
-            relatedItems: [], // 可以在这里添加相关项目逻辑
-            lastAccessedAt: userMetasMap.get(item.lid)?.lastAccessedAt || item.updatedAt,
+            literature: item,
+            userMeta: userMetasMap.get(item.lid) || undefined,
         }));
     }
 
@@ -402,7 +395,7 @@ export class SearchService {
      */
     private async generateSuggestions(
         filter: LiteratureFilter,
-        searchResult: PaginatedResult<LibraryItemCore>,
+        searchResult: LiteratureSearchResult,
         userId?: string
     ): Promise<SearchSuggestions> {
         const suggestions: SearchSuggestions = {
@@ -412,17 +405,17 @@ export class SearchService {
         };
 
         // 1. 生成相关查询
-        if (filter.searchQuery) {
+        if (filter.searchTerm) {
             suggestions.relatedQueries = [
-                `${filter.searchQuery} methodology`,
-                `${filter.searchQuery} review`,
-                `${filter.searchQuery} applications`,
-                `recent ${filter.searchQuery}`,
+                `${filter.searchTerm} methodology`,
+                `${filter.searchTerm} review`,
+                `${filter.searchTerm} applications`,
+                `recent ${filter.searchTerm}`,
             ];
         }
 
         // 2. 推荐过滤器
-        if (searchResult.pagination.total > 100) {
+        if (searchResult.total > 100) {
             suggestions.recommendedFilters = [
                 {
                     field: 'year',
@@ -440,7 +433,7 @@ export class SearchService {
         }
 
         // 3. 拼写纠错（简化实现）
-        if (filter.searchQuery && filter.searchQuery.length > 3) {
+        if (filter.searchTerm && filter.searchTerm.length > 3) {
             // 这里可以实现更复杂的拼写检查逻辑
             suggestions.typoCorrections = [];
         }
@@ -460,13 +453,13 @@ export class SearchService {
         const processed = { ...filter };
 
         // 拼写纠错
-        if (options.enableTypoCorrection && filter.searchQuery) {
-            processed.searchQuery = await this.correctTypos(filter.searchQuery);
+        if (options.enableTypoCorrection && filter.searchTerm) {
+            processed.searchTerm = await this.correctTypos(filter.searchTerm);
         }
 
         // 查询扩展（添加同义词等）
-        if (filter.searchQuery) {
-            processed.searchQuery = await this.expandQuery(filter.searchQuery);
+        if (filter.searchTerm) {
+            processed.searchTerm = await this.expandQuery(filter.searchTerm);
         }
 
         return processed;

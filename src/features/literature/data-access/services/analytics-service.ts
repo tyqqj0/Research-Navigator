@@ -16,17 +16,16 @@
  */
 
 import {
-    enhancedLiteratureRepository,
+    LiteratureRepository,
     userMetaRepository,
     citationRepository,
     collectionRepository,
 } from '../repositories';
 import {
-    LibraryItemCore,
-    UserLiteratureMetaCore,
-    ErrorHandler,
-    withErrorBoundary,
+    LibraryItem,
+    UserLiteratureMeta,
 } from '../models';
+import { handleError } from '../../../../lib/errors';
 
 /**
  * 📊 用户统计数据
@@ -211,7 +210,7 @@ export class AnalyticsService {
     };
 
     constructor(
-        private readonly literatureRepo = enhancedLiteratureRepository,
+        private readonly literatureRepo = LiteratureRepository,
         private readonly userMetaRepo = userMetaRepository,
         private readonly citationRepo = citationRepository,
         private readonly collectionRepo = collectionRepository
@@ -222,7 +221,6 @@ export class AnalyticsService {
     /**
      * 👤 获取用户统计数据
      */
-    @withErrorBoundary('getUserStatistics', 'service')
     async getUserStatistics(
         userId: string,
         period?: { start: Date; end: Date }
@@ -273,7 +271,7 @@ export class AnalyticsService {
             return statistics;
         } catch (error) {
             this.updateServiceStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.getUserStatistics',
                 layer: 'service',
                 userId,
@@ -286,7 +284,6 @@ export class AnalyticsService {
     /**
      * 📚 获取文献分析数据
      */
-    @withErrorBoundary('getLiteratureAnalytics', 'service')
     async getLiteratureAnalytics(
         userId?: string,
         period?: { start: Date; end: Date }
@@ -302,13 +299,15 @@ export class AnalyticsService {
             let literatures: LibraryItemCore[];
             if (userId) {
                 const userMetas = await this.userMetaRepo.findByUserId(userId);
-                const literatureIds = userMetas.map(meta => meta.literatureId);
+                const literatureIds = userMetas.map(meta => meta.lid);
                 literatures = await Promise.all(
                     literatureIds.map(id => this.literatureRepo.findByLid(id))
                 ).then(items => items.filter(item => item !== null) as LibraryItemCore[]);
             } else {
                 // 获取所有文献（需要实现分页或限制）
-                const result = await this.literatureRepo.searchWithFilters({}, { field: 'createdAt', order: 'desc' }, 1, 10000);
+                const result = await this.literatureRepo.searchWithFilters({
+                    searchFields: ['title', 'authors', 'abstract', 'keywords', 'notes']
+                }, { field: 'createdAt', order: 'desc' }, 1, 10000);
                 literatures = result.items;
             }
 
@@ -344,7 +343,7 @@ export class AnalyticsService {
             return analytics;
         } catch (error) {
             this.updateServiceStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.getLiteratureAnalytics',
                 layer: 'service',
                 userId,
@@ -357,7 +356,6 @@ export class AnalyticsService {
     /**
      * 🕸️ 获取引文网络分析
      */
-    @withErrorBoundary('getCitationNetworkAnalytics', 'service')
     async getCitationNetworkAnalytics(
         literatureIds?: string[],
         userId?: string
@@ -397,7 +395,7 @@ export class AnalyticsService {
             return analytics;
         } catch (error) {
             this.updateServiceStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.getCitationNetworkAnalytics',
                 layer: 'service',
                 userId,
@@ -410,7 +408,6 @@ export class AnalyticsService {
     /**
      * ⚡ 获取系统性能分析
      */
-    @withErrorBoundary('getPerformanceAnalytics', 'service')
     async getPerformanceAnalytics(): Promise<PerformanceAnalytics> {
         const startTime = Date.now();
 
@@ -455,7 +452,7 @@ export class AnalyticsService {
             return analytics;
         } catch (error) {
             this.updateServiceStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.getPerformanceAnalytics',
                 layer: 'service',
             });
@@ -467,7 +464,6 @@ export class AnalyticsService {
     /**
      * 📋 生成综合分析报告
      */
-    @withErrorBoundary('generateReport', 'service')
     async generateReport(
         type: 'user' | 'literature' | 'citation' | 'performance' | 'comprehensive',
         userId?: string,
@@ -528,7 +524,7 @@ export class AnalyticsService {
             return report;
         } catch (error) {
             this.updateServiceStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.generateReport',
                 layer: 'service',
                 additionalInfo: { type, userId },
@@ -539,7 +535,7 @@ export class AnalyticsService {
     // ==================== 私有计算方法 ====================
 
     private async calculateUserOverview(
-        userMetas: UserLiteratureMetaCore[],
+        userMetas: UserLiteratureMeta[],
         userId: string
     ) {
         const collections = await this.collectionRepo.searchWithFilters({}, { field: 'createdAt', order: 'desc' }, 1, 10000);
@@ -556,7 +552,7 @@ export class AnalyticsService {
         };
     }
 
-    private calculateReadingProgress(userMetas: UserLiteratureMetaCore[]) {
+    private calculateReadingProgress(userMetas: UserLiteratureMeta[]) {
         const statusCounts = {
             unread: 0,
             reading: 0,
@@ -582,7 +578,7 @@ export class AnalyticsService {
         };
     }
 
-    private calculateEngagement(userMetas: UserLiteratureMetaCore[]) {
+    private calculateEngagement(userMetas: UserLiteratureMeta[]) {
         const now = new Date();
         const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -600,8 +596,8 @@ export class AnalyticsService {
             meta.lastAccessedAt && meta.lastAccessedAt > oneMonthAgo
         ).length;
 
-        const totalReadingTime = userMetas.reduce((sum, meta) => sum + (meta.readingProgress || 0), 0);
-        const activeSessions = userMetas.filter(meta => meta.readingProgress && meta.readingProgress > 0).length;
+        const totalReadingTime = userMetas.reduce((sum, meta) => sum + (meta.readingCompletedAt?.getTime() || 0), 0);
+        const activeSessions = userMetas.filter(meta => meta.readingCompletedAt && meta.readingCompletedAt.getTime() > 0).length;
 
         return {
             dailyActiveItems: dailyActive,
@@ -612,7 +608,7 @@ export class AnalyticsService {
         };
     }
 
-    private async analyzeUserPreferences(userMetas: UserLiteratureMetaCore[]) {
+    private async analyzeUserPreferences(userMetas: UserLiteratureMeta[]) {
         // 标签统计
         const tagCounts = new Map<string, number>();
         const authorCounts = new Map<string, number>();
@@ -714,7 +710,7 @@ export class AnalyticsService {
 
     // ==================== 占位符方法（需要具体实现） ====================
 
-    private analyzeTemporalPatterns(userMetas: UserLiteratureMetaCore[]) {
+    private analyzeTemporalPatterns(userMetas: UserLiteratureMeta[]) {
         // 简化实现
         return {
             monthlyActivity: [],
@@ -723,7 +719,7 @@ export class AnalyticsService {
         };
     }
 
-    private calculateLiteratureOverview(literatures: LibraryItemCore[]) {
+    private calculateLiteratureOverview(literatures: LibraryItem[]) {
         const authors = new Set();
         const sources = new Set();
         let minYear = Infinity;
@@ -746,7 +742,7 @@ export class AnalyticsService {
         };
     }
 
-    private analyzeLiteratureDistribution(literatures: LibraryItemCore[]) {
+    private analyzeLiteratureDistribution(literatures: LibraryItem[]) {
         // 简化实现
         return {
             byYear: [],
@@ -756,7 +752,7 @@ export class AnalyticsService {
         };
     }
 
-    private async analyzeLiteratureQuality(literatures: LibraryItemCore[], userId?: string) {
+    private async analyzeLiteratureQuality(literatures: LibraryItem[], userId?: string) {
         // 简化实现
         return {
             averageRating: 0,
@@ -766,7 +762,7 @@ export class AnalyticsService {
         };
     }
 
-    private analyzeLiteratureTrends(literatures: LibraryItemCore[]) {
+    private analyzeLiteratureTrends(literatures: LibraryItem[]) {
         // 简化实现
         return {
             growthRate: 0.1,

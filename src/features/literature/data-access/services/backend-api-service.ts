@@ -6,7 +6,7 @@
  * 设计: API-First + 缓存优化 + 错误处理
  */
 
-import { LibraryItem, ExtendedLibraryItem, BackendTask, LiteratureStatus } from '../types';
+import { LibraryItem, ExtendedLibraryItem, BackendTask, LiteratureStatus } from '../models';
 
 /**
  * 📥 文献输入类型

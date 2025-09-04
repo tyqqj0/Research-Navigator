@@ -5,18 +5,17 @@
  * 设计原则: 提供标准化的数据库访问接口
  */
 
-// 🗄️ 原始数据库实例 (向后兼容)
-export { LiteratureDatabase, literatureDB } from './literature-database';
+// 🗄️ 原始数据库实例已移除，统一使用增强版
 
 // 🚀 增强版数据库实例 (推荐使用)
 export {
-    enhancedLiteratureDB,
-    EnhancedLiteratureDatabase,
+    literatureDB,
+    literatureDatabase,
     type DatabaseStatistics
-} from './enhanced-literature-database';
+} from './literature-database';
 
 // 🎯 默认导出 - 使用增强版数据库
-export { enhancedLiteratureDB as default } from './enhanced-literature-database';
+export { literatureDB as default } from './literature-database';
 
 // 📊 数据库配置常量
 export const DATABASE_CONFIG = {

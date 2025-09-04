@@ -16,14 +16,14 @@
 
 import {
     citationRepository,
-    enhancedLiteratureRepository,
+    LiteratureRepositoryClass,
 } from '../repositories';
 import {
-    CitationCore,
-    LibraryItemCore,
-    ErrorHandler,
-    withErrorBoundary,
+    Citation,
+    LibraryItem,
 } from '../models';
+import { handleError } from '../../../../lib/errors';
+import { literatureRepository } from '../repositories/literature-repository';
 
 /**
  * 🕸️ 引文网络结果
@@ -70,7 +70,7 @@ export interface CitationDiscoveryResult {
         type: 'direct' | 'indirect' | 'inferred';
     }>;
     recommendations: Array<{
-        literatureId: string;
+        lid: string;
         reason: string;
         priority: 'high' | 'medium' | 'low';
     }>;
@@ -122,7 +122,7 @@ export class CitationService {
 
     constructor(
         private readonly citationRepo = citationRepository,
-        private readonly literatureRepo = enhancedLiteratureRepository
+        private readonly literatureRepo = literatureRepository
     ) { }
 
     // ==================== 基础引文操作 ====================
@@ -139,7 +139,7 @@ export class CitationService {
             context?: string;
             verified?: boolean;
         }
-    ): Promise<CitationCore> {
+    ): Promise<Citation> {
         const startTime = Date.now();
 
         try {
@@ -187,7 +187,7 @@ export class CitationService {
             return createdCitation as any;
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.createCitation',
                 layer: 'service',
                 additionalInfo: { sourceItemId, targetItemId, citationType },
@@ -232,7 +232,7 @@ export class CitationService {
             return result;
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.getCitationNetwork',
                 layer: 'service',
                 additionalInfo: { literatureIds, depth },
@@ -246,7 +246,7 @@ export class CitationService {
      * 🤖 自动发现引文关系
      */
     async discoverCitations(
-        literatureId: string,
+        lid: string,
         options: {
             method?: 'similarity' | 'text_analysis' | 'metadata' | 'all';
             confidenceThreshold?: number;
@@ -263,7 +263,7 @@ export class CitationService {
             } = options;
 
             // 1. 获取目标文献
-            const targetLiterature = await this.literatureRepo.findByLid(literatureId);
+            const targetLiterature = await this.literatureRepo.findByLid(lid);
             if (!targetLiterature) {
                 throw new Error('Target literature not found');
             }
@@ -320,10 +320,10 @@ export class CitationService {
             return result;
         } catch (error) {
             this.updateStats(Date.now() - startTime, false);
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.discoverCitations',
                 layer: 'service',
-                entityId: literatureId,
+                additionalInfo: { lid },
             });
         }
     }
@@ -337,7 +337,7 @@ export class CitationService {
         citationId: number,
         isValid: boolean,
         reason?: string
-    ): Promise<CitationCore> {
+    ): Promise<Citation> {
         try {
             const citation = await this.citationRepo.findById(citationId);
             if (!citation) {
@@ -355,10 +355,10 @@ export class CitationService {
 
             return citation as any;
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.verifyCitation',
                 layer: 'service',
-                entityId: citationId + '',
+                additionalInfo: { citationId, isValid, reason },
             });
         }
     }
@@ -417,7 +417,7 @@ export class CitationService {
             this.setCache(cacheKey, statistics);
             return statistics;
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw handleError(error, {
                 operation: 'service.getCitationStatistics',
                 layer: 'service',
                 userId,
@@ -544,17 +544,26 @@ export class CitationService {
 
     // ==================== 引文发现算法 ====================
 
+    /**
+     * 基于相似度发现潜在引文
+     */
     private async discoverBySimilarity(
-        targetLiterature: LibraryItemCore,
+        targetLiterature: LibraryItem,
         threshold: number,
         limit: number
     ) {
-        const similarItems = await this.literatureRepo.findSimilar(targetLiterature, limit * 2);
+        // 明确 similarItems 的类型
+        type SimilarItem = {
+            item: LibraryItem;
+            score: number;
+        };
+
+        const similarItems: SimilarItem[] = await this.literatureRepo.findSimilar(targetLiterature, limit * 2);
 
         return similarItems
-            .filter(similar => similar.score >= threshold)
+            .filter((similar: SimilarItem) => similar.score >= threshold)
             .slice(0, limit)
-            .map(similar => ({
+            .map((similar: SimilarItem) => ({
                 sourceId: targetLiterature.lid,
                 targetId: similar.item.lid,
                 confidence: similar.score,
@@ -564,7 +573,7 @@ export class CitationService {
     }
 
     private async discoverByTextAnalysis(
-        targetLiterature: LibraryItemCore,
+        targetLiterature: LibraryItem,
         threshold: number,
         limit: number
     ) {
@@ -578,7 +587,7 @@ export class CitationService {
     }
 
     private async discoverByMetadata(
-        targetLiterature: LibraryItemCore,
+        targetLiterature: LibraryItem,
         threshold: number,
         limit: number
     ) {
@@ -588,7 +597,7 @@ export class CitationService {
         // 查找同作者的其他作品
         for (const author of targetLiterature.authors) {
             const authorWorks = await this.literatureRepo.searchWithFilters(
-                { authors: [author], searchFields: ['authors'] },
+                { authors: [author] },
                 { field: 'year', order: 'desc' },
                 1,
                 10
@@ -625,7 +634,7 @@ export class CitationService {
             .filter(citation => citation.confidence > 0.7)
             .slice(0, 10)
             .map(citation => ({
-                literatureId: citation.targetId,
+                lid: citation.targetId,
                 reason: `High confidence citation (${Math.round(citation.confidence * 100)}%)`,
                 priority: (citation.confidence > 0.8 ? 'high' : 'medium') as 'high' | 'medium' | 'low',
             }));
