@@ -15,6 +15,7 @@ import {
     UserLiteratureMetaCore,
     CitationCore,
     CollectionCore,
+    CollectionItemCore,
     ModelValidators,
     ErrorHandler,
     DatabaseError,
@@ -80,6 +81,7 @@ export class EnhancedLiteratureDatabase extends Dexie {
     userMetas!: Table<UserLiteratureMetaCore, string>;
     citations!: Table<CitationCore, string>;
     collections!: Table<CollectionCore, string>;
+    collectionItems!: Table<CollectionItemCore, string>;
 
     // 🗄️ 查询缓存
     private queryCache = new Map<string, QueryCacheEntry>();
@@ -123,9 +125,9 @@ export class EnhancedLiteratureDatabase extends Dexie {
 
             // 👤 用户元数据表 - 用户相关复合索引
             userMetas: `
-                &[userId+literatureId],
+                &[userId+lid],
                 userId,
-                literatureId,
+                lid,
                 *tags,
                 priority,
                 isFavorite,
@@ -147,9 +149,9 @@ export class EnhancedLiteratureDatabase extends Dexie {
 
             // 🔗 引文关系表 - 双向查询优化
             citations: `
-                &[sourceItemId+targetItemId],
-                sourceItemId,
-                targetItemId,
+                &[sourceLid+targetLid],
+                sourceLid,
+                targetLid,
                 citationType,
                 discoveryMethod,
                 isVerified,
@@ -173,7 +175,6 @@ export class EnhancedLiteratureDatabase extends Dexie {
                 type,
                 isPublic,
                 itemCount,
-                *literatureIds,
                 *tags,
                 color,
                 createdAt,
@@ -182,6 +183,18 @@ export class EnhancedLiteratureDatabase extends Dexie {
                 [isPublic+type],
                 [userId+createdAt],
                 [type+itemCount]
+            `.replace(/\s+/g, ' ').trim(),
+
+            // 🖇️ 集合-文献关联表 - 多对多关系优化
+            collectionItems: `
+                &[collectionId+lid],
+                collectionId,
+                lid,
+                addedAt,
+                addedBy,
+                order,
+                [collectionId+addedAt],
+                [lid+addedAt]
             `.replace(/\s+/g, ' ').trim(),
         });
 

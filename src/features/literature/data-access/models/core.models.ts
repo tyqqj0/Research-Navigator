@@ -82,7 +82,7 @@ export const LibraryItemCoreSchema = z.object({
     keywords: z.array(z.string().min(1)).default([]),
     pdfPath: z.string().optional(),
     language: z.string().length(2, 'Language must be 2-letter code').default('en'),
-    status: z.enum(['active', 'archived', 'deleted']).default('active'),
+    status: z.enum(['active', 'archived', 'deleted', 'empty', 'draft']).default('active'),
 }).extend(BaseEntitySchema.shape);
 
 export type LibraryItemCore = z.infer<typeof LibraryItemCoreSchema>;
@@ -92,7 +92,7 @@ export type LibraryItemCore = z.infer<typeof LibraryItemCoreSchema>;
  */
 export const UserLiteratureMetaCoreSchema = z.object({
     userId: z.string().uuid('User ID must be UUID'),
-    literatureId: z.string().uuid('Literature ID must be UUID'),
+    lid: z.string().uuid('Literature ID must be UUID'),
     tags: z.array(z.string().min(1).max(50)).default([]),
     priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
     readingStatus: z.enum(['unread', 'reading', 'completed', 'referenced', 'abandoned']).default('unread'),
@@ -112,8 +112,8 @@ export type UserLiteratureMetaCore = z.infer<typeof UserLiteratureMetaCoreSchema
  * 🔗 引文关系核心模型
  */
 export const CitationCoreSchema = z.object({
-    sourceItemId: z.string().uuid('Source item ID must be UUID'),
-    targetItemId: z.string().uuid('Target item ID must be UUID'),
+    sourceLid: z.string().uuid('Source literature ID must be UUID'),
+    targetLid: z.string().uuid('Target literature ID must be UUID'),
     citationType: z.enum(['direct', 'indirect', 'self', 'co_author']).default('direct'),
     discoveryMethod: z.enum(['manual', 'auto_extracted', 'ai_inferred', 'user_linked']).default('manual'),
     isVerified: z.boolean().default(false),
@@ -148,6 +148,19 @@ export const CollectionCoreSchema = z.object({
 }).extend(BaseEntitySchema.shape);
 
 export type CollectionCore = z.infer<typeof CollectionCoreSchema>;
+
+/**
+ * 🖇️ 集合-文献关联模型
+ */
+export const CollectionItemCoreSchema = z.object({
+    collectionId: z.string().uuid('Collection ID must be UUID'),
+    lid: z.string().uuid('Literature ID must be UUID'),
+    addedAt: z.date(),
+    addedBy: z.string().uuid('User ID must be UUID').optional(),
+    order: z.number().int().nonnegative().default(0),
+});
+
+export type CollectionItemCore = z.infer<typeof CollectionItemCoreSchema>;
 
 // ==================== 组合模型 ====================
 
@@ -357,14 +370,14 @@ export class ModelFactory {
      */
     static createUserMeta(
         userId: string,
-        literatureId: string,
+        lid: string,
         initial?: Partial<UserLiteratureMetaCore>
     ): UserLiteratureMetaCore {
         const now = new Date();
         return {
             id: crypto.randomUUID(),
             userId,
-            literatureId,
+            lid,
             tags: initial?.tags || [],
             priority: initial?.priority || 'medium',
             readingStatus: initial?.readingStatus || 'unread',
@@ -385,15 +398,15 @@ export class ModelFactory {
      * 创建引文关系
      */
     static createCitation(
-        sourceItemId: string,
-        targetItemId: string,
+        sourceLid: string,
+        targetLid: string,
         options?: Partial<CitationCore>
     ): CitationCore {
         const now = new Date();
         return {
             id: crypto.randomUUID(),
-            sourceItemId,
-            targetItemId,
+            sourceLid,
+            targetLid,
             citationType: options?.citationType || 'direct',
             discoveryMethod: options?.discoveryMethod || 'manual',
             isVerified: options?.isVerified || false,

@@ -248,7 +248,7 @@ export class EnhancedLiteratureRepository extends BaseRepository<LibraryItemCore
      */
     @withErrorBoundary('searchWithFilters', 'repository')
     async searchWithFilters(
-        filter: LiteratureFilter = {},
+        filter: LiteratureFilter = {} as any,
         sort: LiteratureSort = { field: 'createdAt', order: 'desc' },
         page: number = 1,
         pageSize: number = LITERATURE_CONSTANTS.DEFAULT_PAGE_SIZE

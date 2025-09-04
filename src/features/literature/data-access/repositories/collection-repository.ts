@@ -430,7 +430,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             const expiredCollections = await this.table
                 .where('type').equals('temporary')
                 .filter(collection =>
-                    collection.expiresAt && collection.expiresAt <= now
+                    collection.expiresAt && collection.expiresAt <= now as any
                 )
                 .toArray();
 

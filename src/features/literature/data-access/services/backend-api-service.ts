@@ -6,7 +6,7 @@
  * 设计: API-First + 缓存优化 + 错误处理
  */
 
-import { LibraryItem, BackendTask, LiteratureStatus } from '../types';
+import { LibraryItem, ExtendedLibraryItem, BackendTask, LiteratureStatus } from '../types';
 
 /**
  * 📥 文献输入类型
@@ -268,7 +268,7 @@ export class BackendApiService {
 
                 // 更新缓存
                 fetched.forEach(item => {
-                    const cacheKey = `literature_${item.id}`;
+                    const cacheKey = `literature_${item.lid}`;
                     this.cache.set(cacheKey, {
                         data: item,
                         timestamp: Date.now()
@@ -278,8 +278,8 @@ export class BackendApiService {
 
             // 合并缓存和新获取的数据，按原顺序返回
             const result = lids.map(lid => {
-                return cached.find(item => item.id === lid) ||
-                    fetched.find(item => item.id === lid);
+                return cached.find(item => item.lid === lid) ||
+                    fetched.find(item => item.lid === lid);
             }).filter(Boolean) as LibraryItem[];
 
             return result;
@@ -504,10 +504,9 @@ export class BackendApiService {
     /**
      * 🔄 后端数据到前端数据的映射
      */
-    private mapBackendToFrontend(backendData: any): LibraryItem {
+    private mapBackendToFrontend(backendData: any): ExtendedLibraryItem {
         return {
-            id: backendData.lid, // 使用后端的LID作为前端ID
-            lid: backendData.lid, // 保持LID字段
+            lid: backendData.lid, // 使用后端的LID
             title: backendData.title,
             authors: backendData.authors || [],
             year: backendData.year,
@@ -518,8 +517,6 @@ export class BackendApiService {
             doi: backendData.doi,
             url: backendData.url,
             pdfPath: backendData.pdf_path,
-            topics: backendData.topics || [],
-            associatedSessions: backendData.associated_sessions || [],
             parsedContent: backendData.parsed_content,
             backendTask: backendData.backend_task,
             createdAt: new Date(backendData.created_at),
