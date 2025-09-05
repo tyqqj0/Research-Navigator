@@ -1,17 +1,17 @@
 /**
- * 📂 Collection Service - 集合管理服务
- * 
- * 职责:
- * 1. 集合的CRUD操作
- * 2. 智能集合创建和管理
- * 3. 集合内容推荐
- * 4. 集合统计和分析
+ * 📂 Collection Service - 重构后的集合业务服务
  * 
  * 设计原则:
- * - 集合专用：专门处理集合相关的业务逻辑
- * - 智能化：支持自动集合创建和内容推荐
- * - 用户友好：提供直观的集合管理接口
- * - 可扩展：支持多种集合类型和规则
+ * 1. 纯业务逻辑：只处理集合相关的业务规则和操作
+ * 2. 无状态管理：不管理任何UI状态，由Store层负责
+ * 3. 单一职责：专注于集合的CRUD和业务规则验证
+ * 4. 依赖注入：通过构造函数注入Repository依赖
+ * 
+ * 架构变化:
+ * - 移除了所有状态管理代码
+ * - 移除了数据组合逻辑（交给Hook层）
+ * - 专注于业务规则和数据验证
+ * - 返回纯数据，不处理UI状态
  */
 
 import {
@@ -20,127 +20,53 @@ import {
     userMetaRepository,
 } from '../repositories';
 import {
-    LibraryItem,
-    UserLiteratureMeta,
-} from '../models';
-import {
     Collection,
     CollectionType,
+    SmartCollectionRule,
+    CreateCollectionInput,
+    UpdateCollectionInput,
+    CollectionQuery,
+    CollectionSort,
+    CollectionOperation,
+    SmartCollectionResult,
+    LibraryItem,
 } from '../models';
 import { handleError } from '../../../../lib/errors';
-/**
- * 📂 集合创建输入
- */
-export interface CreateCollectionInput {
-    name: string;
-    description?: string;
-    type: CollectionType;
-    isPublic?: boolean;
-    tags?: string[];
-    rules?: CollectionRules;
-    initialItems?: string[];
+
+// ==================== 业务错误类型 ====================
+
+export class CollectionBusinessError extends Error {
+    constructor(
+        message: string,
+        public code: string,
+        public details?: any
+    ) {
+        super(message);
+        this.name = 'CollectionBusinessError';
+    }
 }
 
-/**
- * ⚙️ 智能集合规则
- */
-export interface CollectionRules {
-    /** 基于标签的规则 */
-    tags?: {
-        include?: string[];
-        exclude?: string[];
-        operator?: 'and' | 'or';
-    };
-    /** 基于作者的规则 */
-    authors?: {
-        include?: string[];
-        exclude?: string[];
-    };
-    /** 基于时间的规则 */
-    temporal?: {
-        startYear?: number;
-        endYear?: number;
-        recentDays?: number;
-    };
-    /** 基于阅读状态的规则 */
-    readingStatus?: {
-        include?: Array<'unread' | 'reading' | 'completed' | 'abandoned'>;
-    };
-    /** 基于评分的规则 */
-    rating?: {
-        min?: number;
-        max?: number;
-    };
-    /** 基于关键词的规则 */
-    keywords?: {
-        include?: string[];
-        exclude?: string[];
-    };
-}
+// ==================== 业务规则常量 ====================
 
-/**
- * 📊 集合统计
- */
-export interface CollectionStatistics {
-    totalItems: number;
-    readingProgress: {
-        unread: number;
-        reading: number;
-        completed: number;
-    };
-    averageRating: number;
-    topTags: Array<{ tag: string; count: number }>;
-    yearDistribution: Array<{ year: number; count: number }>;
-    authorDistribution: Array<{ author: string; count: number }>;
-    lastUpdated: Date;
-}
+const BUSINESS_RULES = {
+    MAX_COLLECTION_NAME_LENGTH: 100,
+    MAX_DESCRIPTION_LENGTH: 500,
+    MAX_COLLECTIONS_PER_USER: 1000,
+    MAX_LITERATURE_PER_COLLECTION: 10000,
+    MAX_NESTING_DEPTH: 5,
+    SMART_COLLECTION_UPDATE_INTERVAL: 3600, // 1小时
+} as const;
 
-/**
- * 🎯 集合推荐结果
- */
-export interface CollectionRecommendation {
-    suggestedItems: Array<{
-        item: LibraryItem;
-        relevanceScore: number;
-        reasons: string[];
-    }>;
-    suggestedCollections: Array<{
-        name: string;
-        description: string;
-        type: string;
-        estimatedSize: number;
-        rules: CollectionRules;
-    }>;
-}
+// ==================== Collection Service 类 ====================
 
-/**
- * 📂 Collection Service 类
- */
 export class CollectionService {
-    // 📊 集合缓存
-    private collectionCache = new Map<string, {
-        data: any;
-        timestamp: number;
-        ttl: number;
-    }>();
-
-    private readonly defaultCacheTTL = 300000; // 5分钟
-
-    // 📈 服务统计
-    private stats = {
-        totalOperations: 0,
-        averageResponseTime: 0,
-        collectionsCreated: 0,
-        smartCollectionsGenerated: 0,
-    };
-
     constructor(
         private readonly collectionRepo = collectionRepository,
         private readonly literatureRepo = literatureRepository,
         private readonly userMetaRepo = userMetaRepository
     ) { }
 
-    // ==================== 基础集合操作 ====================
+    // ==================== 基础CRUD操作 ====================
 
     /**
      * ➕ 创建集合
@@ -149,600 +75,542 @@ export class CollectionService {
         userId: string,
         input: CreateCollectionInput
     ): Promise<Collection> {
-        const startTime = Date.now();
-
         try {
-            // 1. 验证输入数据
-            this.validateCollectionInput(input);
+            // 1. 业务规则验证
+            await this.validateCreateCollection(userId, input);
 
-            // 2. 创建基础集合
-            const collection = await this.collectionRepo.create({
-                name: input.name,
-                description: input.description || '',
-                type: input.type,
-                ownerId: userId,
-                isPublic: input.isPublic ?? false,
-                literatureIds: input.initialItems || [],
-                parentId: null,
-                childIds: [],
-                depth: 0,
-                itemCount: input.initialItems?.length || 0,
-                smartRule: input.rules as any,
-                createdAt: new Date(),
-                settings: {
-                    sortBy: 'title',
-                    sortOrder: 'asc',
-                    autoArchive: false,
-                    notifyOnUpdate: false,
-                },
-                isArchived: false,
-                expiresAt: undefined,
-            });
+            // 2. 数据预处理
+            const processedInput = await this.preprocessCreateInput(userId, input);
 
-            // 3. 获取创建的集合对象
-            const createdCollection = await this.collectionRepo.findById(collection);
-            if (!createdCollection) {
-                throw new Error('Failed to retrieve created collection');
-            }
+            // 3. 执行创建
+            const collectionId = await this.collectionRepo.createCollection(processedInput);
 
-            // 4. 如果是智能集合，自动填充内容
-            if (input.type === 'smart' && input.rules) {
-                await this.populateSmartCollection(collection, input.rules, userId);
-                this.stats.smartCollectionsGenerated++;
-            }
-
-            // 5. 添加初始项目（如果有）
-            if (input.initialItems && input.initialItems.length > 0) {
-                await this.addItemsToCollection(collection, input.initialItems, userId);
-            }
-
-            this.stats.collectionsCreated++;
-            this.updateStats(Date.now() - startTime, true);
-
-            return createdCollection;
-        } catch (error) {
-            this.updateStats(Date.now() - startTime, false);
-            throw handleError(error, {
-                operation: 'service.createCollection',
-                layer: 'service',
-                userId,
-                additionalInfo: { input },
-            });
-        }
-    }
-
-    /**
-     * 📋 获取用户的所有集合
-     */
-    async getUserCollections(
-        userId: string,
-        includeStatistics: boolean = false
-    ): Promise<Array<Collection & { statistics?: CollectionStatistics }>> {
-        const startTime = Date.now();
-
-        try {
-            const cacheKey = `user_collections_${userId}_${includeStatistics}`;
-            const cached = this.getCache<Array<Collection & { statistics?: CollectionStatistics }>>(cacheKey);
-            if (cached) return cached;
-
-            // 1. 获取用户的所有集合
-            const collections = await this.collectionRepo.findByOwnerId(userId);
-
-            // 2. 如果需要统计信息，为每个集合计算统计
-            const enhancedCollections = includeStatistics
-                ? await Promise.all(
-                    collections.map(async (collection) => ({
-                        ...collection,
-                        statistics: await this.calculateCollectionStatistics(collection, userId),
-                    }))
-                )
-                : collections;
-
-            this.setCache(cacheKey, enhancedCollections);
-            this.updateStats(Date.now() - startTime, true);
-
-            return enhancedCollections;
-        } catch (error) {
-            this.updateStats(Date.now() - startTime, false);
-            throw handleError(error, {
-                operation: 'service.getUserCollections',
-                layer: 'service',
-                userId,
-            });
-        }
-    }
-
-    /**
-     * 📖 获取集合详情
-     */
-    async getCollection(
-        collectionId: string,
-        userId: string,
-        includeItems: boolean = true
-    ): Promise<Collection & {
-        items?: LibraryItem[];
-        statistics?: CollectionStatistics;
-    }> {
-        const startTime = Date.now();
-
-        try {
-            // 1. 获取集合基本信息
+            // 4. 获取创建结果
             const collection = await this.collectionRepo.findById(collectionId);
             if (!collection) {
-                throw new Error('Collection not found');
+                throw new CollectionBusinessError(
+                    'Failed to retrieve created collection',
+                    'CREATION_FAILED'
+                );
             }
 
-            // 2. 验证用户权限
-            if (collection.ownerId !== userId && !collection.isPublic) {
-                throw new Error('Access denied to private collection');
-            }
+            // 5. 后处理操作
+            await this.postCreateCollection(collection);
 
-            let result: any = { ...collection };
-
-            // 3. 获取集合项目（如果需要）
-            if (includeItems) {
-                result.items = await this.getCollectionItems(collectionId);
-            }
-
-            // 4. 计算统计信息
-            result.statistics = await this.calculateCollectionStatistics(collection, userId);
-
-            this.updateStats(Date.now() - startTime, true);
-            return result;
+            return collection;
         } catch (error) {
-            this.updateStats(Date.now() - startTime, false);
-            throw handleError(error, {
-                operation: 'service.getCollection',
-                layer: 'service',
-                additionalInfo: { collectionId },
-                userId,
-            });
+            throw handleError(error, { operation: 'createCollection', additionalInfo: { message: 'Failed to create collection' } });
         }
     }
 
-    // ==================== 集合内容管理 ====================
-
     /**
-     * ➕ 向集合添加项目
+     * 📝 更新集合
      */
-    async addItemsToCollection(
+    async updateCollection(
         collectionId: string,
-        itemIds: string[],
-        userId: string
-    ): Promise<{ added: number; skipped: number; errors: string[] }> {
-        const startTime = Date.now();
-
-        try {
-            // 1. 验证集合存在和权限
-            const collection = await this.collectionRepo.findById(collectionId);
-            if (!collection || collection.ownerId !== userId) {
-                throw new Error('Collection not found or access denied');
-            }
-
-            // 2. 验证项目存在
-            const validItems: string[] = [];
-            const errors: string[] = [];
-
-            for (const itemId of itemIds) {
-                const item = await this.literatureRepo.findById(itemId);
-                if (item) {
-                    validItems.push(itemId);
-                } else {
-                    errors.push(`Item ${itemId} not found`);
-                }
-            }
-
-            // 3. 添加项目到集合
-            const currentItems = new Set(collection.literatureIds);
-            const newItems = validItems.filter(id => !currentItems.has(id));
-
-            if (newItems.length > 0) {
-                const updatedItemIds = [...collection.literatureIds, ...newItems];
-                await this.collectionRepo.update(collectionId, {
-                    literatureIds: updatedItemIds,
-                    itemCount: updatedItemIds.length,
-                });
-
-                // 清理相关缓存
-                this.clearCollectionCache(collectionId, userId);
-            }
-
-            this.updateStats(Date.now() - startTime, true);
-
-            return {
-                added: newItems.length,
-                skipped: validItems.length - newItems.length,
-                errors,
-            };
-        } catch (error) {
-            this.updateStats(Date.now() - startTime, false);
-            throw handleError(error, {
-                operation: 'service.addItemsToCollection',
-                layer: 'service',
-                additionalInfo: { collectionId },
-                userId,
-            });
-        }
-    }
-
-    /**
-     * ➖ 从集合移除项目
-     */
-    async removeItemsFromCollection(
-        collectionId: string,
-        itemIds: string[],
-        userId: string
-    ): Promise<{ removed: number; notFound: number }> {
-        const startTime = Date.now();
-
-        try {
-            // 1. 验证集合存在和权限
-            const collection = await this.collectionRepo.findById(collectionId);
-            if (!collection || collection.ownerId !== userId) {
-                throw new Error('Collection not found or access denied');
-            }
-
-            // 2. 移除项目
-            const currentItems = new Set(collection.literatureIds);
-            const toRemove = new Set(itemIds);
-            const updatedItemIds = collection.literatureIds.filter((id: string) => !toRemove.has(id));
-
-            const removed = collection.literatureIds.length - updatedItemIds.length;
-            const notFound = itemIds.length - removed;
-
-            if (removed > 0) {
-                await this.collectionRepo.update(collectionId, {
-                    literatureIds: updatedItemIds,
-                    itemCount: updatedItemIds.length,
-                });
-
-                // 清理相关缓存
-                this.clearCollectionCache(collectionId, userId);
-            }
-
-            this.updateStats(Date.now() - startTime, true);
-
-            return { removed, notFound };
-        } catch (error) {
-            this.updateStats(Date.now() - startTime, false);
-            throw handleError(error, {
-                operation: 'service.removeItemsFromCollection',
-                layer: 'service',
-                additionalInfo: { collectionId },
-                userId,
-            });
-        }
-    }
-
-    // ==================== 智能集合功能 ====================
-
-    /**
-     * 🤖 生成智能集合推荐
-     */
-    async generateCollectionRecommendations(
         userId: string,
-        basedOnCollection?: string
-    ): Promise<CollectionRecommendation> {
-        const startTime = Date.now();
-
+        updates: UpdateCollectionInput
+    ): Promise<Collection> {
         try {
-            // 1. 分析用户的文献和偏好
-            const userMetas = await this.userMetaRepo.findByUserId(userId);
-            const userPreferences = await this.analyzeUserPreferences(userMetas as any);
+            // 1. 权限验证
+            await this.validateCollectionAccess(collectionId, userId, 'write');
 
-            // 2. 生成项目推荐
-            const suggestedItems = await this.generateItemRecommendations(
-                userId,
-                userPreferences,
-                basedOnCollection
-            );
+            // 2. 业务规则验证
+            await this.validateUpdateCollection(collectionId, updates);
 
-            // 3. 生成集合推荐
-            const suggestedCollections = this.generateCollectionSuggestions(userPreferences);
+            // 3. 数据预处理
+            const processedUpdates = await this.preprocessUpdateInput(collectionId, updates);
 
-            this.updateStats(Date.now() - startTime, true);
+            // 4. 执行更新
+            await this.collectionRepo.update(collectionId, processedUpdates);
 
-            return {
-                suggestedItems,
-                suggestedCollections,
-            };
+            // 5. 获取更新结果
+            const collection = await this.collectionRepo.findById(collectionId);
+            if (!collection) {
+                throw new CollectionBusinessError(
+                    'Collection not found after update',
+                    'UPDATE_FAILED'
+                );
+            }
+
+            // 6. 后处理操作
+            await this.postUpdateCollection(collection, updates);
+
+            return collection;
         } catch (error) {
-            this.updateStats(Date.now() - startTime, false);
-            throw handleError(error, {
-                operation: 'service.generateCollectionRecommendations',
-                layer: 'service',
-                userId,
-                additionalInfo: { basedOnCollection },
-            });
+            throw handleError(error, { operation: 'updateCollection', additionalInfo: { message: 'Failed to update collection' } });
         }
     }
 
     /**
-     * 🔄 更新智能集合
+     * 🗑️ 删除集合
      */
-    async updateSmartCollection(
-        collectionId: string,
-        userId: string
-    ): Promise<{ added: number; removed: number; total: number }> {
-        const startTime = Date.now();
-
+    async deleteCollection(collectionId: string, userId: string): Promise<void> {
         try {
-            // 1. 获取集合信息
-            const collection = await this.collectionRepo.findById(collectionId);
-            if (!collection || collection.ownerId !== userId) {
-                throw new Error('Collection not found or access denied');
-            }
+            // 1. 权限验证
+            await this.validateCollectionAccess(collectionId, userId, 'delete');
 
-            if (collection.type !== 'smart') {
-                throw new Error('Only smart collections can be auto-updated');
-            }
+            // 2. 业务规则验证
+            await this.validateDeleteCollection(collectionId);
 
-            // 2. 获取当前项目
-            const currentItems = new Set(collection.literatureIds);
+            // 3. 预删除处理
+            await this.preDeleteCollection(collectionId);
 
-            // 3. 根据规则重新计算项目（简化实现）
-            const newItems = await this.evaluateCollectionRules({}, userId);
-            const newItemsSet = new Set(newItems);
+            // 4. 执行删除
+            await this.collectionRepo.delete(collectionId);
 
-            // 4. 计算差异
-            const toAdd = newItems.filter(id => !currentItems.has(id));
-            const toRemove = collection.literatureIds.filter((id: string) => !newItemsSet.has(id));
-
-            // 5. 更新集合
-            await this.collectionRepo.update(collectionId, {
-                literatureIds: newItems,
-                itemCount: newItems.length,
-            });
-
-            // 6. 清理缓存
-            this.clearCollectionCache(collectionId, userId);
-
-            this.updateStats(Date.now() - startTime, true);
-
-            return {
-                added: toAdd.length,
-                removed: toRemove.length,
-                total: newItems.length,
-            };
         } catch (error) {
-            this.updateStats(Date.now() - startTime, false);
-            throw handleError(error, {
-                operation: 'service.updateSmartCollection',
-                layer: 'service',
-                additionalInfo: { collectionId },
-                userId,
-            });
+            throw handleError(error, { operation: 'deleteCollection', additionalInfo: { message: 'Failed to delete collection' } });
         }
     }
 
-    // ==================== 私有辅助方法 ====================
-
-    private validateCollectionInput(input: CreateCollectionInput): void {
-        if (!input.name || input.name.trim().length === 0) {
-            throw new Error('Collection name is required');
-        }
-
-        if (input.name.length > 100) {
-            throw new Error('Collection name too long (max 100 characters)');
-        }
-
-        if (input.description && input.description.length > 500) {
-            throw new Error('Collection description too long (max 500 characters)');
-        }
-
-        if (input.type === 'smart' && !input.rules) {
-            throw new Error('Smart collections require rules');
+    /**
+     * 🔍 查询集合
+     */
+    async queryCollections(
+        query: CollectionQuery,
+        sort: CollectionSort = { field: 'createdAt', order: 'desc' },
+        page: number = 1,
+        pageSize: number = 20
+    ): Promise<{
+        items: Collection[];
+        total: number;
+        page: number;
+        pageSize: number;
+        totalPages: number;
+    }> {
+        try {
+            return await this.collectionRepo.searchWithFilters(query, sort, page, pageSize);
+        } catch (error) {
+            throw handleError(error, { operation: 'queryCollections', additionalInfo: { message: 'Failed to query collections' } });
         }
     }
 
-    private async populateSmartCollection(
+    // ==================== 文献管理操作 ====================
+
+    /**
+     * 📚 添加文献到集合
+     */
+    async addLiteratureToCollection(
         collectionId: string,
-        rules: CollectionRules,
+        lids: string[],
         userId: string
     ): Promise<void> {
-        const matchingItems = await this.evaluateCollectionRules(rules, userId);
+        try {
+            // 1. 权限验证
+            await this.validateCollectionAccess(collectionId, userId, 'write');
 
-        if (matchingItems.length > 0) {
-            await this.collectionRepo.update(collectionId, {
-                literatureIds: matchingItems,
-                itemCount: matchingItems.length,
-            });
+            // 2. 业务规则验证
+            await this.validateAddLiterature(collectionId, lids);
+
+            // 3. 执行添加
+            await this.collectionRepo.addLiterature(collectionId, lids);
+
+            // 4. 后处理
+            await this.postAddLiterature(collectionId, lids);
+
+        } catch (error) {
+            throw handleError(error, { operation: 'addLiteratureToCollection', additionalInfo: { message: 'Failed to add literature to collection' } });
         }
-    }
-
-    private async evaluateCollectionRules(
-        rules: CollectionRules,
-        userId: string
-    ): Promise<string[]> {
-        // 简化实现：返回空数组
-        return [];
-    }
-
-    private async getCollectionItems(collectionId: string): Promise<LibraryItem[]> {
-        const collection = await this.collectionRepo.findById(collectionId);
-        if (!collection) return [];
-
-        const items: LibraryItem[] = [];
-        for (const itemId of collection.literatureIds) {
-            const item = await this.literatureRepo.findById(itemId);
-            if (item) {
-                items.push(item);
-            }
-        }
-
-        return items;
-    }
-
-    private async calculateCollectionStatistics(
-        collection: Collection,
-        userId: string
-    ): Promise<CollectionStatistics> {
-        const items = await this.getCollectionItems(collection.id);
-        const userMetas = await this.userMetaRepo.findByUserId(userId);
-        const userMetaMap = new Map(userMetas.map(meta => [meta.lid, meta]));
-
-        // 阅读进度统计
-        const readingProgress = { unread: 0, reading: 0, completed: 0 };
-        let totalRating = 0;
-        let ratedCount = 0;
-
-        // 标签统计
-        const tagCounts = new Map<string, number>();
-        // 年份统计
-        const yearCounts = new Map<number, number>();
-        // 作者统计
-        const authorCounts = new Map<string, number>();
-
-        for (const item of items) {
-            const meta = userMetaMap.get(item.lid);
-
-            // 阅读进度
-            if (meta) {
-                const status = meta.readingStatus as keyof typeof readingProgress;
-                if (status in readingProgress) {
-                    readingProgress[status]++;
-                }
-
-                // 评分
-                if (meta.rating) {
-                    totalRating += meta.rating;
-                    ratedCount++;
-                }
-
-                // 标签
-                for (const tag of meta.tags) {
-                    tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-                }
-            }
-
-            // 年份
-            if (item.year) {
-                yearCounts.set(item.year, (yearCounts.get(item.year) || 0) + 1);
-            }
-
-            // 作者
-            for (const author of item.authors) {
-                authorCounts.set(author, (authorCounts.get(author) || 0) + 1);
-            }
-        }
-
-        return {
-            totalItems: items.length,
-            readingProgress,
-            averageRating: ratedCount > 0 ? totalRating / ratedCount : 0,
-            topTags: Array.from(tagCounts.entries())
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10)
-                .map(([tag, count]) => ({ tag, count })),
-            yearDistribution: Array.from(yearCounts.entries())
-                .sort((a, b) => b[0] - a[0])
-                .map(([year, count]) => ({ year, count })),
-            authorDistribution: Array.from(authorCounts.entries())
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10)
-                .map(([author, count]) => ({ author, count })),
-            lastUpdated: collection.updatedAt || new Date(),
-        };
-    }
-
-    // ==================== 缓存管理 ====================
-
-    private getCache<T>(key: string): T | null {
-        const entry = this.collectionCache.get(key);
-        if (!entry) return null;
-
-        if (Date.now() - entry.timestamp > entry.ttl) {
-            this.collectionCache.delete(key);
-            return null;
-        }
-
-        return entry.data as T;
-    }
-
-    private setCache<T>(key: string, data: T, ttl: number = this.defaultCacheTTL): void {
-        this.collectionCache.set(key, {
-            data,
-            timestamp: Date.now(),
-            ttl,
-        });
-    }
-
-    private clearCollectionCache(collectionId: string, userId: string): void {
-        for (const [key] of this.collectionCache) {
-            if (key.includes(collectionId) || key.includes(`user_collections_${userId}`)) {
-                this.collectionCache.delete(key);
-            }
-        }
-    }
-
-    private updateStats(responseTime: number, success: boolean): void {
-        this.stats.totalOperations++;
-        this.stats.averageResponseTime =
-            (this.stats.averageResponseTime * (this.stats.totalOperations - 1) + responseTime) /
-            this.stats.totalOperations;
     }
 
     /**
-     * 📊 获取服务统计
+     * 📚 从集合移除文献
      */
-    public getCollectionServiceStats() {
-        return { ...this.stats };
+    async removeLiteratureFromCollection(
+        collectionId: string,
+        lids: string[],
+        userId: string
+    ): Promise<void> {
+        try {
+            // 1. 权限验证
+            await this.validateCollectionAccess(collectionId, userId, 'write');
+
+            // 2. 执行移除
+            await this.collectionRepo.removeLiterature(collectionId, lids);
+
+            // 3. 后处理
+            await this.postRemoveLiterature(collectionId, lids);
+
+        } catch (error) {
+            throw handleError(error, { operation: 'removeLiteratureFromCollection', additionalInfo: { message: 'Failed to remove literature from collection' } });
+        }
     }
+
+    // ==================== 智能集合操作 ====================
 
     /**
-     * 🧹 清理缓存
+     * 🤖 执行智能集合规则
      */
-    public clearCache(): void {
-        this.collectionCache.clear();
+    async executeSmartCollection(collectionId: string): Promise<SmartCollectionResult> {
+        try {
+            const collection = await this.collectionRepo.findById(collectionId);
+            if (!collection) {
+                throw new CollectionBusinessError(
+                    'Collection not found',
+                    'NOT_FOUND'
+                );
+            }
+
+            if (collection.type !== 'smart' || !collection.smartRule) {
+                throw new CollectionBusinessError(
+                    'Collection is not a smart collection',
+                    'INVALID_TYPE'
+                );
+            }
+
+            const startTime = Date.now();
+
+            // 执行智能规则
+            const matchedItems = await this.executeSmartRule(collection.smartRule);
+
+            // 计算变更
+            const currentItems = new Set(collection.lids);
+            const newItems = new Set(matchedItems);
+
+            const addedItems = matchedItems.filter(id => !currentItems.has(id));
+            const removedItems = collection.lids.filter(id => !newItems.has(id));
+
+            // 更新集合
+            if (addedItems.length > 0 || removedItems.length > 0) {
+                await this.collectionRepo.update(collectionId, {
+                    lids: matchedItems,
+                    updatedAt: new Date(),
+                });
+            }
+
+            return {
+                collectionId,
+                matchedItems,
+                addedItems,
+                removedItems,
+                totalMatched: matchedItems.length,
+                executedAt: new Date(),
+                executionTime: Date.now() - startTime,
+            };
+
+        } catch (error) {
+            throw handleError(error, { operation: 'executeSmartCollection', additionalInfo: { message: 'Failed to execute smart collection' } });
+        }
     }
 
-    // ==================== 占位符方法（需要具体实现） ====================
+    // ==================== 业务规则验证 ====================
 
-    private async analyzeUserPreferences(userMetas: UserLiteratureMeta[]) {
-        // 简化实现：分析用户偏好
-        return {
-            topTags: [],
-            topAuthors: [],
-            preferredYears: [],
-        };
-    }
-
-    private async generateItemRecommendations(
+    private async validateCreateCollection(
         userId: string,
-        preferences: any,
-        basedOnCollection?: string
-    ) {
-        // 简化实现：生成项目推荐
+        input: CreateCollectionInput
+    ): Promise<void> {
+        // 验证名称长度
+        if (input.name.length > BUSINESS_RULES.MAX_COLLECTION_NAME_LENGTH) {
+            throw new CollectionBusinessError(
+                `Collection name too long (max ${BUSINESS_RULES.MAX_COLLECTION_NAME_LENGTH} characters)`,
+                'NAME_TOO_LONG'
+            );
+        }
+
+        // 验证描述长度
+        if (input.description && input.description.length > BUSINESS_RULES.MAX_DESCRIPTION_LENGTH) {
+            throw new CollectionBusinessError(
+                `Description too long (max ${BUSINESS_RULES.MAX_DESCRIPTION_LENGTH} characters)`,
+                'DESCRIPTION_TOO_LONG'
+            );
+        }
+
+        // 验证用户集合数量限制
+        const userCollections = await this.collectionRepo.searchWithFilters(
+            { ownerUid: userId },
+            { field: 'createdAt', order: 'desc' },
+            1,
+            1
+        );
+
+        if (userCollections.total >= BUSINESS_RULES.MAX_COLLECTIONS_PER_USER) {
+            throw new CollectionBusinessError(
+                `Maximum collections limit reached (${BUSINESS_RULES.MAX_COLLECTIONS_PER_USER})`,
+                'MAX_COLLECTIONS_EXCEEDED'
+            );
+        }
+
+        // 验证层次深度
+        if (input.parentId) {
+            const parentDepth = await this.getCollectionDepth(input.parentId);
+            if (parentDepth >= BUSINESS_RULES.MAX_NESTING_DEPTH) {
+                throw new CollectionBusinessError(
+                    `Maximum nesting depth exceeded (max ${BUSINESS_RULES.MAX_NESTING_DEPTH})`,
+                    'MAX_DEPTH_EXCEEDED'
+                );
+            }
+        }
+    }
+
+    private async validateUpdateCollection(
+        collectionId: string,
+        updates: UpdateCollectionInput
+    ): Promise<void> {
+        // 验证名称长度
+        if (updates.name && updates.name.length > BUSINESS_RULES.MAX_COLLECTION_NAME_LENGTH) {
+            throw new CollectionBusinessError(
+                `Collection name too long (max ${BUSINESS_RULES.MAX_COLLECTION_NAME_LENGTH} characters)`,
+                'NAME_TOO_LONG'
+            );
+        }
+
+        // 验证描述长度
+        if (updates.description && updates.description.length > BUSINESS_RULES.MAX_DESCRIPTION_LENGTH) {
+            throw new CollectionBusinessError(
+                `Description too long (max ${BUSINESS_RULES.MAX_DESCRIPTION_LENGTH} characters)`,
+                'DESCRIPTION_TOO_LONG'
+            );
+        }
+
+        // 验证层次结构变更
+        if (updates.parentId !== undefined) {
+            await this.validateHierarchyChange(collectionId, updates.parentId);
+        }
+    }
+
+    private async validateDeleteCollection(collectionId: string): Promise<void> {
+        const collection = await this.collectionRepo.findById(collectionId);
+        if (!collection) {
+            throw new CollectionBusinessError(
+                'Collection not found',
+                'NOT_FOUND'
+            );
+        }
+
+        // 检查是否有子集合
+        if (collection.childIds.length > 0) {
+            throw new CollectionBusinessError(
+                'Cannot delete collection with child collections',
+                'HAS_CHILDREN'
+            );
+        }
+    }
+
+    private async validateAddLiterature(
+        collectionId: string,
+        lids: string[]
+    ): Promise<void> {
+        const collection = await this.collectionRepo.findById(collectionId);
+        if (!collection) {
+            throw new CollectionBusinessError(
+                'Collection not found',
+                'NOT_FOUND'
+            );
+        }
+
+        // 验证文献数量限制
+        const totalItems = collection.lids.length + lids.length;
+        if (totalItems > BUSINESS_RULES.MAX_LITERATURE_PER_COLLECTION) {
+            throw new CollectionBusinessError(
+                `Maximum literature limit exceeded (max ${BUSINESS_RULES.MAX_LITERATURE_PER_COLLECTION})`,
+                'MAX_LITERATURE_EXCEEDED'
+            );
+        }
+
+        // 验证文献是否存在
+        const existingLiterature = await this.literatureRepo.findByLids(lids);
+        const existingIds = new Set(existingLiterature.map((item: LibraryItem) => item.lid));
+        const missingIds = lids.filter(id => !existingIds.has(id));
+
+        if (missingIds.length > 0) {
+            throw new CollectionBusinessError(
+                `Literature items not found: ${missingIds.join(', ')}`,
+                'LITERATURE_NOT_FOUND',
+                { missingIds }
+            );
+        }
+    }
+
+    private async validateCollectionAccess(
+        collectionId: string,
+        userId: string,
+        permission: 'read' | 'write' | 'delete'
+    ): Promise<void> {
+        const collection = await this.collectionRepo.findById(collectionId);
+        if (!collection) {
+            throw new CollectionBusinessError(
+                'Collection not found',
+                'NOT_FOUND'
+            );
+        }
+
+        // 所有者有全部权限
+        if (collection.ownerUid === userId) {
+            return;
+        }
+
+        // 公开集合的读权限
+        if (permission === 'read' && collection.isPublic) {
+            return;
+        }
+
+        // 其他情况拒绝访问
+        throw new CollectionBusinessError(
+            'Access denied',
+            'ACCESS_DENIED'
+        );
+    }
+
+    // ==================== 辅助方法 ====================
+
+    private async preprocessCreateInput(
+        userId: string,
+        input: CreateCollectionInput
+    ): Promise<CreateCollectionInput> {
+        const processed = { ...input };
+
+        // 设置所有者
+        processed.ownerUid = userId;
+
+        // 处理层次结构
+        if (processed.parentId) {
+            const parent = await this.collectionRepo.findById(processed.parentId);
+            if (parent) {
+                // 自动添加到父集合的子列表中会在Repository层处理
+            }
+        }
+
+        return processed;
+    }
+
+    private async preprocessUpdateInput(
+        collectionId: string,
+        updates: UpdateCollectionInput
+    ): Promise<UpdateCollectionInput> {
+        const processed = { ...updates };
+
+        // 添加更新时间
+        processed.updatedAt = new Date();
+
+        return processed;
+    }
+
+    private async postCreateCollection(collection: Collection): Promise<void> {
+        // 如果是智能集合，立即执行一次规则
+        if (collection.type === 'smart' && collection.smartRule) {
+            try {
+                await this.executeSmartCollection(collection.id);
+            } catch (error) {
+                console.warn(`Failed to execute smart collection on creation: ${error}`);
+            }
+        }
+    }
+
+    private async postUpdateCollection(
+        collection: Collection,
+        updates: UpdateCollectionInput
+    ): Promise<void> {
+        // 如果更新了智能规则，重新执行
+        if (updates.smartRule && collection.type === 'smart') {
+            try {
+                await this.executeSmartCollection(collection.id);
+            } catch (error) {
+                console.warn(`Failed to execute smart collection after update: ${error}`);
+            }
+        }
+    }
+
+    private async preDeleteCollection(collectionId: string): Promise<void> {
+        const collection = await this.collectionRepo.findById(collectionId);
+        if (!collection) return;
+
+        // 从父集合的子列表中移除
+        if (collection.parentId) {
+            try {
+                const parent = await this.collectionRepo.findById(collection.parentId);
+                if (parent) {
+                    const updatedChildIds = parent.childIds.filter(id => id !== collectionId);
+                    await this.collectionRepo.update(collection.parentId, {
+                        childIds: updatedChildIds,
+                    });
+                }
+            } catch (error) {
+                console.warn(`Failed to update parent collection: ${error}`);
+            }
+        }
+    }
+
+    private async postAddLiterature(
+        collectionId: string,
+        lids: string[]
+    ): Promise<void> {
+        // 可以在这里添加后处理逻辑，比如发送通知等
+    }
+
+    private async postRemoveLiterature(
+        collectionId: string,
+        lids: string[]
+    ): Promise<void> {
+        // 可以在这里添加后处理逻辑
+    }
+
+    private async executeSmartRule(rule: SmartCollectionRule): Promise<string[]> {
+        // 这里应该实现智能规则的执行逻辑
+        // 目前返回空数组，实际实现需要根据规则查询文献
         return [];
     }
 
-    private generateCollectionSuggestions(preferences: any) {
-        // 简化实现：生成集合建议
-        return [
-            {
-                name: 'Recent AI Research',
-                description: 'Latest papers in artificial intelligence',
-                type: 'smart',
-                estimatedSize: 25,
-                rules: {
-                    keywords: { include: ['artificial intelligence', 'machine learning'] },
-                    temporal: { recentDays: 90 },
-                },
-            },
-            {
-                name: 'High-Impact Papers',
-                description: 'Your highest-rated literature',
-                type: 'smart',
-                estimatedSize: 15,
-                rules: {
-                    rating: { min: 4 },
-                },
-            },
-        ];
+    private async getCollectionDepth(collectionId: string): Promise<number> {
+        let depth = 0;
+        let currentId: string | null = collectionId;
+
+        while (currentId && depth < BUSINESS_RULES.MAX_NESTING_DEPTH) {
+            const collection = await this.collectionRepo.findById(currentId);
+            if (!collection) break;
+
+            depth++;
+            currentId = collection.parentId || null;
+        }
+
+        return depth;
+    }
+
+    private async validateHierarchyChange(
+        collectionId: string,
+        newParentId: string | null
+    ): Promise<void> {
+        if (!newParentId) return;
+
+        // 防止循环引用
+        if (await this.wouldCreateCycle(collectionId, newParentId)) {
+            throw new CollectionBusinessError(
+                'Cannot create circular hierarchy',
+                'CIRCULAR_HIERARCHY'
+            );
+        }
+
+        // 验证深度限制
+        const newDepth = await this.getCollectionDepth(newParentId) + 1;
+        if (newDepth > BUSINESS_RULES.MAX_NESTING_DEPTH) {
+            throw new CollectionBusinessError(
+                `Maximum nesting depth exceeded (max ${BUSINESS_RULES.MAX_NESTING_DEPTH})`,
+                'MAX_DEPTH_EXCEEDED'
+            );
+        }
+    }
+
+    private async wouldCreateCycle(
+        collectionId: string,
+        potentialParentId: string
+    ): Promise<boolean> {
+        let currentId: string | null = potentialParentId;
+        const visited = new Set<string>();
+
+        while (currentId && !visited.has(currentId)) {
+            if (currentId === collectionId) {
+                return true; // 发现循环
+            }
+
+            visited.add(currentId);
+            const collection = await this.collectionRepo.findById(currentId);
+            currentId = collection?.parentId || null;
+        }
+
+        return false;
     }
 }
 
-// 🏪 服务实例
-export const collectionService = new CollectionService();
+// ==================== 导出 ====================
 
-export default collectionService;
+export const collectionService = new CollectionService();

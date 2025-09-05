@@ -81,7 +81,7 @@ export interface LiteratureStatistics {
  * 🏗️ 增强版文献仓储类
  */
 export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id: string }, string> {
-    protected table = literatureDB.libraries;
+    protected table = literatureDB.libraries as any;
     protected generateId = () => crypto.randomUUID();
 
     // 📊 相似性检测阈值
@@ -125,6 +125,40 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
             throw appError;
         }
     }
+
+    /**
+     * 🔍 批量根据文献ID查找
+     */
+    async findByLids(lids: string[]): Promise<LibraryItem[]> {
+        if (!lids || lids.length === 0) {
+            return [];
+        }
+
+        // 过滤掉空的lid
+        const validLids = lids.filter(lid => lid && lid.trim());
+        if (validLids.length === 0) {
+            return [];
+        }
+
+        try {
+            const items = await this.table.where('lid').anyOf(validLids).toArray();
+            return items || [];
+        } catch (error) {
+            const appError = new AppError(
+                `批量查找文献失败: ${error instanceof Error ? error.message : String(error)}`,
+                ErrorType.DATABASE_ERROR,
+                ErrorSeverity.HIGH,
+                {
+                    operation: 'repository.findByLids',
+                    layer: 'repository',
+                    additionalInfo: { lids: validLids, originalError: error }
+                }
+            );
+            handleError(appError);
+            throw appError;
+        }
+    }
+
 
     /**
      * ➕ 智能创建或更新文献
@@ -394,28 +428,28 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
 
             for (const item of allItems) {
                 // 来源统计
-                bySource[item.source] = (bySource[item.source] || 0) + 1;
+                // bySource[item.source] = (bySource[item.source] || 0) + 1;
 
                 // 年份统计
                 if (item.year) {
                     byYear[item.year] = (byYear[item.year] || 0) + 1;
                 }
 
-                // 语言统计
-                byLanguage[item.language] = (byLanguage[item.language] || 0) + 1;
+                // // 语言统计
+                // byLanguage[item.language] = (byLanguage[item.language] || 0) + 1;
 
-                // 状态统计
-                byStatus[item.status] = (byStatus[item.status] || 0) + 1;
+                // // 状态统计
+                // byStatus[item.status] = (byStatus[item.status] || 0) + 1;
 
                 // 作者统计
                 for (const author of item.authors) {
                     authorCounts[author] = (authorCounts[author] || 0) + 1;
                 }
 
-                // 关键词统计
-                for (const keyword of item.keywords) {
-                    keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
-                }
+                // // 关键词统计
+                // for (const keyword of item.keywords) {
+                //     keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+                // }
 
                 // 时间统计
                 if (item.createdAt > oneDayAgo) recentDay++;

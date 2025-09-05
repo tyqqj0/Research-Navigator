@@ -40,9 +40,9 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
     /**
      * 🔍 根据所有者ID查找集合
      */
-    async findByOwnerId(ownerId: string): Promise<Collection[]> {
+    async findByOwnerId(ownerUid: string): Promise<Collection[]> {
         try {
-            return await this.table.where('ownerId').equals(ownerId).toArray();
+            return await this.table.where('ownerUid').equals(ownerUid).toArray();
         } catch (error) {
             console.error('[CollectionRepository] findByOwnerId failed:', error);
             return [];
@@ -76,9 +76,9 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
     /**
      * 🌳 获取集合层次树
      */
-    async getCollectionTree(ownerId: string): Promise<Collection[]> {
+    async getCollectionTree(ownerUid: string): Promise<Collection[]> {
         try {
-            const allCollections = await this.findByOwnerId(ownerId);
+            const allCollections = await this.findByOwnerId(ownerUid);
 
             // 构建层次结构
             const collectionsMap = new Map<string, Collection>();
@@ -132,8 +132,8 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             let collection = this.table.toCollection();
 
             // 应用筛选条件
-            if (query.ownerId) {
-                collection = this.table.where('ownerId').equals(query.ownerId);
+            if (query.ownerUid) {
+                collection = this.table.where('ownerUid').equals(query.ownerUid);
             }
 
             if (query.type) {
@@ -197,9 +197,9 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             const collection: Collection = {
                 id: this.generateId(),
                 ...input,
-                literatureIds: input.literatureIds || [],
+                lids: input.lids || [],
                 childIds: [],
-                itemCount: input.literatureIds?.length || 0,
+                itemCount: input.lids?.length || 0,
                 isArchived: false,
                 createdAt: now,
                 updatedAt: now
@@ -221,7 +221,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async addLiterature(
         collectionId: string,
-        literatureIds: string[]
+        lids: string[]
     ): Promise<void> {
         try {
             const collection = await this.findById(collectionId);
@@ -230,13 +230,13 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             }
 
             // 去重添加
-            const existingIds = new Set(collection.literatureIds);
-            const newIds = literatureIds.filter(id => !existingIds.has(id));
+            const existingIds = new Set(collection.lids);
+            const newIds = lids.filter(id => !existingIds.has(id));
 
             if (newIds.length > 0) {
-                const updatedLiteratureIds = [...collection.literatureIds, ...newIds];
+                const updatedLiteratureIds = [...collection.lids, ...newIds];
                 await this.update(collectionId, {
-                    literatureIds: updatedLiteratureIds,
+                    lids: updatedLiteratureIds,
                     itemCount: updatedLiteratureIds.length,
                     lastItemAddedAt: DatabaseUtils.now()
                 });
@@ -252,7 +252,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async removeLiterature(
         collectionId: string,
-        literatureIds: string[]
+        lids: string[]
     ): Promise<void> {
         try {
             const collection = await this.findById(collectionId);
@@ -260,13 +260,13 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                 throw new Error(`Collection ${collectionId} not found`);
             }
 
-            const idsToRemove = new Set(literatureIds);
-            const updatedLiteratureIds = collection.literatureIds.filter(
+            const idsToRemove = new Set(lids);
+            const updatedLiteratureIds = collection.lids.filter(
                 id => !idsToRemove.has(id)
             );
 
             await this.update(collectionId, {
-                literatureIds: updatedLiteratureIds,
+                lids: updatedLiteratureIds,
                 itemCount: updatedLiteratureIds.length
             });
         } catch (error) {
@@ -300,7 +300,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                     if (!operation.targetCollectionId) {
                         throw new Error('Target collection ID required for copy operation');
                     }
-                    await this.addLiterature(operation.targetCollectionId, operation.literatureIds);
+                    await this.addLiterature(operation.targetCollectionId, operation.lids);
                     break;
             }
         } catch (error) {
@@ -314,7 +314,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async executeSmartRule(
         collectionId: string,
-        literatureIds: string[]
+        lids: string[]
     ): Promise<SmartCollectionResult> {
         try {
             const collection = await this.findById(collectionId);
@@ -327,15 +327,15 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
 
             // 这里需要实现复杂的筛选逻辑
             // 为简化实现，我们先返回基础结果
-            const matchedItems = literatureIds; // 实际需要根据规则筛选
-            const currentItems = new Set(collection.literatureIds);
+            const matchedItems = lids; // 实际需要根据规则筛选
+            const currentItems = new Set(collection.lids);
 
             const addedItems = matchedItems.filter(id => !currentItems.has(id));
-            const removedItems = collection.literatureIds.filter(id => !matchedItems.includes(id));
+            const removedItems = collection.lids.filter(id => !matchedItems.includes(id));
 
             // 更新集合
             await this.update(collectionId, {
-                literatureIds: matchedItems,
+                lids: matchedItems,
                 itemCount: matchedItems.length,
                 lastItemAddedAt: addedItems.length > 0 ? DatabaseUtils.now() : collection.lastItemAddedAt
             });
@@ -449,14 +449,14 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
     /**
      * 📊 获取用户集合统计
      */
-    async getUserCollectionStats(ownerId: string): Promise<{
+    async getUserCollectionStats(ownerUid: string): Promise<{
         total: number;
         byType: Record<CollectionType, number>;
         totalItems: number;
         averageItemsPerCollection: number;
     }> {
         try {
-            const userCollections = await this.findByOwnerId(ownerId);
+            const userCollections = await this.findByOwnerId(ownerUid);
 
             const stats = {
                 total: userCollections.length,

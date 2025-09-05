@@ -1,314 +1,260 @@
 /**
- * 📂 Collection Store - 集合数据的统一事实来源
+ * 📂 Collection Store - 纯粹的集合数据存储层
  * 
- * 设计原则:
- * 1. 单一事实来源：所有集合数据都从这里获取
- * 2. 原子化操作：只处理最基础的CRUD操作
- * 3. 响应式状态：使用Zustand管理状态变化
- * 4. 类型安全：严格的TypeScript类型定义
+ * 🎯 核心职责：
+ * 1. 存储规范化的集合数据（唯一数据源）
+ * 2. 提供原子化的数据操作（同步CRUD）
+ * 3. 提供简单的数据查询（基础选择器）
  * 
- * 架构理念:
- * - Store层只管理数据状态，不做业务逻辑
- * - 所有数据变更都通过actions进行
- * - 提供细粒度的selector方便组件订阅
+ * ❌ 不负责的事情：
+ * - UI状态管理（loading、selection、viewMode等）
+ * - 业务逻辑编排（搜索、过滤等）
+ * - API调用和错误处理
+ * - 复杂的数据组合和计算
+ * 
+ * 架构定位：
+ * - 专门管理集合数据的"仓库"
+ * - 与Literature Store独立，各司其职
+ * - Hook层负责组合和业务编排
  */
 
 import { create } from 'zustand';
-import { subscribeWithSelector } from 'zustand/middleware';
+import { subscribeWithSelector, devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import {
-    Collection,
-    CollectionUIConfig,
-    CollectionStats,
-    CreateCollectionInput,
-    UpdateCollectionInput,
-    CollectionQuery,
-    CollectionType
-} from '../models';
+import type { Collection } from '../models';
 
-// ==================== Store State ====================
+// ==================== Store State Interface ====================
 
 export interface CollectionStoreState {
-    // 📚 核心数据
+    // 📂 核心数据 - 规范化存储（Record提供快速访问）
     collections: Record<string, Collection>;
 
-    // 🎨 UI配置数据
-    uiConfigs: Record<string, CollectionUIConfig>;
-
-    // 📊 统计数据
-    stats: Record<string, CollectionStats>;
-
-    // 🔄 加载状态
-    loading: {
-        fetch: boolean;
-        create: boolean;
-        update: boolean;
-        delete: boolean;
+    // 📊 简单统计
+    stats: {
+        total: number;
+        lastUpdated: Date | null;
     };
-
-    // ❌ 错误状态
-    error: string | null;
-
-    // 📱 选择状态
-    selectedCollectionId: string | null;
-
-    // 🔍 查询状态
-    lastQuery: CollectionQuery | null;
-    queryResults: string[]; // collection IDs
 }
 
-// ==================== Store Actions ====================
+// ==================== Store Actions Interface ====================
 
 export interface CollectionStoreActions {
-    // 📚 基础CRUD操作
-    setCollections: (collections: Collection[]) => void;
+    // 📂 数据操作 - 原子化的同步操作
     addCollection: (collection: Collection) => void;
-    updateCollection: (id: string, updates: Partial<Collection>) => void;
+    addCollections: (collections: Collection[]) => void;
+    updateCollection: (id: string, collection: Collection) => void;
     removeCollection: (id: string) => void;
+    removeCollections: (ids: string[]) => void;
+    clearCollections: () => void;
+    replaceCollections: (collections: Collection[]) => void;
 
-    // 🎨 UI配置管理
-    setUIConfig: (config: CollectionUIConfig) => void;
-    updateUIConfig: (collectionId: string, updates: Partial<CollectionUIConfig>) => void;
+    // 📚 集合内容管理 - 原子操作
+    addLiteratureToCollection: (collectionId: string, literatureId: string) => void;
+    removeLiteratureFromCollection: (collectionId: string, literatureId: string) => void;
+    addLiteraturesToCollection: (collectionId: string, lids: string[]) => void;
+    removeLiteraturesFromCollection: (collectionId: string, lids: string[]) => void;
 
-    // 📊 统计数据管理
-    setStats: (stats: CollectionStats) => void;
-    updateStats: (collectionId: string, stats: Partial<CollectionStats>) => void;
+    // 📊 数据查询 - 简单的选择器
+    getCollection: (id: string) => Collection | undefined;
+    getAllCollections: () => Collection[];
+    getCollections: (ids: string[]) => Collection[];
+    hasCollection: (id: string) => boolean;
+    getCollectionsByType: (type: Collection['type']) => Collection[];
 
-    // 🔄 状态管理
-    setLoading: (key: keyof CollectionStoreState['loading'], loading: boolean) => void;
-    setError: (error: string | null) => void;
-
-    // 📱 选择管理
-    selectCollection: (id: string | null) => void;
-
-    // 🔍 查询管理
-    setQueryResults: (query: CollectionQuery, results: string[]) => void;
-    clearQuery: () => void;
-
-    // 🧹 清理操作
-    reset: () => void;
+    // 📈 统计更新
+    updateStats: () => void;
 }
 
 // ==================== Initial State ====================
 
 const initialState: CollectionStoreState = {
     collections: {},
-    uiConfigs: {},
-    stats: {},
-    loading: {
-        fetch: false,
-        create: false,
-        update: false,
-        delete: false,
+    stats: {
+        total: 0,
+        lastUpdated: null,
     },
-    error: null,
-    selectedCollectionId: null,
-    lastQuery: null,
-    queryResults: [],
 };
 
 // ==================== Store Implementation ====================
 
 export const useCollectionStore = create<CollectionStoreState & CollectionStoreActions>()(
-    subscribeWithSelector(
-        immer((set, get) => ({
-            ...initialState,
+    devtools(
+        subscribeWithSelector(
+            immer((set, get) => ({
+                ...initialState,
 
-            // ==================== 基础CRUD操作 ====================
-
-            setCollections: (collections) =>
-                set((state) => {
-                    state.collections = {};
-                    collections.forEach((collection) => {
+                // 📂 数据操作 - 原子化操作
+                addCollection: (collection) => {
+                    set((state) => {
                         state.collections[collection.id] = collection;
                     });
-                }),
+                    get().updateStats();
+                },
 
-            addCollection: (collection) =>
-                set((state) => {
-                    state.collections[collection.id] = collection;
-                }),
-
-            updateCollection: (id, updates) =>
-                set((state) => {
-                    if (state.collections[id]) {
-                        Object.assign(state.collections[id], {
-                            ...updates,
-                            updatedAt: new Date(),
+                addCollections: (collections) => {
+                    set((state) => {
+                        collections.forEach(collection => {
+                            state.collections[collection.id] = collection;
                         });
-                    }
-                }),
+                    });
+                    get().updateStats();
+                },
 
-            removeCollection: (id) =>
-                set((state) => {
-                    delete state.collections[id];
-                    delete state.uiConfigs[id];
-                    delete state.stats[id];
+                updateCollection: (id, collection) => {
+                    set((state) => {
+                        if (state.collections[id]) {
+                            state.collections[id] = collection;
+                        }
+                    });
+                    get().updateStats();
+                },
 
-                    // 如果删除的是当前选中的集合，清除选择
-                    if (state.selectedCollectionId === id) {
-                        state.selectedCollectionId = null;
-                    }
+                removeCollection: (id) => {
+                    set((state) => {
+                        delete state.collections[id];
+                    });
+                    get().updateStats();
+                },
 
-                    // 从查询结果中移除
-                    state.queryResults = state.queryResults.filter(cid => cid !== id);
-                }),
+                removeCollections: (ids) => {
+                    set((state) => {
+                        ids.forEach(id => delete state.collections[id]);
+                    });
+                    get().updateStats();
+                },
 
-            // ==================== UI配置管理 ====================
+                clearCollections: () => {
+                    set((state) => {
+                        state.collections = {};
+                    });
+                    get().updateStats();
+                },
 
-            setUIConfig: (config) =>
-                set((state) => {
-                    state.uiConfigs[config.collectionId] = config;
-                }),
-
-            updateUIConfig: (collectionId, updates) =>
-                set((state) => {
-                    if (state.uiConfigs[collectionId]) {
-                        Object.assign(state.uiConfigs[collectionId], {
-                            ...updates,
-                            updatedAt: new Date(),
+                replaceCollections: (collections) => {
+                    set((state) => {
+                        state.collections = {};
+                        collections.forEach(collection => {
+                            state.collections[collection.id] = collection;
                         });
-                    } else {
-                        // 创建默认UI配置
-                        state.uiConfigs[collectionId] = {
-                            collectionId,
-                            sortBy: 'addedAt',
-                            sortOrder: 'desc',
-                            viewMode: 'list',
-                            notifyOnUpdate: false,
-                            updatedAt: new Date(),
-                            ...updates,
-                        };
-                    }
-                }),
+                    });
+                    get().updateStats();
+                },
 
-            // ==================== 统计数据管理 ====================
+                // 📚 集合内容管理 - 原子操作
+                addLiteratureToCollection: (collectionId, literatureId) => {
+                    set((state) => {
+                        const collection = state.collections[collectionId];
+                        if (collection && !collection.lids.includes(literatureId)) {
+                            collection.lids.push(literatureId);
+                            collection.updatedAt = new Date();
+                        }
+                    });
+                },
 
-            setStats: (stats) =>
-                set((state) => {
-                    state.stats[stats.collectionId] = stats;
-                }),
+                removeLiteratureFromCollection: (collectionId, literatureId) => {
+                    set((state) => {
+                        const collection = state.collections[collectionId];
+                        if (collection) {
+                            const index = collection.lids.indexOf(literatureId);
+                            if (index !== -1) {
+                                collection.lids.splice(index, 1);
+                                collection.updatedAt = new Date();
+                            }
+                        }
+                    });
+                },
 
-            updateStats: (collectionId, statsUpdates) =>
-                set((state) => {
-                    if (state.stats[collectionId]) {
-                        Object.assign(state.stats[collectionId], {
-                            ...statsUpdates,
-                            calculatedAt: new Date(),
-                        });
-                    } else {
-                        // 创建默认统计
-                        state.stats[collectionId] = {
-                            collectionId,
-                            itemCount: 0,
-                            sourceDistribution: {},
-                            yearDistribution: {},
-                            calculatedAt: new Date(),
-                            ...statsUpdates,
-                        };
-                    }
-                }),
+                addLiteraturesToCollection: (collectionId, lids) => {
+                    set((state) => {
+                        const collection = state.collections[collectionId];
+                        if (collection) {
+                            lids.forEach(literatureId => {
+                                if (!collection.lids.includes(literatureId)) {
+                                    collection.lids.push(literatureId);
+                                }
+                            });
+                            collection.updatedAt = new Date();
+                        }
+                    });
+                },
 
-            // ==================== 状态管理 ====================
+                removeLiteraturesFromCollection: (collectionId, lids) => {
+                    set((state) => {
+                        const collection = state.collections[collectionId];
+                        if (collection) {
+                            collection.lids = collection.lids.filter(
+                                (lid: string) => !lids.includes(lid)
+                            );
+                            collection.updatedAt = new Date();
+                        }
+                    });
+                },
 
-            setLoading: (key, loading) =>
-                set((state) => {
-                    state.loading[key] = loading;
-                }),
+                // 📊 数据查询 - 简单选择器
+                getCollection: (id) => {
+                    return get().collections[id];
+                },
 
-            setError: (error) =>
-                set((state) => {
-                    state.error = error;
-                }),
+                getAllCollections: () => {
+                    return Object.values(get().collections);
+                },
 
-            // ==================== 选择管理 ====================
+                getCollections: (ids) => {
+                    const { collections } = get();
+                    return ids
+                        .map(id => collections[id])
+                        .filter(Boolean) as Collection[];
+                },
 
-            selectCollection: (id) =>
-                set((state) => {
-                    state.selectedCollectionId = id;
-                }),
+                hasCollection: (id) => {
+                    return !!get().collections[id];
+                },
 
-            // ==================== 查询管理 ====================
+                getCollectionsByType: (type) => {
+                    const { collections } = get();
+                    return Object.values(collections).filter(collection => collection.type === type);
+                },
 
-            setQueryResults: (query, results) =>
-                set((state) => {
-                    state.lastQuery = query;
-                    state.queryResults = results;
-                }),
-
-            clearQuery: () =>
-                set((state) => {
-                    state.lastQuery = null;
-                    state.queryResults = [];
-                }),
-
-            // ==================== 清理操作 ====================
-
-            reset: () =>
-                set((state) => {
-                    Object.assign(state, initialState);
-                }),
-        }))
+                // 📈 统计更新
+                updateStats: () => {
+                    set((state) => {
+                        state.stats.total = Object.keys(state.collections).length;
+                        state.stats.lastUpdated = new Date();
+                    });
+                },
+            }))
+        ),
+        {
+            name: 'collection-store',
+            // 数据不持久化，每次重新加载
+            partialize: () => ({}),
+        }
     )
 );
 
 // ==================== Selectors ====================
 
-// 🎯 基础选择器
-export const collectionSelectors = {
-    // 获取所有集合
-    all: (state: CollectionStoreState) => Object.values(state.collections),
+// 📂 基础数据选择器
+export const selectAllCollections = (state: CollectionStoreState & CollectionStoreActions) =>
+    state.getAllCollections();
 
-    // 根据ID获取集合
-    byId: (state: CollectionStoreState, id: string) => state.collections[id],
+export const selectCollectionById = (id: string) =>
+    (state: CollectionStoreState & CollectionStoreActions) =>
+        state.getCollection(id);
 
-    // 获取集合数量
-    count: (state: CollectionStoreState) => Object.keys(state.collections).length,
+export const selectCollectionCount = (state: CollectionStoreState & CollectionStoreActions) =>
+    state.stats.total;
 
-    // 根据类型获取集合
-    byType: (state: CollectionStoreState, type: CollectionType) =>
-        Object.values(state.collections).filter(c => c.type === type),
+export const selectCollectionsByType = (type: Collection['type']) =>
+    (state: CollectionStoreState & CollectionStoreActions) =>
+        state.getCollectionsByType(type);
 
-    // 根据所有者获取集合
-    byOwner: (state: CollectionStoreState, ownerId: string) =>
-        Object.values(state.collections).filter(c => c.ownerId === ownerId),
-
-    // 获取公开集合
-    public: (state: CollectionStoreState) =>
-        Object.values(state.collections).filter(c => c.isPublic),
-
-    // 获取未归档集合
-    active: (state: CollectionStoreState) =>
-        Object.values(state.collections).filter(c => !c.isArchived),
-
-    // 获取根集合（无父级）
-    roots: (state: CollectionStoreState) =>
-        Object.values(state.collections).filter(c => !c.parentId),
-
-    // 获取子集合
-    children: (state: CollectionStoreState, parentId: string) =>
-        Object.values(state.collections).filter(c => c.parentId === parentId),
-};
-
-// 🎨 UI配置选择器
-export const uiConfigSelectors = {
-    byCollectionId: (state: CollectionStoreState, collectionId: string) =>
-        state.uiConfigs[collectionId],
-};
+// 用户相关选择器已移除，在Hook层处理
 
 // 📊 统计选择器
-export const statsSelectors = {
-    byCollectionId: (state: CollectionStoreState, collectionId: string) =>
-        state.stats[collectionId],
-};
+export const selectStats = (state: CollectionStoreState & CollectionStoreActions) =>
+    state.stats;
 
-// 🔄 状态选择器
-export const loadingSelectors = {
-    any: (state: CollectionStoreState) => Object.values(state.loading).some(Boolean),
-    specific: (state: CollectionStoreState, key: keyof CollectionStoreState['loading']) =>
-        state.loading[key],
-};
+// ==================== 默认导出 ====================
 
-// ==================== 类型导出 ====================
-
-export type CollectionStore = CollectionStoreState & CollectionStoreActions;
+export default useCollectionStore;

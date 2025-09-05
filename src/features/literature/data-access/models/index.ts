@@ -28,10 +28,7 @@ export type {
     LiteratureFilter,
     LiteratureSortField,
     LiteratureSortOrder,
-    LiteratureSort
-} from './library-item.types';
-
-export {
+    LiteratureSort,
     LibraryItemSchema,
     ExtendedLibraryItemSchema,
     BackendTaskSchema,
@@ -52,29 +49,29 @@ export {
     UserLiteratureMetaSchema
 } from './user-literature-meta.types';
 
-// 🔗 引文关系类型
+// 🔗 引文关系类型 (简化版本)
 export type {
     Citation,
-    CitationNode,
-    CitationEdge,
-    CitationNetwork,
+    CitationDegree,
+    CitationOverview,
     CreateCitationInput,
     UpdateCitationInput,
     CitationQuery,
-    CitationStats
+    CitationRelationship,
+    CitationSearchResult
 } from './citation.types';
 
 export {
     CitationSchema,
-    CitationNodeSchema,
-    CitationEdgeSchema,
-    CitationNetworkSchema
+    CitationDegreeSchema,
+    CitationOverviewSchema
 } from './citation.types';
 
 // 📂 文献集合类型
 export type {
     CollectionType,
     Collection,
+    CollectionUIConfig,
     SmartCollectionRule,
     CollectionStats,
     CreateCollectionInput,

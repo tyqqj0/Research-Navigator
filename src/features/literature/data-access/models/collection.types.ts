@@ -91,11 +91,11 @@ export const CollectionSchema = z.object({
     ]),
 
     // 👤 所有者信息
-    ownerId: z.string(),
+    ownerUid: z.string(),
     isPublic: z.boolean().default(false),
 
     // 📚 文献关联 - 核心关系数据
-    literatureIds: z.array(z.string()).default([]),
+    lids: z.array(z.string()).default([]),
 
     // 🤖 智能规则 (仅SMART类型使用)
     smartRule: SmartCollectionRuleSchema.optional(),
@@ -249,11 +249,11 @@ export type LegacyCollection = z.infer<typeof LegacyCollectionSchema>;
 
 // 创建集合输入 - 基于核心Collection类型
 export type CreateCollectionInput = Omit<Collection, 'id' | 'createdAt' | 'updatedAt' | 'childIds'>;
-export type UpdateCollectionInput = Partial<Omit<Collection, 'id' | 'ownerId' | 'createdAt'>>;
+export type UpdateCollectionInput = Partial<Omit<Collection, 'id' | 'ownerUid' | 'createdAt'>>;
 
 // 🔍 集合查询类型
 export type CollectionQuery = {
-    ownerId?: string;
+    ownerUid?: string;
     type?: CollectionType;
     isPublic?: boolean;
     parentId?: string | null;
@@ -271,7 +271,7 @@ export type CollectionSort = {
 // 🔄 集合操作类型
 export type CollectionOperation = {
     type: 'add_literature' | 'remove_literature' | 'move_literature' | 'copy_literature';
-    literatureIds: string[];
+    lids: string[];
     targetCollectionId?: string; // 用于move/copy操作
 };
 

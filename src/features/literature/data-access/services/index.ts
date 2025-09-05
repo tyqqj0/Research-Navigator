@@ -91,6 +91,15 @@ export {
   type CitationNetworkResult as BackendCitationNetworkResult,
 } from './backend-api-service';
 
+// 🔄 组合服务 - 文献数据组合操作
+export {
+  compositionService,
+  CompositionService,
+  type CreateComposedLiteratureInput,
+  type UpdateComposedLiteratureInput,
+  type BatchOperationResult,
+} from './composition-service';
+
 // 🤖 AI服务 - AI能力集成
 // export {
 //     aiService,
@@ -318,9 +327,9 @@ export const quickLiteratureActions = {
   },
 
   // 🕸️ 获取引文网络
-  async getCitationNetwork(literatureIds: string[], depth: number = 2) {
+  async getCitationNetwork(lids: string[], depth: number = 2) {
     return await literatureDomainServices.citation.getCitationNetwork(
-      literatureIds,
+      lids,
       depth,
       true
     );

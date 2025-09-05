@@ -1,0 +1,634 @@
+/**
+ * 📚 Literature Operations Hook - 业务编排和UI状态管理
+ * 
+ * 🎯 核心职责：
+ * 1. 管理UI状态（loading、selection、error等）
+ * 2. 编排业务逻辑（调用Service，更新Store）
+ * 3. 组合多个Store的数据为UI提供完整视图
+ * 4. 处理复杂的用户交互逻辑
+ * 
+ * 架构定位：
+ * - 这是"产品经理"层，根据UI需求设计最终产品
+ * - 连接纯粹的Store（数据仓库）和Service（业务逻辑）
+ * - 为组件提供开箱即用的数据和操作方法
+ * - 管理所有UI相关的临时状态
+ */
+
+import { useState, useCallback, useMemo } from 'react';
+import { useLiteratureStore } from '../stores';
+import { compositionService } from '../services';
+import type {
+    EnhancedLibraryItem,
+    LiteratureFilter,
+    LiteratureSort,
+    PaginatedResult,
+} from '../models';
+import type {
+    CreateComposedLiteratureInput,
+    UpdateComposedLiteratureInput,
+} from '../services/composition-service';
+
+// ==================== Hook State Interfaces ====================
+
+interface LiteratureUIState {
+    // 🔄 加载状态
+    isLoading: boolean;
+    isSearching: boolean;
+    loadingIds: Set<string>;
+
+    // 🎯 选择状态
+    selectedIds: Set<string>;
+
+    // 🎨 视图状态
+    viewMode: 'list' | 'grid' | 'table';
+
+    // ❌ 错误状态
+    error: string | null;
+}
+
+interface SearchState {
+    query: string;
+    results: EnhancedLibraryItem[];
+    total: number;
+    hasMore: boolean;
+    filter: LiteratureFilter;
+    sort: LiteratureSort;
+    page: number;
+    pageSize: number;
+}
+
+// ==================== Hook Return Interface ====================
+
+export interface UseLiteratureOperationsReturn {
+    // 📚 数据状态
+    literatures: EnhancedLibraryItem[];
+    selectedLiteratures: EnhancedLibraryItem[];
+
+    // 🔍 搜索状态
+    searchState: SearchState;
+
+    // 📊 UI状态
+    uiState: LiteratureUIState;
+
+    // 📈 统计信息
+    stats: {
+        total: number;
+        selected: number;
+        lastUpdated: Date | null;
+    };
+
+    // 🔧 基础操作
+    setCurrentUser: (userId: string | null) => void;
+    clearError: () => void;
+
+    // 📚 数据操作 - 🎯 重构后：移除userId参数，Service内部自动获取
+    createLiterature: (input: Omit<CreateComposedLiteratureInput, 'userId'>) => Promise<EnhancedLibraryItem>;
+    updateLiterature: (lid: string, input: UpdateComposedLiteratureInput) => Promise<EnhancedLibraryItem>;
+    deleteLiterature: (lid: string, options?: { deleteGlobally?: boolean }) => Promise<void>;
+    batchDeleteLiteratures: (lids: string[], options?: { deleteGlobally?: boolean }) => Promise<void>;
+
+    // 🔄 数据同步 - 🎯 重构后：自动使用当前用户
+    loadLiteratures: (options?: { force?: boolean }) => Promise<void>;
+    loadLiterature: (lid: string) => Promise<EnhancedLibraryItem | null>;
+    refreshLiterature: (lid: string) => Promise<void>;
+
+    // 🔍 搜索操作
+    search: (query: string, options?: {
+        filter?: Partial<LiteratureFilter>;
+        sort?: LiteratureSort;
+        page?: number;
+        pageSize?: number;
+    }) => Promise<void>;
+    clearSearch: () => void;
+    loadMoreResults: () => Promise<void>;
+
+    // 🎯 选择操作
+    selectLiterature: (lid: string) => void;
+    selectMultipleLiteratures: (lids: string[]) => void;
+    deselectLiterature: (lid: string) => void;
+    clearSelection: () => void;
+    toggleSelection: (lid: string) => void;
+    selectAll: () => void;
+
+    // 🎨 UI操作
+    setViewMode: (mode: 'list' | 'grid' | 'table') => void;
+
+    // 📊 数据查询辅助
+    getLiterature: (lid: string) => EnhancedLibraryItem | undefined;
+    getLiteratures: (lids: string[]) => EnhancedLibraryItem[];
+    getFilteredLiteratures: (filter?: Partial<LiteratureFilter>) => EnhancedLibraryItem[];
+}
+
+// ==================== Hook Implementation ====================
+
+export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
+    // 📚 Store数据
+    const store = useLiteratureStore();
+
+    // 📊 UI状态管理
+    const [uiState, setUIState] = useState<LiteratureUIState>({
+        isLoading: false,
+        isSearching: false,
+        loadingIds: new Set(),
+        selectedIds: new Set(),
+        viewMode: 'list',
+        error: null,
+    });
+
+    // 🔍 搜索状态管理
+    const [searchState, setSearchState] = useState<SearchState>({
+        query: '',
+        results: [],
+        total: 0,
+        hasMore: false,
+        filter: {},
+        sort: { field: 'createdAt', order: 'desc' },
+        page: 1,
+        pageSize: 20,
+    });
+
+    // 📈 派生状态
+    const stats = useMemo(() => ({
+        total: store.stats.total,
+        selected: uiState.selectedIds.size,
+        lastUpdated: store.stats.lastUpdated,
+    }), [store.stats, uiState.selectedIds.size]);
+
+    const selectedLiteratures = useMemo(() => {
+        return Array.from(uiState.selectedIds)
+            .map(lid => store.getLiterature(lid))
+            .filter(Boolean) as EnhancedLibraryItem[];
+    }, [uiState.selectedIds, store.literatures]);
+
+    // 🔧 基础操作
+    const setCurrentUser = useCallback((userId: string | null) => {
+        store.setCurrentUser(userId);
+        // 清空UI状态
+        setUIState(prev => ({
+            ...prev,
+            selectedIds: new Set(),
+            error: null,
+        }));
+        setSearchState(prev => ({
+            ...prev,
+            query: '',
+            results: [],
+            total: 0,
+            hasMore: false,
+            page: 1,
+        }));
+    }, [store]);
+
+    const clearError = useCallback(() => {
+        setUIState(prev => ({ ...prev, error: null }));
+    }, []);
+
+    // 📚 数据操作 - 🎯 重构后：Service自动处理用户身份
+    const createLiterature = useCallback(async (input: Omit<CreateComposedLiteratureInput, 'userId'>) => {
+        setUIState(prev => ({ ...prev, isLoading: true, error: null }));
+
+        try {
+            // 🔐 Service层自动获取用户身份并处理业务逻辑
+            const enhanced = await compositionService.createComposedLiterature(input);
+
+            // Store层更新数据
+            store.addLiterature(enhanced);
+
+            setUIState(prev => ({ ...prev, isLoading: false }));
+            return enhanced;
+        } catch (error) {
+            setUIState(prev => ({
+                ...prev,
+                error: error instanceof Error ? error.message : '创建文献失败',
+                isLoading: false,
+            }));
+            throw error;
+        }
+    }, [store]);
+
+    const updateLiterature = useCallback(async (lid: string, input: UpdateComposedLiteratureInput) => {
+        setUIState(prev => ({
+            ...prev,
+            loadingIds: new Set(prev.loadingIds).add(lid),
+            error: null,
+        }));
+
+        try {
+            // 🔐 Service层自动获取用户身份并处理业务逻辑
+            const enhanced = await compositionService.updateComposedLiterature(lid, input);
+
+            // Store层更新数据
+            store.updateLiterature(lid, enhanced);
+
+            // 更新搜索结果中的数据
+            if (searchState.query && searchState.results.some(item => item.literature.lid === lid)) {
+                setSearchState(prev => ({
+                    ...prev,
+                    results: prev.results.map(item =>
+                        item.literature.lid === lid ? enhanced : item
+                    ),
+                }));
+            }
+
+            setUIState(prev => {
+                const newLoadingIds = new Set(prev.loadingIds);
+                newLoadingIds.delete(lid);
+                return { ...prev, loadingIds: newLoadingIds };
+            });
+
+            return enhanced;
+        } catch (error) {
+            setUIState(prev => {
+                const newLoadingIds = new Set(prev.loadingIds);
+                newLoadingIds.delete(lid);
+                return {
+                    ...prev,
+                    error: error instanceof Error ? error.message : '更新文献失败',
+                    loadingIds: newLoadingIds,
+                };
+            });
+            throw error;
+        }
+    }, [store, searchState]);
+
+    const deleteLiterature = useCallback(async (lid: string, options: { deleteGlobally?: boolean } = {}) => {
+        setUIState(prev => ({
+            ...prev,
+            loadingIds: new Set(prev.loadingIds).add(lid),
+            error: null,
+        }));
+
+        try {
+            // 🔐 Service层自动获取用户身份并处理业务逻辑
+            await compositionService.deleteComposedLiterature(lid, options);
+
+            // Store层更新数据
+            store.removeLiterature(lid);
+
+            // 更新UI状态
+            setUIState(prev => {
+                const newLoadingIds = new Set(prev.loadingIds);
+                newLoadingIds.delete(lid);
+                const newSelectedIds = new Set(prev.selectedIds);
+                newSelectedIds.delete(lid);
+                return { ...prev, loadingIds: newLoadingIds, selectedIds: newSelectedIds };
+            });
+
+            // 从搜索结果中移除
+            setSearchState(prev => ({
+                ...prev,
+                results: prev.results.filter(item => item.literature.lid !== lid),
+            }));
+        } catch (error) {
+            setUIState(prev => {
+                const newLoadingIds = new Set(prev.loadingIds);
+                newLoadingIds.delete(lid);
+                return {
+                    ...prev,
+                    error: error instanceof Error ? error.message : '删除文献失败',
+                    loadingIds: newLoadingIds,
+                };
+            });
+            throw error;
+        }
+    }, [store]);
+
+    const batchDeleteLiteratures = useCallback(async (lids: string[], options: { deleteGlobally?: boolean } = {}) => {
+        setUIState(prev => ({ ...prev, isLoading: true, error: null }));
+
+        try {
+            // 🔐 Service层自动获取用户身份并处理业务逻辑
+            await compositionService.deleteComposedLiteratureBatch(
+                lids.map(lid => ({ lid, deleteGlobally: options.deleteGlobally }))
+            );
+
+            // Store层更新数据
+            store.removeLiteratures(lids);
+
+            // 更新UI状态
+            setUIState(prev => {
+                const newSelectedIds = new Set(prev.selectedIds);
+                lids.forEach(lid => newSelectedIds.delete(lid));
+                return { ...prev, selectedIds: newSelectedIds, isLoading: false };
+            });
+
+            // 从搜索结果中移除
+            setSearchState(prev => ({
+                ...prev,
+                results: prev.results.filter(item => !lids.includes(item.literature.lid)),
+            }));
+        } catch (error) {
+            setUIState(prev => ({
+                ...prev,
+                error: error instanceof Error ? error.message : '批量删除失败',
+                isLoading: false,
+            }));
+            throw error;
+        }
+    }, [store]);
+
+    // 🔄 数据同步 - 🎯 重构后：自动使用当前用户
+    const loadLiteratures = useCallback(async (options: { force?: boolean } = {}) => {
+        const { force = false } = options;
+
+        // 如果已有数据且不强制刷新，则跳过
+        if (!force && store.stats.total > 0) return;
+
+        setUIState(prev => ({ ...prev, isLoading: true, error: null }));
+
+        try {
+            // 🔐 Service层自动获取当前用户的数据
+            const result = await compositionService.getUserComposedLiteratures();
+
+            // Store层更新数据
+            store.replaceLiteratures(result);
+
+            setUIState(prev => ({ ...prev, isLoading: false }));
+        } catch (error) {
+            setUIState(prev => ({
+                ...prev,
+                error: error instanceof Error ? error.message : '加载文献失败',
+                isLoading: false,
+            }));
+            throw error;
+        }
+    }, [store]);
+
+    const loadLiterature = useCallback(async (lid: string) => {
+        setUIState(prev => ({
+            ...prev,
+            loadingIds: new Set(prev.loadingIds).add(lid),
+            error: null,
+        }));
+
+        try {
+            // 🔐 Service层自动获取当前用户的数据
+            const enhanced = await compositionService.getEnhancedLiterature(lid);
+
+            if (enhanced) {
+                // Store层更新数据
+                store.addLiterature(enhanced);
+            }
+
+            setUIState(prev => {
+                const newLoadingIds = new Set(prev.loadingIds);
+                newLoadingIds.delete(lid);
+                return { ...prev, loadingIds: newLoadingIds };
+            });
+
+            return enhanced;
+        } catch (error) {
+            setUIState(prev => {
+                const newLoadingIds = new Set(prev.loadingIds);
+                newLoadingIds.delete(lid);
+                return {
+                    ...prev,
+                    error: error instanceof Error ? error.message : '加载文献失败',
+                    loadingIds: newLoadingIds,
+                };
+            });
+            return null;
+        }
+    }, [store]);
+
+    const refreshLiterature = useCallback(async (lid: string) => {
+        await loadLiterature(lid);
+    }, [loadLiterature]);
+
+    // 🔍 搜索操作
+    const search = useCallback(async (query: string, options: {
+        filter?: Partial<LiteratureFilter>;
+        sort?: LiteratureSort;
+        page?: number;
+        pageSize?: number;
+    } = {}) => {
+        const {
+            filter = {},
+            sort = { field: 'createdAt', order: 'desc' },
+            page = 1,
+            pageSize = 20,
+        } = options;
+
+        setUIState(prev => ({ ...prev, isSearching: true, error: null }));
+        setSearchState(prev => ({
+            ...prev,
+            query,
+            filter,
+            sort,
+            page,
+            pageSize,
+        }));
+
+        try {
+            // 🔐 Service层自动获取当前用户并处理搜索
+            const result = await compositionService.searchEnhancedLiteratures(
+                { searchTerm: query, ...filter },
+                sort,
+                page,
+                pageSize
+            );
+
+            setSearchState(prev => ({
+                ...prev,
+                results: result.items,
+                total: result.total,
+                hasMore: result.page < result.totalPages,
+            }));
+
+            setUIState(prev => ({ ...prev, isSearching: false }));
+        } catch (error) {
+            setUIState(prev => ({
+                ...prev,
+                error: error instanceof Error ? error.message : '搜索失败',
+                isSearching: false,
+            }));
+        }
+    }, [store]);
+
+    const clearSearch = useCallback(() => {
+        setSearchState(prev => ({
+            ...prev,
+            query: '',
+            results: [],
+            total: 0,
+            hasMore: false,
+            page: 1,
+        }));
+    }, []);
+
+    const loadMoreResults = useCallback(async () => {
+        if (!store.currentUserId || !searchState.hasMore || uiState.isSearching) return;
+
+        const nextPage = searchState.page + 1;
+
+        setUIState(prev => ({ ...prev, isSearching: true }));
+
+        try {
+            // Service层处理分页搜索
+            const result = await compositionService.searchEnhancedLiteratures(
+                store.currentUserId,
+                { searchTerm: searchState.query, ...searchState.filter },
+                searchState.sort,
+                nextPage,
+                searchState.pageSize
+            );
+
+            setSearchState(prev => ({
+                ...prev,
+                results: [...prev.results, ...result.items],
+                page: nextPage,
+                hasMore: result.page < result.totalPages,
+            }));
+
+            setUIState(prev => ({ ...prev, isSearching: false }));
+        } catch (error) {
+            setUIState(prev => ({
+                ...prev,
+                error: error instanceof Error ? error.message : '加载更多失败',
+                isSearching: false,
+            }));
+        }
+    }, [store, searchState, uiState.isSearching]);
+
+    // 🎯 选择操作
+    const selectLiterature = useCallback((lid: string) => {
+        setUIState(prev => ({
+            ...prev,
+            selectedIds: new Set(prev.selectedIds).add(lid),
+        }));
+    }, []);
+
+    const selectMultipleLiteratures = useCallback((lids: string[]) => {
+        setUIState(prev => {
+            const newSelectedIds = new Set(prev.selectedIds);
+            lids.forEach(lid => newSelectedIds.add(lid));
+            return { ...prev, selectedIds: newSelectedIds };
+        });
+    }, []);
+
+    const deselectLiterature = useCallback((lid: string) => {
+        setUIState(prev => {
+            const newSelectedIds = new Set(prev.selectedIds);
+            newSelectedIds.delete(lid);
+            return { ...prev, selectedIds: newSelectedIds };
+        });
+    }, []);
+
+    const clearSelection = useCallback(() => {
+        setUIState(prev => ({ ...prev, selectedIds: new Set() }));
+    }, []);
+
+    const toggleSelection = useCallback((lid: string) => {
+        setUIState(prev => {
+            const newSelectedIds = new Set(prev.selectedIds);
+            if (newSelectedIds.has(lid)) {
+                newSelectedIds.delete(lid);
+            } else {
+                newSelectedIds.add(lid);
+            }
+            return { ...prev, selectedIds: newSelectedIds };
+        });
+    }, []);
+
+    const selectAll = useCallback(() => {
+        const items = searchState.query ? searchState.results : store.getAllLiteratures();
+        setUIState(prev => ({
+            ...prev,
+            selectedIds: new Set(items.map(item => item.literature.lid)),
+        }));
+    }, [searchState, store]);
+
+    // 🎨 UI操作
+    const setViewMode = useCallback((mode: 'list' | 'grid' | 'table') => {
+        setUIState(prev => ({ ...prev, viewMode: mode }));
+    }, []);
+
+    // 📊 数据查询辅助
+    const getLiterature = useCallback((lid: string) => {
+        return store.getLiterature(lid);
+    }, [store]);
+
+    const getLiteratures = useCallback((lids: string[]) => {
+        return store.getLiteratures(lids);
+    }, [store]);
+
+    const getFilteredLiteratures = useCallback((filter: Partial<LiteratureFilter> = {}) => {
+        const items = store.getAllLiteratures();
+
+        return items.filter(item => {
+            // 基础过滤逻辑
+            if (filter.tags && filter.tags.length > 0) {
+                const itemTags = item.userMeta?.tags || [];
+                const hasTag = filter.tags.some(tag => itemTags.includes(tag));
+                if (!hasTag) return false;
+            }
+
+            if (filter.status && item.userMeta?.readingStatus !== filter.status) {
+                return false;
+            }
+
+            if (filter.dateRange) {
+                const itemDate = new Date(item.literature.createdAt);
+                if (filter.dateRange.start && itemDate < filter.dateRange.start) return false;
+                if (filter.dateRange.end && itemDate > filter.dateRange.end) return false;
+            }
+
+            return true;
+        });
+    }, [store]);
+
+    return {
+        // 📚 数据状态
+        literatures: store.getAllLiteratures(),
+        selectedLiteratures,
+
+        // 🔍 搜索状态
+        searchState,
+
+        // 📊 UI状态
+        uiState,
+
+        // 📈 统计信息
+        stats,
+
+        // 🔧 基础操作
+        setCurrentUser,
+        clearError,
+
+        // 📚 数据操作
+        createLiterature,
+        updateLiterature,
+        deleteLiterature,
+        batchDeleteLiteratures,
+
+        // 🔄 数据同步
+        loadLiteratures,
+        loadLiterature,
+        refreshLiterature,
+
+        // 🔍 搜索操作
+        search,
+        clearSearch,
+        loadMoreResults,
+
+        // 🎯 选择操作
+        selectLiterature,
+        selectMultipleLiteratures,
+        deselectLiterature,
+        clearSelection,
+        toggleSelection,
+        selectAll,
+
+        // 🎨 UI操作
+        setViewMode,
+
+        // 📊 数据查询辅助
+        getLiterature,
+        getLiteratures,
+        getFilteredLiteratures,
+    };
+};
+
+export default useLiteratureOperations;
+
+

@@ -11,16 +11,16 @@
 
 import Dexie, { Table, Transaction } from 'dexie';
 import {
-    LibraryItemCore,
-    UserLiteratureMetaCore,
-    CitationCore,
-    CollectionCore,
-    CollectionItemCore,
+    LibraryItem,
+    UserLiteratureMeta,
+    Citation,
+    Collection,
     ModelValidators,
-    ErrorHandler,
-    DatabaseError,
     LITERATURE_CONSTANTS,
-    LibraryItemCoreSchema,
+    LibraryItemSchema,
+    UserLiteratureMetaSchema,
+    CitationSchema,
+    CollectionSchema,
 } from '../models';
 import type {
     LiteratureFilter,
@@ -28,9 +28,45 @@ import type {
     PaginatedResult,
 } from '../models';
 
+// 📊 集合项类型 - 临时定义，待后续统一
+export type CollectionItem = {
+    collectionId: string;
+    lid: string;
+    addedAt: Date;
+    addedBy: string;
+    order: number;
+};
+
 // 📊 数据库配置
 const DATABASE_NAME = 'ResearchNavigatorLiteratureDB_Enhanced';
 const DATABASE_VERSION = 2;
+
+// 📊 扩展常量定义
+const EXTENDED_LITERATURE_CONSTANTS = {
+    ...LITERATURE_CONSTANTS,
+    MAX_CACHE_SIZE: 1000,
+    DEFAULT_CACHE_TTL: 300, // 5分钟
+};
+
+// 🚨 简化的错误处理类
+class DatabaseErrorHandler {
+    static handle(error: any, context: {
+        operation: string;
+        layer: string;
+        entityType?: string;
+        inputData?: any;
+        additionalInfo?: any;
+    }) {
+        console.error(`[${context.layer}] ${context.operation} failed:`, error);
+        if (context.inputData) {
+            console.error('Input data:', context.inputData);
+        }
+        if (context.additionalInfo) {
+            console.error('Additional info:', context.additionalInfo);
+        }
+        return error instanceof Error ? error : new Error(String(error));
+    }
+}
 
 /**
  * 🎯 查询缓存接口
@@ -77,16 +113,16 @@ export interface DatabaseStatistics {
  */
 export class literatureDatabase extends Dexie {
     // 📚 核心表定义
-    libraries!: Table<LibraryItemCore, string>;
-    userMetas!: Table<UserLiteratureMetaCore, string>;
-    citations!: Table<CitationCore, string>;
-    collections!: Table<CollectionCore, string>;
-    collectionItems!: Table<CollectionItemCore, string>;
+    libraries!: Table<LibraryItem, string>;
+    userMetas!: Table<UserLiteratureMeta, string>;
+    citations!: Table<Citation, string>;
+    collections!: Table<Collection, string>;
+    collectionItems!: Table<CollectionItem, string>;
 
     // 🗄️ 查询缓存
     private queryCache = new Map<string, QueryCacheEntry>();
-    private readonly maxCacheSize = LITERATURE_CONSTANTS.MAX_CACHE_SIZE;
-    private readonly defaultCacheTTL = LITERATURE_CONSTANTS.DEFAULT_CACHE_TTL * 1000; // 转换为毫秒
+    private readonly maxCacheSize = EXTENDED_LITERATURE_CONSTANTS.MAX_CACHE_SIZE;
+    private readonly defaultCacheTTL = EXTENDED_LITERATURE_CONSTANTS.DEFAULT_CACHE_TTL * 1000; // 转换为毫秒
 
     // 📊 性能监控
     private queryStats = {
@@ -249,38 +285,35 @@ export class literatureDatabase extends Dexie {
      * 🔍 验证和增强文献条目
      */
     private validateAndEnhanceLibraryItem(
-        obj: Partial<LibraryItemCore>,
+        obj: Partial<LibraryItem>,
         operation: 'creating' | 'updating',
-        existingObj?: LibraryItemCore
+        existingObj?: LibraryItem
     ): void {
         try {
             const now = new Date();
 
             if (operation === 'creating') {
-                // 验证完整对象
-                ModelValidators.libraryItem(obj as LibraryItemCore);
+                // 验证完整对象 - 基本字段验证
+                if (!obj.title || !obj.authors || !Array.isArray(obj.authors)) {
+                    throw new Error('LibraryItem validation failed: title and authors are required');
+                }
 
                 // 设置默认值
-                (obj as LibraryItemCore).createdAt = now;
-                (obj as LibraryItemCore).updatedAt = now;
-                (obj as LibraryItemCore).status = obj.status || 'active';
-                (obj as LibraryItemCore).authors = obj.authors || [];
-                (obj as LibraryItemCore).keywords = obj.keywords || [];
-                (obj as LibraryItemCore).language = obj.language || 'en';
-                (obj as LibraryItemCore).source = obj.source || 'manual';
+                (obj as LibraryItem).createdAt = now;
+                (obj as LibraryItem).updatedAt = now;
+                (obj as LibraryItem).authors = obj.authors || [];
+                (obj as LibraryItem).source = obj.source || 'manual';
             } else {
                 // 更新操作，只验证修改的字段
                 obj.updatedAt = now;
 
                 if (Object.keys(obj).length > 1) { // 除了updatedAt
-                    const mergedObj = { ...existingObj, ...obj };
-                    const validationResult = ModelValidators.safeValidate(
-                        LibraryItemCoreSchema,
-                        mergedObj
-                    );
-
-                    if (!validationResult.success) {
-                        throw new Error(`Validation failed: ${validationResult.error}`);
+                    // 基本字段验证
+                    if (obj.title !== undefined && typeof obj.title !== 'string') {
+                        throw new Error('LibraryItem validation failed: title must be a string');
+                    }
+                    if (obj.authors !== undefined && !Array.isArray(obj.authors)) {
+                        throw new Error('LibraryItem validation failed: authors must be an array');
                     }
                 }
             }
@@ -288,7 +321,7 @@ export class literatureDatabase extends Dexie {
             // 清理查询缓存
             this.clearRelatedCache('libraries');
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw DatabaseErrorHandler.handle(error, {
                 operation: `database.libraries.${operation}`,
                 layer: 'database',
                 entityType: 'LibraryItem',
@@ -301,27 +334,29 @@ export class literatureDatabase extends Dexie {
      * 🔍 验证和增强用户元数据
      */
     private validateAndEnhanceUserMeta(
-        obj: Partial<UserLiteratureMetaCore>,
+        obj: Partial<UserLiteratureMeta>,
         operation: 'creating' | 'updating',
-        existingObj?: UserLiteratureMetaCore
+        existingObj?: UserLiteratureMeta
     ): void {
         try {
             const now = new Date();
 
             if (operation === 'creating') {
-                ModelValidators.userMeta(obj as UserLiteratureMetaCore);
+                // 使用Zod schema验证
+                const validationResult = UserLiteratureMetaSchema.safeParse(obj);
+                if (!validationResult.success) {
+                    throw new Error(`Validation failed: ${validationResult.error.message}`);
+                }
 
                 // 设置默认值
-                (obj as UserLiteratureMetaCore).createdAt = now;
-                (obj as UserLiteratureMetaCore).updatedAt = now;
-                (obj as UserLiteratureMetaCore).tags = obj.tags || [];
-                (obj as UserLiteratureMetaCore).priority = obj.priority || 'medium';
-                (obj as UserLiteratureMetaCore).readingStatus = obj.readingStatus || 'unread';
-                (obj as UserLiteratureMetaCore).isFavorite = obj.isFavorite || false;
-                (obj as UserLiteratureMetaCore).readingProgress = obj.readingProgress || 0;
-                (obj as UserLiteratureMetaCore).associatedSessions = obj.associatedSessions || [];
-                (obj as UserLiteratureMetaCore).associatedProjects = obj.associatedProjects || [];
-                (obj as UserLiteratureMetaCore).customCategories = obj.customCategories || [];
+                (obj as UserLiteratureMeta).createdAt = now;
+                (obj as UserLiteratureMeta).updatedAt = now;
+                (obj as UserLiteratureMeta).tags = obj.tags || [];
+                (obj as UserLiteratureMeta).priority = obj.priority || 'medium';
+                (obj as UserLiteratureMeta).readingStatus = obj.readingStatus || 'unread';
+                (obj as UserLiteratureMeta).associatedSessions = obj.associatedSessions || [];
+                (obj as UserLiteratureMeta).associatedProjects = obj.associatedProjects || [];
+                (obj as UserLiteratureMeta).customCategories = obj.customCategories || [];
             } else {
                 obj.updatedAt = now;
 
@@ -333,7 +368,7 @@ export class literatureDatabase extends Dexie {
 
             this.clearRelatedCache('userMetas');
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw DatabaseErrorHandler.handle(error, {
                 operation: `database.userMetas.${operation}`,
                 layer: 'database',
                 entityType: 'UserLiteratureMeta',
@@ -346,35 +381,35 @@ export class literatureDatabase extends Dexie {
      * 🔍 验证和增强引文关系
      */
     private validateAndEnhanceCitation(
-        obj: Partial<CitationCore>,
+        obj: Partial<Citation>,
         operation: 'creating' | 'updating',
-        existingObj?: CitationCore
+        existingObj?: Citation
     ): void {
         try {
             const now = new Date();
 
             if (operation === 'creating') {
-                ModelValidators.citation(obj as CitationCore);
+                // 使用Zod schema验证
+                const validationResult = CitationSchema.safeParse(obj);
+                if (!validationResult.success) {
+                    throw new Error(`Validation failed: ${validationResult.error.message}`);
+                }
 
                 // 设置默认值
-                (obj as CitationCore).createdAt = now;
-                (obj as CitationCore).updatedAt = now;
-                (obj as CitationCore).citationType = obj.citationType || 'direct';
-                (obj as CitationCore).discoveryMethod = obj.discoveryMethod || 'manual';
-                (obj as CitationCore).isVerified = obj.isVerified || false;
-                (obj as CitationCore).confidence = obj.confidence || 1;
+                (obj as Citation).createdAt = now;
 
                 // 防止自引用
                 if (obj.sourceItemId === obj.targetItemId) {
                     throw new Error('Citation cannot reference itself');
                 }
             } else {
-                obj.updatedAt = now;
+                // 更新操作 - Citation只有context字段可以更新
+                // 其他字段保持不变
             }
 
             this.clearRelatedCache('citations');
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw DatabaseErrorHandler.handle(error, {
                 operation: `database.citations.${operation}`,
                 layer: 'database',
                 entityType: 'Citation',
@@ -387,36 +422,39 @@ export class literatureDatabase extends Dexie {
      * 🔍 验证和增强集合
      */
     private validateAndEnhanceCollection(
-        obj: Partial<CollectionCore>,
+        obj: Partial<Collection>,
         operation: 'creating' | 'updating',
-        existingObj?: CollectionCore
+        existingObj?: Collection
     ): void {
         try {
             const now = new Date();
 
             if (operation === 'creating') {
-                ModelValidators.collection(obj as CollectionCore);
+                // 使用Zod schema验证
+                const validationResult = CollectionSchema.safeParse(obj);
+                if (!validationResult.success) {
+                    throw new Error(`Validation failed: ${validationResult.error.message}`);
+                }
 
                 // 设置默认值
-                (obj as CollectionCore).createdAt = now;
-                (obj as CollectionCore).updatedAt = now;
-                (obj as CollectionCore).type = obj.type || 'manual';
-                (obj as CollectionCore).isPublic = obj.isPublic || false;
-                (obj as CollectionCore).itemCount = obj.itemCount || 0;
-                (obj as CollectionCore).literatureIds = obj.literatureIds || [];
-                (obj as CollectionCore).tags = obj.tags || [];
+                (obj as Collection).createdAt = now;
+                (obj as Collection).updatedAt = now;
+                (obj as Collection).type = obj.type || 'general';
+                (obj as Collection).isPublic = obj.isPublic || false;
+                (obj as Collection).lids = obj.lids || [];
             } else {
                 obj.updatedAt = now;
 
-                // 如果更新了literatureIds，同步更新itemCount
-                if (obj.literatureIds) {
-                    obj.itemCount = obj.literatureIds.length;
+                // 如果更新了lids，记录变化
+                if (obj.lids) {
+                    // 集合项数量由lids数组长度决定
+                    console.log(`Collection ${existingObj?.id || 'unknown'} updated with ${obj.lids.length} items`);
                 }
             }
 
             this.clearRelatedCache('collections');
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw DatabaseErrorHandler.handle(error, {
                 operation: `database.collections.${operation}`,
                 layer: 'database',
                 entityType: 'Collection',
@@ -451,7 +489,9 @@ export class literatureDatabase extends Dexie {
         // 如果缓存已满，清理最旧的条目
         if (this.queryCache.size >= this.maxCacheSize) {
             const oldestKey = this.queryCache.keys().next().value;
-            this.queryCache.delete(oldestKey);
+            if (oldestKey) {
+                this.queryCache.delete(oldestKey);
+            }
         }
 
         this.queryCache.set(key, {
@@ -493,7 +533,7 @@ export class literatureDatabase extends Dexie {
         sort: LiteratureSort = { field: 'createdAt', order: 'desc' },
         page: number = 1,
         pageSize: number = LITERATURE_CONSTANTS.DEFAULT_PAGE_SIZE
-    ): Promise<PaginatedResult<LibraryItemCore>> {
+    ): Promise<PaginatedResult<LibraryItem>> {
         const startTime = Date.now();
         this.queryStats.totalQueries++;
 
@@ -502,7 +542,7 @@ export class literatureDatabase extends Dexie {
             const cacheKey = `search_literatures_${JSON.stringify({ filter, sort, page, pageSize })}`;
 
             // 尝试从缓存获取
-            const cached = this.getCache<PaginatedResult<LibraryItemCore>>(cacheKey);
+            const cached = this.getCache<PaginatedResult<LibraryItem>>(cacheKey);
             if (cached) {
                 return cached;
             }
@@ -511,48 +551,32 @@ export class literatureDatabase extends Dexie {
             let query = this.libraries.toCollection();
 
             // 应用过滤器
-            if (filter.sources?.length) {
-                query = this.libraries.where('source').anyOf(filter.sources);
+            if (filter.source && filter.source !== 'all') {
+                query = this.libraries.where('source').equals(filter.source);
             }
 
-            if (filter.years?.length) {
-                query = this.libraries.where('year').anyOf(filter.years);
+            if (filter.yearRange) {
+                query = this.libraries.where('year')
+                    .between(filter.yearRange.start, filter.yearRange.end, true, true);
             }
 
-            if (filter.createdAfter || filter.createdBefore) {
-                if (filter.createdAfter && filter.createdBefore) {
-                    query = this.libraries.where('createdAt').between(filter.createdAfter, filter.createdBefore);
-                } else if (filter.createdAfter) {
-                    query = this.libraries.where('createdAt').above(filter.createdAfter);
-                } else if (filter.createdBefore) {
-                    query = this.libraries.where('createdAt').below(filter.createdBefore);
-                }
+            if (filter.authors?.length) {
+                query = query.filter(item =>
+                    filter.authors!.some(author =>
+                        item.authors.some(itemAuthor =>
+                            itemAuthor.toLowerCase().includes(author.toLowerCase())
+                        )
+                    )
+                );
             }
 
             // 文本搜索
-            if (filter.searchQuery) {
-                const searchTerm = filter.searchQuery.toLowerCase();
+            if (filter.searchTerm) {
+                const searchTerm = filter.searchTerm.toLowerCase();
                 query = query.filter(item => {
-                    const searchFields = filter.searchFields || ['title', 'authors'];
-
-                    return searchFields.some(field => {
-                        switch (field) {
-                            case 'title':
-                                return item.title.toLowerCase().includes(searchTerm);
-                            case 'authors':
-                                return item.authors.some(author =>
-                                    author.toLowerCase().includes(searchTerm)
-                                );
-                            case 'abstract':
-                                return item.abstract?.toLowerCase().includes(searchTerm) || false;
-                            case 'keywords':
-                                return item.keywords.some(keyword =>
-                                    keyword.toLowerCase().includes(searchTerm)
-                                );
-                            default:
-                                return false;
-                        }
-                    });
+                    return item.title.toLowerCase().includes(searchTerm) ||
+                        item.authors.some(author => author.toLowerCase().includes(searchTerm)) ||
+                        (item.abstract?.toLowerCase().includes(searchTerm) || false);
                 });
             }
 
@@ -569,18 +593,44 @@ export class literatureDatabase extends Dexie {
                 );
             }
 
-            if (filter.hasDoi !== undefined) {
-                query = query.filter(item =>
-                    filter.hasDoi ? !!item.doi : !item.doi
-                );
-            }
+            // 移除hasDoi过滤器，因为LibraryItem没有doi字段
 
             // 排序
             if (sort.field === 'title' || sort.field === 'year' || sort.field === 'createdAt') {
-                query = query.sortBy(sort.field);
+                query = query.sortBy(sort.field) as any;
                 if (sort.order === 'desc') {
                     query = query.reverse();
                 }
+            } else if (sort.field === 'authors') {
+                // 按第一个作者排序 - 需要特殊处理
+                const sortedItems = await query.toArray();
+                sortedItems.sort((a, b) => {
+                    const authorA = a.authors[0] || '';
+                    const authorB = b.authors[0] || '';
+                    const comparison = authorA.localeCompare(authorB);
+                    return sort.order === 'desc' ? -comparison : comparison;
+                });
+
+                // 重新构建查询
+                const offset = (page - 1) * pageSize;
+                const paginatedItems = sortedItems.slice(offset, offset + pageSize);
+
+                const result: PaginatedResult<LibraryItem> = {
+                    items: paginatedItems,
+                    total: sortedItems.length,
+                    page,
+                    pageSize,
+                    totalPages: Math.ceil(sortedItems.length / pageSize),
+                };
+
+                // 缓存结果
+                this.setCache(cacheKey, result, this.defaultCacheTTL);
+
+                // 记录性能
+                const queryTime = Date.now() - startTime;
+                this.updateQueryStats(queryTime);
+
+                return result;
             }
 
             // 分页
@@ -590,14 +640,12 @@ export class literatureDatabase extends Dexie {
                 query.count()
             ]);
 
-            const result: PaginatedResult<LibraryItemCore> = {
+            const result: PaginatedResult<LibraryItem> = {
                 items,
-                pagination: {
-                    page,
-                    pageSize,
-                    total,
-                    totalPages: Math.ceil(total / pageSize),
-                },
+                total,
+                page,
+                pageSize,
+                totalPages: Math.ceil(total / pageSize),
             };
 
             // 缓存结果
@@ -609,7 +657,7 @@ export class literatureDatabase extends Dexie {
 
             return result;
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw DatabaseErrorHandler.handle(error, {
                 operation: 'database.searchLiteratures',
                 layer: 'database',
                 additionalInfo: { filter, sort, page, pageSize },
@@ -638,7 +686,7 @@ export class literatureDatabase extends Dexie {
                     total: libraries.length,
                     bySource: this.groupBy(libraries, 'source'),
                     byYear: this.groupBy(libraries.filter(l => l.year), 'year'),
-                    byStatus: this.groupBy(libraries, 'status'),
+                    byStatus: {}, // LibraryItem没有status字段，返回空对象
                 },
                 userMetas: {
                     total: userMetas.length,
@@ -648,14 +696,14 @@ export class literatureDatabase extends Dexie {
                 },
                 citations: {
                     total: citations.length,
-                    byType: this.groupBy(citations, 'citationType'),
-                    verified: citations.filter(c => c.isVerified).length,
-                    unverified: citations.filter(c => !c.isVerified).length,
+                    byType: {}, // Citation没有citationType字段
+                    verified: 0, // Citation没有isVerified字段
+                    unverified: citations.length, // 所有都认为未验证
                 },
                 collections: {
                     total: collections.length,
                     byType: this.groupBy(collections, 'type'),
-                    byUser: this.groupBy(collections, 'userId'),
+                    byUser: {}, // Collection没有userId字段
                     public: collections.filter(c => c.isPublic).length,
                     private: collections.filter(c => !c.isPublic).length,
                 },
@@ -665,7 +713,7 @@ export class literatureDatabase extends Dexie {
             this.setCache(cacheKey, stats, this.defaultCacheTTL * 10);
             return stats;
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw DatabaseErrorHandler.handle(error, {
                 operation: 'database.getStatistics',
                 layer: 'database',
             });
@@ -684,34 +732,35 @@ export class literatureDatabase extends Dexie {
         const startTime = Date.now();
 
         try {
-            await this.transaction('rw', this.libraries, this.userMetas, this.citations, async (tx) => {
+            let orphanedUserMetas = 0;
+            let orphanedCitations = 0;
+
+            await this.transaction('rw', this.libraries, this.userMetas, this.citations, async () => {
                 // 获取所有有效的文献ID
                 const validLiteratureIds = new Set(
-                    (await tx.libraries.toArray()).map(item => item.lid)
+                    (await this.libraries.toArray()).map((item: any) => item.lid)
                 );
 
                 // 清理孤立的用户元数据
-                const orphanedUserMetas = await tx.userMetas
-                    .filter(meta => !validLiteratureIds.has(meta.lid))
+                orphanedUserMetas = await this.userMetas
+                    .filter((meta: any) => !validLiteratureIds.has(meta.lid))
                     .delete();
 
                 // 清理孤立的引文关系
-                const orphanedCitations = await tx.citations
-                    .filter(citation =>
+                orphanedCitations = await this.citations
+                    .filter((citation: any) =>
                         !validLiteratureIds.has(citation.sourceItemId) ||
                         !validLiteratureIds.has(citation.targetItemId)
                     )
                     .delete();
-
-                return { orphanedUserMetas, orphanedCitations };
             });
 
             // 清理缓存
             this.clearAllCache();
 
             const result = {
-                orphanedUserMetas: 0, // 实际值会在事务中设置
-                orphanedCitations: 0,
+                orphanedUserMetas,
+                orphanedCitations,
                 duplicateLiteratures: 0, // TODO: 实现重复检测
                 executionTime: Date.now() - startTime,
             };
@@ -719,7 +768,7 @@ export class literatureDatabase extends Dexie {
             console.log('🔧 Database maintenance completed:', result);
             return result;
         } catch (error) {
-            throw ErrorHandler.handle(error, {
+            throw DatabaseErrorHandler.handle(error, {
                 operation: 'database.performMaintenance',
                 layer: 'database',
             });
@@ -766,7 +815,7 @@ export class literatureDatabase extends Dexie {
     /**
      * 📊 获取性能统计
      */
-    public getPerformanceStats() {
+    public getPerformanceStats(): any {
         return {
             ...this.queryStats,
             cacheSize: this.queryCache.size,
@@ -784,7 +833,7 @@ export class literatureDatabase extends Dexie {
         stats: DatabaseStatistics;
         version: number;
         dbName: string;
-        performance: ReturnType<typeof this.getPerformanceStats>;
+        performance: any;
         issues: string[];
     }> {
         try {

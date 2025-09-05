@@ -310,23 +310,23 @@ export function useCollectionLiterature(collectionId: string) {
 
     // 添加文献到集合
     const addLiterature = useCallback(
-        async (literatureIds: string[], userId: string) => {
+        async (lids: string[], userId: string) => {
             setError(null);
 
             try {
                 await collectionService.addLiteratureToCollection(
                     collectionId,
-                    literatureIds,
+                    lids,
                     userId
                 );
 
                 // 更新本地状态
                 if (collection) {
                     const newLiteratureIds = [
-                        ...new Set([...collection.literatureIds, ...literatureIds])
+                        ...new Set([...collection.lids, ...lids])
                     ];
                     updateCollection(collectionId, {
-                        literatureIds: newLiteratureIds,
+                        lids: newLiteratureIds,
                         updatedAt: new Date(),
                     });
                 }
@@ -341,23 +341,23 @@ export function useCollectionLiterature(collectionId: string) {
 
     // 从集合移除文献
     const removeLiterature = useCallback(
-        async (literatureIds: string[], userId: string) => {
+        async (lids: string[], userId: string) => {
             setError(null);
 
             try {
                 await collectionService.removeLiteratureFromCollection(
                     collectionId,
-                    literatureIds,
+                    lids,
                     userId
                 );
 
                 // 更新本地状态
                 if (collection) {
-                    const newLiteratureIds = collection.literatureIds.filter(
-                        id => !literatureIds.includes(id)
+                    const newLiteratureIds = collection.lids.filter(
+                        id => !lids.includes(id)
                     );
                     updateCollection(collectionId, {
-                        literatureIds: newLiteratureIds,
+                        lids: newLiteratureIds,
                         updatedAt: new Date(),
                     });
                 }
@@ -371,7 +371,7 @@ export function useCollectionLiterature(collectionId: string) {
     );
 
     return {
-        literatureIds: collection?.literatureIds || [],
+        lids: collection?.lids || [],
         addLiterature,
         removeLiterature,
     };

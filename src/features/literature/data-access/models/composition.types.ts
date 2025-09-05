@@ -98,7 +98,7 @@ export type BatchCompositionResult<T = EnhancedLibraryItem> = {
  */
 export type BatchByIdsOptions = CompositionOptions & {
     /** 文献ID列表 */
-    literatureIds: string[];
+    lids: string[];
     /** 是否保持ID顺序（默认false，按数据库返回顺序） */
     preserveOrder?: boolean;
     /** 是否忽略不存在的ID（默认true，不存在的ID不会导致整体失败） */
