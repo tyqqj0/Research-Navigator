@@ -1,44 +1,337 @@
 /**
- * 📚 Literature Domain - Data Access Layer 统一导出
+ * 📚 Literature Domain - Data Access Layer API Gateway
  * 
  * 架构: Feature-First + Domain-Driven Design
- * 分层: Models -> Database -> Repositories -> Services -> Stores
- * 设计原则: 单向依赖、领域隔离、可测试性
+ * 设计原则: 最小暴露、单一入口、类型安全
+ * 
+ * 这个文件是文献领域的统一API入口，只暴露必要的接口：
+ * - 🏪 Stores: 响应式状态管理 (主要接口)
+ * - 📝 Models: 核心类型和验证接口
+ * - 🚪 Entry Points: 文献添加和操作入口
  */
 
-// 🎯 模型层 (核心数据模型和验证)
-export * from './models';
+// =============================================================================
+// 🏪 主要接口: Stores (响应式状态管理)
+// =============================================================================
 
-// 🗄️ 数据库层 (持久化和查询)
-export * from './database';
+export {
+    // 核心存储
+    useLiteratureStore,
+    useCitationStore,
+    useCollectionStore,
 
-// 🏗️ 仓储层 (数据访问抽象)
-export * from './repositories';
+    // 存储状态类型
+    type LiteratureStoreState,
+    type LiteratureStoreActions,
+    type CitationStoreState,
+    // type CitationStoreActions,
+    type CollectionStoreState,
+    type CollectionStoreActions
+} from './stores';
 
-// 🔧 服务层 (业务逻辑封装)
-export * from './services';
+// =============================================================================
+// 📝 核心模型: 选择性导出必要的类型和接口
+// =============================================================================
 
-// 🏪 状态管理层 (响应式状态)
-export * from './stores';
+export type {
+    // 文献核心类型
+    LibraryItem,
+    LiteratureSource,
+    UserLiteratureMeta,
 
-// 🎯 域聚合器 - 提供统一的数据访问接口
-export class LiteratureDataAccess {
+    // 引用相关
+    Citation,
+    CitationDegree,
+    CitationOverview,
+
+    // 集合相关
+    Collection,
+    CollectionType,
+
+    // 验证和输入类型
+    CreateLibraryItemInput as CreateLiteratureInput,
+    UpdateLibraryItemInput as UpdateLiteratureInput,
+    CreateCitationInput,
+    CreateCollectionInput as CreateCollectionData, // 重命名解决冲突
+
+    // 查询和过滤
+    LiteratureFilter,
+    UserMetaFilter,
+    CollectionType as CollectionFilter,
+
+    // 统计类型
+    UserLiteratureStats as LiteratureStats,
+    LiteratureStatus,
+    ComponentStatus
+} from './models';
+
+// =============================================================================
+// 🚪 文献添加入口: 便捷的文献导入接口
+// =============================================================================
+
+// 导入内部使用的类型
+import type { LibraryItem, LiteratureSource } from './models';
+
+export interface LiteratureEntryPoint {
+    /**
+     * 通过DOI添加文献
+     */
+    addByDOI(doi: string, options?: {
+        autoExtractCitations?: boolean;
+        addToCollection?: string;
+        tags?: string[];
+    }): Promise<LibraryItem>;
+
+    /**
+     * 通过URL添加文献
+     */
+    addByURL(url: string, options?: {
+        autoExtractCitations?: boolean;
+        addToCollection?: string;
+        tags?: string[];
+    }): Promise<LibraryItem>;
+
+    /**
+     * 通过标题和作者手动添加
+     */
+    addByMetadata(metadata: {
+        title: string;
+        authors: string[];
+        year?: number;
+        journal?: string;
+        abstract?: string;
+        keywords?: string[];
+    }, options?: {
+        autoExtractCitations?: boolean;
+        addToCollection?: string;
+        tags?: string[];
+    }): Promise<LibraryItem>;
+
+    /**
+     * 批量导入文献
+     */
+    batchImport(entries: Array<{
+        type: 'doi' | 'url' | 'metadata';
+        data: string | object;
+        options?: any;
+    }>): Promise<{
+        successful: LibraryItem[];
+        failed: Array<{ entry: any; error: string }>;
+    }>;
+}
+
+// =============================================================================
+// 🎯 统一数据访问接口: 高级操作和系统管理
+// =============================================================================
+
+export interface LiteratureDataAccessAPI {
+    // 文献入口点
+    readonly entry: LiteratureEntryPoint;
+
+    // 系统管理
+    initialize(): Promise<{ isHealthy: boolean; initializationTime: number }>;
+    performHealthCheck(): Promise<{ overall: boolean; recommendations: string[] }>;
+    performMaintenance(): Promise<{ optimizations: string[]; executionTime: number }>;
+    generateStatisticsReport(): Promise<{
+        overview: any;
+        insights: any;
+        recommendations: string[];
+    }>;
+
+    // 高级查询
+    searchLiterature(query: string, options?: any): Promise<LibraryItem[]>;
+    findSimilarLiterature(itemId: string): Promise<LibraryItem[]>;
+    analyzeCitationNetwork(itemId: string): Promise<any>;
+
+    // 数据导出
+    exportData(format: 'json' | 'csv' | 'bibtex', options?: any): Promise<string>;
+
+    // 清理
+    shutdown(): Promise<void>;
+}
+
+// =============================================================================
+// 🚪 文献入口点实现
+// =============================================================================
+
+class LiteratureEntryPointImpl implements LiteratureEntryPoint {
+    constructor(
+        private readonly literatureStore = require('./stores').useLiteratureStore(),
+        private readonly services = require('./services').literatureDomainServices
+    ) { }
+
+    async addByDOI(doi: string, options: {
+        autoExtractCitations?: boolean;
+        addToCollection?: string;
+        tags?: string[];
+    } = {}): Promise<LibraryItem> {
+        try {
+            // 1. 通过DOI获取元数据
+            const metadata = await this.services.literature.fetchMetadataByDOI(doi);
+
+            // 2. 创建文献项
+            const item = await this.literatureStore.createItem({
+                ...metadata,
+                doi,
+                tags: options.tags || [],
+                source: 'doi' as LiteratureSource
+            });
+
+            // 3. 可选操作
+            if (options.autoExtractCitations) {
+                await this.services.citation.extractAndLinkCitations(item.id);
+            }
+
+            if (options.addToCollection) {
+                const collectionStore = require('./stores').useCollectionStore();
+                await collectionStore.addItemToCollection(options.addToCollection, item.id);
+            }
+
+            return item;
+        } catch (error) {
+            console.error('[LiteratureEntry] Failed to add by DOI:', error);
+            throw new Error(`Failed to add literature by DOI: ${doi}`);
+        }
+    }
+
+    async addByURL(url: string, options: {
+        autoExtractCitations?: boolean;
+        addToCollection?: string;
+        tags?: string[];
+    } = {}): Promise<LibraryItem> {
+        try {
+            // 1. 从URL提取元数据
+            const metadata = await this.services.literature.fetchMetadataByURL(url);
+
+            // 2. 创建文献项
+            const item = await this.literatureStore.createItem({
+                ...metadata,
+                url,
+                tags: options.tags || [],
+                source: 'url' as LiteratureSource
+            });
+
+            // 3. 可选操作
+            if (options.autoExtractCitations) {
+                await this.services.citation.extractAndLinkCitations(item.id);
+            }
+
+            if (options.addToCollection) {
+                const collectionStore = require('./stores').useCollectionStore();
+                await collectionStore.addItemToCollection(options.addToCollection, item.id);
+            }
+
+            return item;
+        } catch (error) {
+            console.error('[LiteratureEntry] Failed to add by URL:', error);
+            throw new Error(`Failed to add literature by URL: ${url}`);
+        }
+    }
+
+    async addByMetadata(metadata: {
+        title: string;
+        authors: string[];
+        year?: number;
+        journal?: string;
+        abstract?: string;
+        keywords?: string[];
+    }, options: {
+        autoExtractCitations?: boolean;
+        addToCollection?: string;
+        tags?: string[];
+    } = {}): Promise<LibraryItem> {
+        try {
+            // 创建文献项
+            const item = await this.literatureStore.createItem({
+                title: metadata.title,
+                authors: metadata.authors,
+                year: metadata.year,
+                journal: metadata.journal,
+                abstract: metadata.abstract,
+                keywords: metadata.keywords || [],
+                tags: options.tags || [],
+                source: 'manual' as LiteratureSource
+            });
+
+            // 可选操作
+            if (options.autoExtractCitations && metadata.abstract) {
+                await this.services.citation.extractAndLinkCitations(item.id);
+            }
+
+            if (options.addToCollection) {
+                const collectionStore = require('./stores').useCollectionStore();
+                await collectionStore.addItemToCollection(options.addToCollection, item.id);
+            }
+
+            return item;
+        } catch (error) {
+            console.error('[LiteratureEntry] Failed to add by metadata:', error);
+            throw new Error(`Failed to add literature by metadata: ${metadata.title}`);
+        }
+    }
+
+    async batchImport(entries: Array<{
+        type: 'doi' | 'url' | 'metadata';
+        data: string | object;
+        options?: any;
+    }>): Promise<{
+        successful: LibraryItem[];
+        failed: Array<{ entry: any; error: string }>;
+    }> {
+        const successful: LibraryItem[] = [];
+        const failed: Array<{ entry: any; error: string }> = [];
+
+        for (const entry of entries) {
+            try {
+                let item: LibraryItem;
+
+                switch (entry.type) {
+                    case 'doi':
+                        item = await this.addByDOI(entry.data as string, entry.options);
+                        break;
+                    case 'url':
+                        item = await this.addByURL(entry.data as string, entry.options);
+                        break;
+                    case 'metadata':
+                        item = await this.addByMetadata(entry.data as any, entry.options);
+                        break;
+                    default:
+                        throw new Error(`Unsupported entry type: ${entry.type}`);
+                }
+
+                successful.push(item);
+            } catch (error) {
+                failed.push({
+                    entry,
+                    error: error instanceof Error ? error.message : String(error)
+                });
+            }
+        }
+
+        return { successful, failed };
+    }
+}
+
+// =============================================================================
+// 🎯 统一数据访问实现
+// =============================================================================
+
+export class LiteratureDataAccess implements LiteratureDataAccessAPI {
+    public readonly entry: LiteratureEntryPoint;
+
     constructor(
         public readonly repositories = require('./repositories').literatureDomainRepositories,
         public readonly services = require('./services').literatureDomainServices,
         public readonly database = require('./database').literatureDB
-    ) { }
+    ) {
+        this.entry = new LiteratureEntryPointImpl();
+    }
 
-    /**
-     * 🚀 初始化整个数据访问层
-     */
-    async initialize(): Promise<{
-        database: any;
-        repositories: any;
-        services: any;
-        isHealthy: boolean;
-        initializationTime: number;
-    }> {
+    // =============================================================================
+    // 🚀 系统管理方法
+    // =============================================================================
+
+    async initialize(): Promise<{ isHealthy: boolean; initializationTime: number }> {
         const startTime = Date.now();
 
         try {
@@ -53,37 +346,18 @@ export class LiteratureDataAccess {
             // 3. 服务层初始化
             const serviceInit = await this.services.initialize();
 
-            const result = {
-                database: dbHealth,
-                repositories: repoHealth,
-                services: serviceInit,
-                isHealthy: dbHealth.isHealthy && repoHealth.isHealthy && serviceInit.services.core,
-                initializationTime: Date.now() - startTime
-            };
+            const isHealthy = dbHealth.isHealthy && repoHealth.isHealthy && serviceInit.services.core;
+            const initializationTime = Date.now() - startTime;
 
-            console.log('[LiteratureDataAccess] Data access layer initialized:', result);
-            return result;
+            console.log('[LiteratureDataAccess] Data access layer initialized:', { isHealthy, initializationTime });
+            return { isHealthy, initializationTime };
         } catch (error) {
             console.error('[LiteratureDataAccess] Initialization failed:', error);
             throw new Error('Failed to initialize literature data access layer');
         }
     }
 
-    /**
-     * 🔍 执行全面健康检查
-     */
-    async performComprehensiveHealthCheck(): Promise<{
-        overall: boolean;
-        database: any;
-        repositories: any;
-        services: any;
-        performance: {
-            totalResponseTime: number;
-            checkTime: Date;
-        };
-        recommendations: string[];
-    }> {
-        const startTime = Date.now();
+    async performHealthCheck(): Promise<{ overall: boolean; recommendations: string[] }> {
         const recommendations: string[] = [];
 
         try {
@@ -116,43 +390,17 @@ export class LiteratureDataAccess {
 
             const overall = dbHealth.isHealthy && repoHealth.isHealthy && serviceHealth.overall;
 
-            return {
-                overall,
-                database: dbHealth,
-                repositories: repoHealth,
-                services: serviceHealth,
-                performance: {
-                    totalResponseTime: Date.now() - startTime,
-                    checkTime: new Date()
-                },
-                recommendations
-            };
+            return { overall, recommendations };
         } catch (error) {
-            console.error('[LiteratureDataAccess] Comprehensive health check failed:', error);
+            console.error('[LiteratureDataAccess] Health check failed:', error);
             return {
                 overall: false,
-                database: { isHealthy: false },
-                repositories: { isHealthy: false },
-                services: { overall: false },
-                performance: {
-                    totalResponseTime: Date.now() - startTime,
-                    checkTime: new Date()
-                },
                 recommendations: ['Health check system failure', ...recommendations]
             };
         }
     }
 
-    /**
-     * 🛠️ 执行维护和优化
-     */
-    async performMaintenance(): Promise<{
-        database: any;
-        repositories: any;
-        services: any;
-        optimizations: string[];
-        executionTime: number;
-    }> {
+    async performMaintenance(): Promise<{ optimizations: string[]; executionTime: number }> {
         const startTime = Date.now();
         const optimizations: string[] = [];
 
@@ -175,46 +423,20 @@ export class LiteratureDataAccess {
             const serviceMaintenance = await this.services.performIntelligentMaintenance();
             optimizations.push(...serviceMaintenance.recommendations);
 
-            const result = {
-                database: dbMaintenance,
-                repositories: repoMaintenance,
-                services: serviceMaintenance,
-                optimizations,
-                executionTime: Date.now() - startTime
-            };
+            const executionTime = Date.now() - startTime;
 
-            console.log('[LiteratureDataAccess] Comprehensive maintenance completed:', result);
-            return result;
+            console.log('[LiteratureDataAccess] Comprehensive maintenance completed:', { optimizations, executionTime });
+            return { optimizations, executionTime };
         } catch (error) {
             console.error('[LiteratureDataAccess] Maintenance failed:', error);
             throw new Error('Failed to perform maintenance');
         }
     }
 
-    /**
-     * 📊 获取全域统计报告
-     */
     async generateStatisticsReport(): Promise<{
-        overview: {
-            totalLiterature: number;
-            totalCitations: number;
-            totalCollections: number;
-            totalUsers: number;
-            lastActivity: Date | null;
-        };
-        performance: {
-            databaseSize: string;
-            averageQueryTime: number;
-            cacheHitRate: number;
-        };
-        insights: {
-            mostCitedLiterature: any[];
-            trendingTopics: any[];
-            activeUsers: any[];
-            citationNetworkStats: any;
-        };
+        overview: any;
+        insights: any;
         recommendations: string[];
-        generatedAt: Date;
     }> {
         try {
             console.log('[LiteratureDataAccess] Generating comprehensive statistics report...');
@@ -236,26 +458,19 @@ export class LiteratureDataAccess {
                 recommendations.push('No citation network - run citation linking to discover relationships');
             }
 
-            const trendingTopics = trends.filter(t => t.momentum === 'rising').slice(0, 5);
+            const trendingTopics = trends.filter((t: any) => t.momentum === 'rising').slice(0, 5);
             if (trendingTopics.length > 0) {
                 recommendations.push(`${trendingTopics.length} trending research topics identified`);
             }
 
             return {
                 overview: dbOverview,
-                performance: {
-                    databaseSize: '0 MB', // 可以实现实际计算
-                    averageQueryTime: 0,   // 可以添加性能监控
-                    cacheHitRate: 0        // 可以添加缓存统计
-                },
                 insights: {
                     mostCitedLiterature: domainStats.citations.mostCitedItems.slice(0, 10),
                     trendingTopics,
-                    activeUsers: [], // 需要用户活动数据
                     citationNetworkStats: domainStats.citations.networkStats
                 },
-                recommendations,
-                generatedAt: new Date()
+                recommendations
             };
         } catch (error) {
             console.error('[LiteratureDataAccess] Statistics report generation failed:', error);
@@ -263,9 +478,50 @@ export class LiteratureDataAccess {
         }
     }
 
-    /**
-     * 🧹 清理所有资源
-     */
+    // =============================================================================
+    // 🔍 高级查询方法
+    // =============================================================================
+
+    async searchLiterature(query: string, options: any = {}): Promise<LibraryItem[]> {
+        try {
+            return await this.services.literature.searchLiterature(query, options);
+        } catch (error) {
+            console.error('[LiteratureDataAccess] Search failed:', error);
+            throw new Error(`Failed to search literature: ${query}`);
+        }
+    }
+
+    async findSimilarLiterature(itemId: string): Promise<LibraryItem[]> {
+        try {
+            return await this.services.ai.findSimilarLiterature(itemId);
+        } catch (error) {
+            console.error('[LiteratureDataAccess] Similar literature search failed:', error);
+            throw new Error(`Failed to find similar literature for: ${itemId}`);
+        }
+    }
+
+    async analyzeCitationNetwork(itemId: string): Promise<any> {
+        try {
+            return await this.services.citation.analyzeCitationNetwork(itemId);
+        } catch (error) {
+            console.error('[LiteratureDataAccess] Citation network analysis failed:', error);
+            throw new Error(`Failed to analyze citation network for: ${itemId}`);
+        }
+    }
+
+    // =============================================================================
+    // 📤 数据导出方法
+    // =============================================================================
+
+    async exportData(format: 'json' | 'csv' | 'bibtex', options: any = {}): Promise<string> {
+        try {
+            return await this.services.literature.exportData(format, options);
+        } catch (error) {
+            console.error('[LiteratureDataAccess] Data export failed:', error);
+            throw new Error(`Failed to export data in ${format} format`);
+        }
+    }
+
     async shutdown(): Promise<void> {
         try {
             console.log('[LiteratureDataAccess] Shutting down data access layer...');
@@ -286,5 +542,30 @@ export class LiteratureDataAccess {
     }
 }
 
-// 🏪 数据访问层单例实例
+// =============================================================================
+// 🏪 单例实例和便捷导出
+// =============================================================================
+
+/**
+ * 📚 文献数据访问层单例实例
+ * 
+ * 使用示例:
+ * ```typescript
+ * import { literatureDataAccess } from '@/features/literature/data-access';
+ * 
+ * // 添加文献
+ * const item = await literatureDataAccess.entry.addByDOI('10.1000/example');
+ * 
+ * // 搜索文献
+ * const results = await literatureDataAccess.searchLiterature('machine learning');
+ * 
+ * // 系统管理
+ * const health = await literatureDataAccess.performHealthCheck();
+ * ```
+ */
 export const literatureDataAccess = new LiteratureDataAccess();
+
+/**
+ * 🚪 便捷的文献入口点 - 直接导出以简化使用
+ */
+export const literatureEntry = literatureDataAccess.entry;

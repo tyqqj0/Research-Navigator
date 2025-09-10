@@ -292,7 +292,7 @@ function AdvancedComponent() {
 ### **性能配置**
 ```typescript
 // 更新偏好设置
-literature.updatePreferences({
+iterature.updatePreferences({
   pageSize: 50,           // 分页大小
   autoRefresh: true,      // 自动刷新
   cacheEnabled: true,     // 启用缓存

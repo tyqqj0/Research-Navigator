@@ -16,7 +16,7 @@
  */
 
 import {
-    LiteratureRepository,
+    literatureRepository,
     userMetaRepository,
     citationRepository,
     collectionRepository,
@@ -210,7 +210,7 @@ export class AnalyticsService {
     };
 
     constructor(
-        private readonly literatureRepo = LiteratureRepository,
+        private readonly literatureRepo = literatureRepository,
         private readonly userMetaRepo = userMetaRepository,
         private readonly citationRepo = citationRepository,
         private readonly collectionRepo = collectionRepository
@@ -296,17 +296,24 @@ export class AnalyticsService {
             if (cached) return cached;
 
             // 1. 获取文献数据
-            let literatures: LibraryItemCore[];
+            let literatures: LibraryItem[];
             if (userId) {
                 const userMetas = await this.userMetaRepo.findByUserId(userId);
                 const lids = userMetas.map(meta => meta.lid);
                 literatures = await Promise.all(
                     lids.map(id => this.literatureRepo.findByLid(id))
-                ).then(items => items.filter(item => item !== null) as LibraryItemCore[]);
+                ).then(items => items.filter(item => item !== null) as LibraryItem[]);
             } else {
                 // 获取所有文献（需要实现分页或限制）
                 const result = await this.literatureRepo.searchWithFilters({
-                    searchFields: ['title', 'authors', 'abstract', 'keywords', 'notes']
+                    searchTerm: '',
+                    authors: [],
+                    hasAbstract: true,
+                    hasPdf: true,
+                    yearRange: {
+                        start: period?.start?.getFullYear() || 0,
+                        end: period?.end?.getFullYear() || 0,
+                    },
                 }, { field: 'createdAt', order: 'desc' }, 1, 10000);
                 literatures = result.items;
             }
@@ -565,9 +572,9 @@ export class AnalyticsService {
 
         for (const meta of userMetas) {
             statusCounts[meta.readingStatus as keyof typeof statusCounts]++;
-            totalProgress += meta.readingProgress || 0;
-            if (meta.readingProgress) {
-                totalReadingTime += meta.readingProgress;
+            totalProgress += meta.readingCompletedAt?.getTime() || 0;
+            if (meta.readingCompletedAt) {
+                totalReadingTime += meta.readingCompletedAt.getTime();
             }
         }
 

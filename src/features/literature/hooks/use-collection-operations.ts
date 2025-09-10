@@ -15,17 +15,17 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useCollectionStore, useLiteratureStore } from '../stores';
-import { collectionService } from '../services';
+import { useCollectionStore, useLiteratureStore } from '../data-access/stores';
+import { collectionService } from '../data-access/services';
 import type {
     Collection,
     CollectionType,
     EnhancedLibraryItem,
-} from '../models';
+} from '../data-access/models';
 import type {
     CreateCollectionInput,
     UpdateCollectionInput,
-} from '../services/collection-service';
+} from '../data-access/services/collection-service';
 
 // ==================== Hook State Interfaces ====================
 
@@ -188,11 +188,11 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         return Array.from(uiState.selectedIds)
             .map(id => collectionStore.getCollection(id))
             .filter(Boolean) as Collection[];
-    }, [uiState.selectedIds, collectionStore.collections]);
+    }, [uiState.selectedIds, collectionStore]);
 
     // 🔧 基础操作
     const setCurrentUser = useCallback((userId: string | null) => {
-        collectionStore.setCurrentUser(userId);
+        // Store层不再需要setCurrentUser方法，用户身份由Service层管理
         // 清空UI状态
         setUIState(prev => ({
             ...prev,
@@ -208,7 +208,7 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
             hasMore: false,
             page: 1,
         }));
-    }, [collectionStore]);
+    }, []);
 
     const clearError = useCallback(() => {
         setUIState(prev => ({ ...prev, error: null }));
@@ -216,13 +216,11 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
 
     // 📂 集合操作
     const createCollection = useCallback(async (input: CreateCollectionInput) => {
-        if (!collectionStore.currentUserId) throw new Error('用户未登录');
-
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 
         try {
-            // Service层处理业务逻辑
-            const collection = await collectionService.createCollection(collectionStore.currentUserId, input);
+            // Service层处理业务逻辑（Service层自动获取用户身份）
+            const collection = await collectionService.createCollection(input);
 
             // Store层更新数据
             collectionStore.addCollection(collection);
@@ -240,8 +238,6 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
     }, [collectionStore]);
 
     const updateCollection = useCallback(async (id: string, input: UpdateCollectionInput) => {
-        if (!collectionStore.currentUserId) throw new Error('用户未登录');
-
         setUIState(prev => ({
             ...prev,
             loadingIds: new Set(prev.loadingIds).add(id),
@@ -249,8 +245,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }));
 
         try {
-            // Service层处理业务逻辑
-            const collection = await collectionService.updateCollection(id, collectionStore.currentUserId, input);
+            // Service层处理业务逻辑（Service层自动获取用户身份）
+            const collection = await collectionService.updateCollection(id, input);
 
             // Store层更新数据
             collectionStore.updateCollection(id, collection);
@@ -277,8 +273,6 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
     }, [collectionStore]);
 
     const deleteCollection = useCallback(async (id: string) => {
-        if (!collectionStore.currentUserId) throw new Error('用户未登录');
-
         setUIState(prev => ({
             ...prev,
             loadingIds: new Set(prev.loadingIds).add(id),
@@ -286,8 +280,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }));
 
         try {
-            // Service层处理业务逻辑
-            await collectionService.deleteCollection(id, collectionStore.currentUserId);
+            // Service层处理业务逻辑（Service层自动获取用户身份）
+            await collectionService.deleteCollection(id);
 
             // Store层更新数据
             collectionStore.removeCollection(id);
@@ -323,11 +317,9 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
 
     // 📚 集合内容管理
     const addLiteratureToCollection = useCallback(async (collectionId: string, literatureId: string) => {
-        if (!collectionStore.currentUserId) throw new Error('用户未登录');
-
         try {
-            // Service层处理业务逻辑
-            await collectionService.addItemsToCollection(collectionId, [literatureId], collectionStore.currentUserId);
+            // Service层处理业务逻辑（Service层自动获取用户身份）
+            await collectionService.addItemsToCollection(collectionId, [literatureId]);
 
             // Store层更新数据
             collectionStore.addLiteratureToCollection(collectionId, literatureId);
@@ -341,11 +333,9 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
     }, [collectionStore]);
 
     const removeLiteratureFromCollection = useCallback(async (collectionId: string, literatureId: string) => {
-        if (!collectionStore.currentUserId) throw new Error('用户未登录');
-
         try {
-            // Service层处理业务逻辑
-            await collectionService.removeItemsFromCollection(collectionId, [literatureId], collectionStore.currentUserId);
+            // Service层处理业务逻辑（Service层自动获取用户身份）
+            await collectionService.removeItemsFromCollection(collectionId, [literatureId]);
 
             // Store层更新数据
             collectionStore.removeLiteratureFromCollection(collectionId, literatureId);
@@ -359,11 +349,9 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
     }, [collectionStore]);
 
     const addLiteraturesToCollection = useCallback(async (collectionId: string, lids: string[]) => {
-        if (!collectionStore.currentUserId) throw new Error('用户未登录');
-
         try {
-            // Service层处理业务逻辑
-            await collectionService.addItemsToCollection(collectionId, lids, collectionStore.currentUserId);
+            // Service层处理业务逻辑（Service层自动获取用户身份）
+            await collectionService.addItemsToCollection(collectionId, lids);
 
             // Store层更新数据
             collectionStore.addLiteraturesToCollection(collectionId, lids);
@@ -377,11 +365,9 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
     }, [collectionStore]);
 
     const removeLiteraturesFromCollection = useCallback(async (collectionId: string, lids: string[]) => {
-        if (!collectionStore.currentUserId) throw new Error('用户未登录');
-
         try {
-            // Service层处理业务逻辑
-            await collectionService.removeItemsFromCollection(collectionId, lids, collectionStore.currentUserId);
+            // Service层处理业务逻辑（Service层自动获取用户身份）
+            await collectionService.removeItemsFromCollection(collectionId, lids);
 
             // Store层更新数据
             collectionStore.removeLiteraturesFromCollection(collectionId, lids);
@@ -395,7 +381,7 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
     }, [collectionStore]);
 
     // 🔄 数据同步
-    const loadCollections = useCallback(async (userId: string, options: { force?: boolean } = {}) => {
+    const loadCollections = useCallback(async (options: { force?: boolean } = {}) => {
         const { force = false } = options;
 
         // 如果已有数据且不强制刷新，则跳过
@@ -404,8 +390,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 
         try {
-            // Service层获取数据
-            const result = await collectionService.getUserCollections(userId);
+            // Service层获取数据（Service层自动获取用户身份）
+            const result = await collectionService.getUserCollections();
 
             // Store层更新数据
             collectionStore.replaceCollections(result);
@@ -422,8 +408,6 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
     }, [collectionStore]);
 
     const loadCollection = useCallback(async (id: string) => {
-        if (!collectionStore.currentUserId) throw new Error('用户未登录');
-
         setUIState(prev => ({
             ...prev,
             loadingIds: new Set(prev.loadingIds).add(id),
@@ -431,8 +415,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }));
 
         try {
-            // Service层获取数据
-            const collection = await collectionService.getCollection(id, collectionStore.currentUserId);
+            // Service层获取数据（Service层自动获取用户身份）
+            const collection = await collectionService.getCollection(id);
 
             if (collection) {
                 // Store层更新数据
@@ -476,8 +460,6 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
             pageSize = 20,
         } = options;
 
-        if (!collectionStore.currentUserId) return;
-
         setUIState(prev => ({ ...prev, isSearching: true, error: null }));
         setSearchState(prev => ({
             ...prev,
@@ -488,8 +470,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }));
 
         try {
-            // Service层处理搜索
-            const result = await collectionService.searchCollections(collectionStore.currentUserId, {
+            // Service层处理搜索（Service层自动获取用户身份）
+            const result = await collectionService.searchCollections({
                 searchTerm: query,
                 ...filter,
             });
@@ -523,15 +505,15 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
     }, []);
 
     const loadMoreResults = useCallback(async () => {
-        if (!collectionStore.currentUserId || !searchState.hasMore || uiState.isSearching) return;
+        if (!searchState.hasMore || uiState.isSearching) return;
 
         const nextPage = searchState.page + 1;
 
         setUIState(prev => ({ ...prev, isSearching: true }));
 
         try {
-            // Service层处理分页搜索
-            const result = await collectionService.searchCollections(collectionStore.currentUserId, {
+            // Service层处理分页搜索（Service层自动获取用户身份）
+            const result = await collectionService.searchCollections({
                 searchTerm: searchState.query,
                 ...searchState.filter,
                 page: nextPage,
@@ -553,7 +535,7 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
                 isSearching: false,
             }));
         }
-    }, [collectionStore, searchState, uiState.isSearching]);
+    }, [searchState, uiState.isSearching]);
 
     // 🎯 选择操作
     const selectCollection = useCallback((id: string) => {

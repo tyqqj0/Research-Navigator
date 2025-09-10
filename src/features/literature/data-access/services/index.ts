@@ -31,16 +31,16 @@ export {
 } from './search-service';
 
 // 🤖 推荐服务 - 智能推荐算法
-export {
-  recommendationService,
-  RecommendationService,
-  type RecommendationResult,
-  type RecommendedLiterature,
-  type SuggestedTag,
-  type RelatedCollection,
-  type TrendingTopic,
-  type RecommendationOptions,
-} from './recommendation-service';
+// export {
+//   recommendationService,
+//   RecommendationService,
+//   type RecommendationResult,
+//   type RecommendedLiterature,
+//   type SuggestedTag,
+//   type RelatedCollection,
+//   type TrendingTopic,
+//   type RecommendationOptions,
+// } from './recommendation-service';
 
 // 📊 分析服务 - 统计分析和报告
 export {
@@ -66,10 +66,10 @@ export {
 export {
   collectionService,
   CollectionService,
-  type CreateCollectionInput,
-  type CollectionRules,
-  type CollectionStatistics,
-  type CollectionRecommendation,
+  // type CreateCollectionInput,
+  // type CollectionRules,
+  // type CollectionStatistics,
+  // type CollectionRecommendation,
 } from './collection-service';
 
 // 👤 用户元数据服务 - 用户个性化数据管理
@@ -116,7 +116,7 @@ export {
 // 导入服务实例
 import { literatureService } from './literature-service';
 import { searchService } from './search-service';
-import { recommendationService } from './recommendation-service';
+// import { recommendationService } from './recommendation-service';
 import { analyticsService } from './analytics-service';
 import { citationService } from './citation-service';
 import { collectionService } from './collection-service';
@@ -127,7 +127,7 @@ export const literatureDomainServices = {
   // 核心业务服务
   literature: literatureService,
   search: searchService,
-  recommendation: recommendationService,
+  // recommendation: recommendationService,
   analytics: analyticsService,
   citation: citationService,
   collection: collectionService,
@@ -172,10 +172,10 @@ export const literatureDomainServices = {
       // 清理所有服务缓存
       await Promise.all([
         this.search.clearCache(),
-        this.recommendation.clearCache(),
+        // this.recommendation.clearCache(),
         this.analytics.clearCache(),
         this.citation.clearCache(),
-        this.collection.clearCache(),
+        // this.collection.clearCache(),
         this.backend.clearCache(),
       ]);
 
@@ -191,7 +191,7 @@ export const literatureDomainServices = {
   async getServiceStatus(): Promise<{
     literature: boolean;
     search: boolean;
-    recommendation: boolean;
+    // recommendation: boolean;
     analytics: boolean;
     citation: boolean;
     collection: boolean;
@@ -204,7 +204,7 @@ export const literatureDomainServices = {
       const services = {
         literature: true,
         search: true,
-        recommendation: true,
+        // recommendation: true,
         analytics: true,
         citation: true,
         collection: true,
@@ -220,7 +220,7 @@ export const literatureDomainServices = {
       return {
         literature: false,
         search: false,
-        recommendation: false,
+        // recommendation: false,
         analytics: false,
         citation: false,
         collection: false,
@@ -238,10 +238,10 @@ export const literatureDomainServices = {
     return {
       literature: this.literature.getServiceStats(),
       search: this.search.getSearchStats(),
-      recommendation: this.recommendation.getRecommendationStats(),
+      // recommendation: this.recommendation.getRecommendationStats(),
       analytics: this.analytics.getServiceStats(),
       citation: this.citation.getCitationServiceStats(),
-      collection: this.collection.getCollectionServiceStats(),
+      // collection: this.collection.getCollectionServiceStats(),
       timestamp: new Date(),
     };
   },
@@ -313,18 +313,18 @@ export const quickLiteratureActions = {
     );
   },
 
-  // 🎯 获取推荐
-  async getRecommendations(
-    userId: string,
-    baseLiteratureId?: string,
-    options?: { limit?: number }
-  ) {
-    return await literatureDomainServices.recommendation.getPersonalizedRecommendations(
-      userId,
-      baseLiteratureId,
-      { limit: options?.limit || 10 }
-    );
-  },
+  // // 🎯 获取推荐
+  // async getRecommendations(
+  //   userId: string,
+  //   baseLiteratureId?: string,
+  //   options?: { limit?: number }
+  // ) {
+  //   return await literatureDomainServices.recommendation.getPersonalizedRecommendations(
+  //     userId,
+  //     baseLiteratureId,
+  //     { limit: options?.limit || 10 }
+  //   );
+  // },
 
   // 🕸️ 获取引文网络
   async getCitationNetwork(lids: string[], depth: number = 2) {
@@ -346,15 +346,26 @@ export const quickLiteratureActions = {
       name,
       type,
       description: options?.description || '',
-      rules: options?.rules,
+      ownerUid: userId,
+      isPublic: false,
+      lids: [],
+      isArchived: false,
+      // rules: options?.rules,
     });
   },
 
   // 📋 获取用户集合
   async getUserCollections(userId: string, includeStats: boolean = false) {
-    return await literatureDomainServices.collection.getUserCollections(
-      userId,
-      includeStats
+    return await literatureDomainServices.collection.queryCollections(
+      {
+        ownerUid: userId,
+      },
+      {
+        field: 'createdAt',
+        order: 'desc'
+      },
+      1,
+      50
     );
   },
 

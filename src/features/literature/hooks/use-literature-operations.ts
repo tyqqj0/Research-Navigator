@@ -15,18 +15,18 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useLiteratureStore } from '../stores';
-import { compositionService } from '../services';
+import { useLiteratureStore } from '../data-access/stores';
+import { compositionService } from '../data-access/services';
 import type {
     EnhancedLibraryItem,
     LiteratureFilter,
     LiteratureSort,
     PaginatedResult,
-} from '../models';
+} from '../data-access/models';
 import type {
     CreateComposedLiteratureInput,
     UpdateComposedLiteratureInput,
-} from '../services/composition-service';
+} from '../data-access/services/composition-service';
 
 // ==================== Hook State Interfaces ====================
 
@@ -158,11 +158,11 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         return Array.from(uiState.selectedIds)
             .map(lid => store.getLiterature(lid))
             .filter(Boolean) as EnhancedLibraryItem[];
-    }, [uiState.selectedIds, store.literatures]);
+    }, [uiState.selectedIds, store]);
 
     // 🔧 基础操作
     const setCurrentUser = useCallback((userId: string | null) => {
-        store.setCurrentUser(userId);
+        // Store层不再需要setCurrentUser方法，用户身份由Service层管理
         // 清空UI状态
         setUIState(prev => ({
             ...prev,
@@ -177,7 +177,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
             hasMore: false,
             page: 1,
         }));
-    }, [store]);
+    }, []);
 
     const clearError = useCallback(() => {
         setUIState(prev => ({ ...prev, error: null }));
@@ -457,7 +457,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
     }, []);
 
     const loadMoreResults = useCallback(async () => {
-        if (!store.currentUserId || !searchState.hasMore || uiState.isSearching) return;
+        if (!searchState.hasMore || uiState.isSearching) return;
 
         const nextPage = searchState.page + 1;
 
@@ -466,7 +466,6 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         try {
             // Service层处理分页搜索
             const result = await compositionService.searchEnhancedLiteratures(
-                store.currentUserId,
                 { searchTerm: searchState.query, ...searchState.filter },
                 searchState.sort,
                 nextPage,
@@ -488,7 +487,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
                 isSearching: false,
             }));
         }
-    }, [store, searchState, uiState.isSearching]);
+    }, [searchState, uiState.isSearching]);
 
     // 🎯 选择操作
     const selectLiterature = useCallback((lid: string) => {
@@ -556,21 +555,54 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         const items = store.getAllLiteratures();
 
         return items.filter(item => {
-            // 基础过滤逻辑
-            if (filter.tags && filter.tags.length > 0) {
-                const itemTags = item.userMeta?.tags || [];
-                const hasTag = filter.tags.some(tag => itemTags.includes(tag));
-                if (!hasTag) return false;
-            }
-
-            if (filter.status && item.userMeta?.readingStatus !== filter.status) {
+            // 来源过滤
+            if (filter.source && filter.source !== 'all' && item.literature.source !== filter.source) {
                 return false;
             }
 
-            if (filter.dateRange) {
-                const itemDate = new Date(item.literature.createdAt);
-                if (filter.dateRange.start && itemDate < filter.dateRange.start) return false;
-                if (filter.dateRange.end && itemDate > filter.dateRange.end) return false;
+            // 搜索词过滤
+            if (filter.searchTerm) {
+                const searchTerm = filter.searchTerm.toLowerCase();
+                const title = item.literature.title?.toLowerCase() || '';
+                const abstract = item.literature.abstract?.toLowerCase() || '';
+                const authors = item.literature.authors?.join(' ').toLowerCase() || '';
+
+                if (!title.includes(searchTerm) &&
+                    !abstract.includes(searchTerm) &&
+                    !authors.includes(searchTerm)) {
+                    return false;
+                }
+            }
+
+            // 年份范围过滤
+            if (filter.yearRange && item.literature.year) {
+                if (item.literature.year < filter.yearRange.start ||
+                    item.literature.year > filter.yearRange.end) {
+                    return false;
+                }
+            }
+
+            // 作者过滤
+            if (filter.authors && filter.authors.length > 0) {
+                const itemAuthors = item.literature.authors || [];
+                const hasAuthor = filter.authors.some(author =>
+                    itemAuthors.some(itemAuthor =>
+                        itemAuthor.toLowerCase().includes(author.toLowerCase())
+                    )
+                );
+                if (!hasAuthor) return false;
+            }
+
+            // 摘要存在性过滤
+            if (filter.hasAbstract !== undefined) {
+                const hasAbstract = !!(item.literature.abstract && item.literature.abstract.trim());
+                if (filter.hasAbstract !== hasAbstract) return false;
+            }
+
+            // PDF存在性过滤
+            if (filter.hasPdf !== undefined) {
+                const hasPdf = !!(item.literature.pdfPath);
+                if (filter.hasPdf !== hasPdf) return false;
             }
 
             return true;

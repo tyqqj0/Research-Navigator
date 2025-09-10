@@ -39,11 +39,6 @@ export {
 // ==================== 🔄 Legacy Hooks (待迁移) ====================
 // 这些是旧的Hook，需要逐步迁移到新的Operations Hook
 export {
-    useLiteratures,
-    type UseLiteraturesReturn,
-} from './use-literatures';
-
-export {
     useCollections,
     type UseCollectionsReturn,
 } from './use-collections';

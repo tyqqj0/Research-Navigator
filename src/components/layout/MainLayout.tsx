@@ -100,11 +100,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                     label: '笔记',
                     path: '/literature/notes'
                 },
-                {
-                    key: 'citations',
-                    label: '引用管理',
-                    path: '/literature/citations'
-                }
+                // {
+                //     key: 'citations',
+                //     label: '引用管理',
+                //     path: '/literature/citations'
+                // }
             ]
         },
         {

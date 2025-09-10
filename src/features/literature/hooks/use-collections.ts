@@ -16,110 +16,38 @@
 
 import { useCallback, useEffect, useMemo } from 'react';
 import { shallow } from 'zustand/shallow';
-import {
-    useCollectionStore,
-    collectionSelectors,
-    uiConfigSelectors,
-    statsSelectors,
-    loadingSelectors,
-} from '../stores/collection-store';
-import { collectionService } from '../services/collection-service-refactored';
-import {
+import { useCollectionStore } from '../data-access/stores';
+import { collectionService } from '../data-access/services';
+import type {
     Collection,
     CollectionType,
-    CollectionUIConfig,
-    CollectionStats,
     CreateCollectionInput,
     UpdateCollectionInput,
-    CollectionQuery,
-    CollectionSort,
-} from '../models';
+} from '../data-access/models';
 
 // ==================== 基础集合Hook ====================
 
 /**
  * 🎯 使用所有集合
  */
-export function useCollections(query?: CollectionQuery) {
-    const {
-        collections,
-        queryResults,
-        lastQuery,
-        loading,
-        error,
-        setCollections,
-        setQueryResults,
-        setLoading,
-        setError,
-    } = useCollectionStore(
-        useCallback((state) => ({
-            collections: state.collections,
-            queryResults: state.queryResults,
-            lastQuery: state.lastQuery,
-            loading: state.loading,
-            error: state.error,
-            setCollections: state.setCollections,
-            setQueryResults: state.setQueryResults,
-            setLoading: state.setLoading,
-            setError: state.setError,
-        }), []),
-        shallow
-    );
+export function useCollections() {
+    const store = useCollectionStore();
 
     // 获取集合列表
-    const fetchCollections = useCallback(
-        async (
-            searchQuery: CollectionQuery = {},
-            sort: CollectionSort = { field: 'createdAt', order: 'desc' },
-            page: number = 1,
-            pageSize: number = 50
-        ) => {
-            setLoading('fetch', true);
-            setError(null);
-
-            try {
-                const result = await collectionService.queryCollections(
-                    searchQuery,
-                    sort,
-                    page,
-                    pageSize
-                );
-
-                setCollections(result.items);
-                setQueryResults(searchQuery, result.items.map(c => c.id));
-
-                return result;
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to fetch collections';
-                setError(errorMessage);
-                throw error;
-            } finally {
-                setLoading('fetch', false);
-            }
-        },
-        [setCollections, setQueryResults, setLoading, setError]
-    );
-
-    // 计算当前显示的集合
-    const displayedCollections = useMemo(() => {
-        if (query && JSON.stringify(query) === JSON.stringify(lastQuery)) {
-            return queryResults.map(id => collections[id]).filter(Boolean);
+    const fetchCollections = useCallback(async () => {
+        try {
+            const result = await collectionService.getUserCollections();
+            store.replaceCollections(result);
+            return result;
+        } catch (error) {
+            console.error('Failed to fetch collections:', error);
+            throw error;
         }
-        return Object.values(collections);
-    }, [collections, queryResults, lastQuery, query]);
-
-    // 自动加载
-    useEffect(() => {
-        if (query) {
-            fetchCollections(query);
-        }
-    }, [query, fetchCollections]);
+    }, [store]);
 
     return {
-        collections: displayedCollections,
-        allCollections: Object.values(collections),
-        loading: loading.fetch,
-        error,
+        collections: store.getAllCollections(),
+        stats: store.stats,
         refetch: fetchCollections,
     };
 }
@@ -128,90 +56,30 @@ export function useCollections(query?: CollectionQuery) {
  * 🎯 使用单个集合
  */
 export function useCollection(collectionId: string | null) {
-    const {
-        collection,
-        uiConfig,
-        stats,
-        loading,
-        error,
-        updateCollection: updateCollectionInStore,
-        setUIConfig,
-        setStats,
-        setLoading,
-        setError,
-    } = useCollectionStore(
-        useCallback((state) => ({
-            collection: collectionId ? collectionSelectors.byId(state, collectionId) : null,
-            uiConfig: collectionId ? uiConfigSelectors.byCollectionId(state, collectionId) : null,
-            stats: collectionId ? statsSelectors.byCollectionId(state, collectionId) : null,
-            loading: state.loading,
-            error: state.error,
-            updateCollection: state.updateCollection,
-            setUIConfig: state.setUIConfig,
-            setStats: state.setStats,
-            setLoading: state.setLoading,
-            setError: state.setError,
-        }), [collectionId]),
-        shallow
-    );
+    const store = useCollectionStore();
+
+    const collection = collectionId ? store.getCollection(collectionId) : null;
 
     // 更新集合
     const updateCollection = useCallback(
-        async (updates: UpdateCollectionInput, userId: string) => {
+        async (updates: UpdateCollectionInput) => {
             if (!collectionId) return null;
 
-            setLoading('update', true);
-            setError(null);
-
             try {
-                const updatedCollection = await collectionService.updateCollection(
-                    collectionId,
-                    userId,
-                    updates
-                );
-
-                updateCollectionInStore(collectionId, updatedCollection);
+                const updatedCollection = await collectionService.updateCollection(collectionId, updates);
+                store.updateCollection(collectionId, updatedCollection);
                 return updatedCollection;
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to update collection';
-                setError(errorMessage);
+                console.error('Failed to update collection:', error);
                 throw error;
-            } finally {
-                setLoading('update', false);
             }
         },
-        [collectionId, updateCollectionInStore, setLoading, setError]
-    );
-
-    // 更新UI配置
-    const updateUIConfig = useCallback(
-        (configUpdates: Partial<CollectionUIConfig>) => {
-            if (!collectionId) return;
-
-            const newConfig: CollectionUIConfig = {
-                collectionId,
-                sortBy: 'addedAt',
-                sortOrder: 'desc',
-                viewMode: 'list',
-                notifyOnUpdate: false,
-                updatedAt: new Date(),
-                ...uiConfig,
-                ...configUpdates,
-            };
-
-            setUIConfig(newConfig);
-        },
-        [collectionId, uiConfig, setUIConfig]
+        [collectionId, store]
     );
 
     return {
         collection,
-        uiConfig,
-        stats,
-        loading: loading.update,
-        error,
         updateCollection,
-        updateUIConfig,
     };
 }
 
@@ -221,73 +89,40 @@ export function useCollection(collectionId: string | null) {
  * 🎯 集合CRUD操作
  */
 export function useCollectionOperations() {
-    const {
-        addCollection,
-        removeCollection,
-        setLoading,
-        setError,
-    } = useCollectionStore(
-        useCallback((state) => ({
-            addCollection: state.addCollection,
-            removeCollection: state.removeCollection,
-            setLoading: state.setLoading,
-            setError: state.setError,
-        }), []),
-        shallow
-    );
+    const store = useCollectionStore();
 
     // 创建集合
     const createCollection = useCallback(
-        async (userId: string, input: CreateCollectionInput) => {
-            setLoading('create', true);
-            setError(null);
-
+        async (input: CreateCollectionInput) => {
             try {
-                const collection = await collectionService.createCollection(userId, input);
-                addCollection(collection);
+                const collection = await collectionService.createCollection(input);
+                store.addCollection(collection);
                 return collection;
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to create collection';
-                setError(errorMessage);
+                console.error('Failed to create collection:', error);
                 throw error;
-            } finally {
-                setLoading('create', false);
             }
         },
-        [addCollection, setLoading, setError]
+        [store]
     );
 
     // 删除集合
     const deleteCollection = useCallback(
-        async (collectionId: string, userId: string) => {
-            setLoading('delete', true);
-            setError(null);
-
+        async (collectionId: string) => {
             try {
-                await collectionService.deleteCollection(collectionId, userId);
-                removeCollection(collectionId);
+                await collectionService.deleteCollection(collectionId);
+                store.removeCollection(collectionId);
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to delete collection';
-                setError(errorMessage);
+                console.error('Failed to delete collection:', error);
                 throw error;
-            } finally {
-                setLoading('delete', false);
             }
         },
-        [removeCollection, setLoading, setError]
-    );
-
-    const { loading } = useCollectionStore(
-        useCallback((state) => ({ loading: state.loading }), [])
+        [store]
     );
 
     return {
         createCollection,
         deleteCollection,
-        loading: {
-            create: loading.create,
-            delete: loading.delete,
-        },
     };
 }
 
@@ -295,79 +130,37 @@ export function useCollectionOperations() {
  * 🎯 集合文献管理
  */
 export function useCollectionLiterature(collectionId: string) {
-    const {
-        collection,
-        updateCollection,
-        setError,
-    } = useCollectionStore(
-        useCallback((state) => ({
-            collection: collectionSelectors.byId(state, collectionId),
-            updateCollection: state.updateCollection,
-            setError: state.setError,
-        }), [collectionId]),
-        shallow
-    );
+    const store = useCollectionStore();
+    const collection = store.getCollection(collectionId);
 
     // 添加文献到集合
     const addLiterature = useCallback(
-        async (lids: string[], userId: string) => {
-            setError(null);
-
+        async (lids: string[]) => {
             try {
-                await collectionService.addLiteratureToCollection(
-                    collectionId,
-                    lids,
-                    userId
-                );
-
+                await collectionService.addItemsToCollection(collectionId, lids);
                 // 更新本地状态
-                if (collection) {
-                    const newLiteratureIds = [
-                        ...new Set([...collection.lids, ...lids])
-                    ];
-                    updateCollection(collectionId, {
-                        lids: newLiteratureIds,
-                        updatedAt: new Date(),
-                    });
-                }
+                store.addLiteraturesToCollection(collectionId, lids);
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to add literature';
-                setError(errorMessage);
+                console.error('Failed to add literature:', error);
                 throw error;
             }
         },
-        [collectionId, collection, updateCollection, setError]
+        [collectionId, store]
     );
 
     // 从集合移除文献
     const removeLiterature = useCallback(
-        async (lids: string[], userId: string) => {
-            setError(null);
-
+        async (lids: string[]) => {
             try {
-                await collectionService.removeLiteratureFromCollection(
-                    collectionId,
-                    lids,
-                    userId
-                );
-
+                await collectionService.removeItemsFromCollection(collectionId, lids);
                 // 更新本地状态
-                if (collection) {
-                    const newLiteratureIds = collection.lids.filter(
-                        id => !lids.includes(id)
-                    );
-                    updateCollection(collectionId, {
-                        lids: newLiteratureIds,
-                        updatedAt: new Date(),
-                    });
-                }
+                store.removeLiteraturesFromCollection(collectionId, lids);
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to remove literature';
-                setError(errorMessage);
+                console.error('Failed to remove literature:', error);
                 throw error;
             }
         },
-        [collectionId, collection, updateCollection, setError]
+        [collectionId, store]
     );
 
     return {
@@ -383,103 +176,11 @@ export function useCollectionLiterature(collectionId: string) {
  * 🎯 按类型获取集合
  */
 export function useCollectionsByType(type: CollectionType) {
-    const collections = useCollectionStore(
-        useCallback((state) => collectionSelectors.byType(state, type), [type])
-    );
-
-    return collections;
+    const store = useCollectionStore();
+    return store.getCollectionsByType(type);
 }
 
-/**
- * 🎯 按用户获取集合
- */
-export function useUserCollections(userId: string) {
-    const collections = useCollectionStore(
-        useCallback((state) => collectionSelectors.byOwner(state, userId), [userId])
-    );
+// 简化的hooks，移除复杂的选择器和状态管理
+// 这些功能可以通过useCollectionOperations hook来实现
 
-    return collections;
-}
-
-/**
- * 🎯 获取公开集合
- */
-export function usePublicCollections() {
-    const collections = useCollectionStore(
-        useCallback((state) => collectionSelectors.public(state), [])
-    );
-
-    return collections;
-}
-
-/**
- * 🎯 获取活跃集合（未归档）
- */
-export function useActiveCollections() {
-    const collections = useCollectionStore(
-        useCallback((state) => collectionSelectors.active(state), [])
-    );
-
-    return collections;
-}
-
-/**
- * 🎯 集合层次结构
- */
-export function useCollectionHierarchy(parentId?: string) {
-    const {
-        rootCollections,
-        childCollections,
-    } = useCollectionStore(
-        useCallback((state) => ({
-            rootCollections: collectionSelectors.roots(state),
-            childCollections: parentId ? collectionSelectors.children(state, parentId) : [],
-        }), [parentId]),
-        shallow
-    );
-
-    return parentId ? childCollections : rootCollections;
-}
-
-/**
- * 🎯 集合选择状态
- */
-export function useCollectionSelection() {
-    const {
-        selectedCollectionId,
-        selectedCollection,
-        selectCollection,
-    } = useCollectionStore(
-        useCallback((state) => ({
-            selectedCollectionId: state.selectedCollectionId,
-            selectedCollection: state.selectedCollectionId
-                ? collectionSelectors.byId(state, state.selectedCollectionId)
-                : null,
-            selectCollection: state.selectCollection,
-        }), []),
-        shallow
-    );
-
-    return {
-        selectedCollectionId,
-        selectedCollection,
-        selectCollection,
-    };
-}
-
-/**
- * 🎯 集合加载状态
- */
-export function useCollectionLoading() {
-    const loading = useCollectionStore(
-        useCallback((state) => ({
-            isLoading: loadingSelectors.any(state),
-            fetch: state.loading.fetch,
-            create: state.loading.create,
-            update: state.loading.update,
-            delete: state.loading.delete,
-        }), [])
-    );
-
-    return loading;
-}
+export type UseCollectionsReturn = ReturnType<typeof useCollections>;

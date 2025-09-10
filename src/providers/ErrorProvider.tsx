@@ -4,6 +4,8 @@
  * 全局错误处理Provider，提供应用程序级别的错误管理
  */
 
+'use client';
+
 import React, { createContext, useContext, useCallback, useState, ReactNode } from 'react';
 import { AppError, GlobalErrorHandler, handleError, type ErrorContext } from '../lib/errors';
 
