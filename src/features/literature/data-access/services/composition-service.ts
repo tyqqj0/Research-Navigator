@@ -43,7 +43,7 @@ export interface CreateComposedLiteratureInput {
     // 文献核心数据
     literature: CreateLibraryItemInput;
     // 用户元数据（可选）
-    userMeta?: Omit<CreateUserLiteratureMetaInput, 'lid' | 'userId'>;
+    userMeta?: Omit<CreateUserLiteratureMetaInput, 'paperId' | 'userId'>;
     // 🚀 移除userId参数 - Service内部自动获取当前用户
 }
 
@@ -62,7 +62,7 @@ export interface UpdateComposedLiteratureInput {
  */
 export interface BatchOperationResult {
     success: string[];
-    failed: Array<{ lid: string; error: string }>;
+    failed: Array<{ paperId: string; error: string }>;
     total: number;
 }
 
@@ -113,7 +113,7 @@ export class CompositionService {
             const result = await this.literatureService.createLiterature(input.literature);
 
             // 获取创建的文献数据
-            const literature = await this.literatureService.getLiterature(result.lid);
+            const literature = await this.literatureService.getLiterature(result.paperId);
             if (!literature) {
                 throw new Error('Failed to retrieve created literature');
             }
@@ -123,7 +123,7 @@ export class CompositionService {
             if (input.userMeta) {
                 const metaInput: CreateUserLiteratureMetaInput = {
                     ...input.userMeta,
-                    lid: literature.lid,
+                    paperId: literature.paperId,
                     userId, // 🎯 使用内部获取的userId
                     tags: input.userMeta.tags || [],
                     readingStatus: input.userMeta.readingStatus || 'unread',
@@ -134,7 +134,7 @@ export class CompositionService {
                 };
                 userMeta = await this.userMetaService.createUserMeta(
                     userId, // 🎯 使用内部获取的userId
-                    literature.lid,
+                    literature.paperId,
                     metaInput,
                     { autoSetDefaultTags: true }
                 );
@@ -164,10 +164,10 @@ export class CompositionService {
         for (const input of inputs) {
             try {
                 const created = await this.createComposedLiterature(input);
-                results.success.push(created.literature.lid);
+                results.success.push(created.literature.paperId);
             } catch (error) {
                 results.failed.push({
-                    lid: `temp-${Date.now()}`, // 临时ID，因为还未创建
+                    paperId: `temp-${Date.now()}`, // 临时ID，因为还未创建
                     error: error instanceof Error ? error.message : 'Unknown error'
                 });
             }
@@ -185,7 +185,7 @@ export class CompositionService {
      * 🎯 重构后：自动获取当前用户ID，简化API调用
      */
     async updateComposedLiterature(
-        lid: string,
+        paperId: string,
         updates: UpdateComposedLiteratureInput
     ): Promise<EnhancedLibraryItem> {
         const userId = this.getCurrentUserId(); // 🔐 内部自动获取用户ID
@@ -195,32 +195,32 @@ export class CompositionService {
 
             // 1. 更新文献核心数据（如果提供）
             if (updates.literature) {
-                const result = await this.literatureService.updateLiterature(lid, updates.literature);
+                const result = await this.literatureService.updateLiterature(paperId, updates.literature);
                 // 获取更新后的数据
-                literature = await this.literatureService.getLiterature(lid);
+                literature = await this.literatureService.getLiterature(paperId);
                 if (!literature) {
                     throw new Error('Failed to retrieve updated literature');
                 }
             } else {
-                literature = await this.literatureService.getLiterature(lid);
+                literature = await this.literatureService.getLiterature(paperId);
             }
 
             if (!literature) {
-                throw new Error(`Literature not found: ${lid}`);
+                throw new Error(`Literature not found: ${paperId}`);
             }
 
             // 2. 更新用户元数据（如果提供）
             if (updates.userMeta) {
                 // 先检查用户元数据是否存在
-                const existingMeta = await this.userMetaService.getUserMeta(userId, lid);
+                const existingMeta = await this.userMetaService.getUserMeta(userId, paperId);
 
                 if (existingMeta) {
-                    userMeta = await this.userMetaService.updateUserMeta(userId, lid, updates.userMeta);
+                    userMeta = await this.userMetaService.updateUserMeta(userId, paperId, updates.userMeta);
                 } else {
                     // 如果不存在则创建
                     const metaInput: CreateUserLiteratureMetaInput = {
                         ...updates.userMeta,
-                        lid,
+                        paperId,
                         userId,
                         tags: updates.userMeta.tags || [],
                         readingStatus: updates.userMeta.readingStatus || 'unread',
@@ -231,7 +231,7 @@ export class CompositionService {
                     };
                     userMeta = await this.userMetaService.createUserMeta(
                         userId,
-                        lid,
+                        paperId,
                         metaInput,
                         { autoSetDefaultTags: true }
                     );
@@ -239,7 +239,7 @@ export class CompositionService {
             } else {
                 // 获取现有用户元数据
                 try {
-                    userMeta = await this.userMetaService.getUserMeta(userId, lid);
+                    userMeta = await this.userMetaService.getUserMeta(userId, paperId);
                 } catch (error) {
                     // 用户元数据不存在是正常情况
                 }
@@ -250,7 +250,7 @@ export class CompositionService {
         } catch (error) {
             ErrorHandler.handle(error, {
                 operation: 'CompositionService.updateComposedLiterature',
-                additionalInfo: { message: `Updating literature ${lid} for user: ${userId}` }
+                additionalInfo: { message: `Updating literature ${paperId} for user: ${userId}` }
             });
             throw error;
         }
@@ -261,7 +261,7 @@ export class CompositionService {
      * 🎯 重构后：移除userId参数，批量操作都使用当前用户
      */
     async updateComposedLiteratureBatch(
-        updates: Array<{ lid: string; updates: UpdateComposedLiteratureInput }>
+        updates: Array<{ paperId: string; updates: UpdateComposedLiteratureInput }>
     ): Promise<BatchOperationResult> {
         const results: BatchOperationResult = {
             success: [],
@@ -271,11 +271,11 @@ export class CompositionService {
 
         for (const update of updates) {
             try {
-                await this.updateComposedLiterature(update.lid, update.updates); // 🎯 移除userId参数
-                results.success.push(update.lid);
+                await this.updateComposedLiterature(update.paperId, update.updates); // 🎯 移除userId参数
+                results.success.push(update.paperId);
             } catch (error) {
                 results.failed.push({
-                    lid: update.lid,
+                    paperId: update.paperId,
                     error: error instanceof Error ? error.message : 'Unknown error'
                 });
             }
@@ -291,10 +291,10 @@ export class CompositionService {
      * 🎯 重构后：自动使用当前用户，API更简洁
      */
     async updateUserMeta(
-        lid: string,
+        paperId: string,
         updates: UpdateUserLiteratureMetaInput
     ): Promise<EnhancedLibraryItem> {
-        return this.updateComposedLiterature(lid, { userMeta: updates }); // 🎯 移除userId参数
+        return this.updateComposedLiterature(paperId, { userMeta: updates }); // 🎯 移除userId参数
     }
 
     // ==================== 删除操作 ====================
@@ -305,7 +305,7 @@ export class CompositionService {
      * 清理所有相关数据，包括用户元数据
      * 🎯 重构后：默认删除当前用户的数据，可选择删除全局数据
      */
-    async deleteComposedLiterature(lid: string, options: {
+    async deleteComposedLiterature(paperId: string, options: {
         deleteGlobally?: boolean
     } = {}): Promise<void> {
         const userId = this.getCurrentUserId(); // 🔐 内部自动获取用户ID
@@ -313,21 +313,21 @@ export class CompositionService {
         try {
             // 1. 删除当前用户的元数据
             try {
-                await this.userMetaService.deleteUserMeta(lid, userId);
+                await this.userMetaService.deleteUserMeta(paperId, userId);
             } catch (error) {
                 // 用户元数据可能不存在，忽略错误
             }
 
             // 2. 如果指定全局删除，则删除文献核心数据
             if (options.deleteGlobally) {
-                await this.literatureService.deleteLiterature(lid);
+                await this.literatureService.deleteLiterature(paperId);
                 // TODO: 实现删除所有用户元数据的方法
-                // await this.userMetaService.deleteAllUserMetaForLiterature(lid);
+                // await this.userMetaService.deleteAllUserMetaForLiterature(paperId);
             }
         } catch (error) {
             ErrorHandler.handle(error, {
                 operation: 'CompositionService.deleteComposedLiterature',
-                additionalInfo: { message: `Deleting literature ${lid} for user: ${userId}, global: ${options.deleteGlobally}` }
+                additionalInfo: { message: `Deleting literature ${paperId} for user: ${userId}, global: ${options.deleteGlobally}` }
             });
             throw error;
         }
@@ -338,7 +338,7 @@ export class CompositionService {
      * 🎯 重构后：批量删除当前用户的文献数据
      */
     async deleteComposedLiteratureBatch(
-        requests: Array<{ lid: string; deleteGlobally?: boolean }>
+        requests: Array<{ paperId: string; deleteGlobally?: boolean }>
     ): Promise<BatchOperationResult> {
         const results: BatchOperationResult = {
             success: [],
@@ -348,13 +348,13 @@ export class CompositionService {
 
         for (const request of requests) {
             try {
-                await this.deleteComposedLiterature(request.lid, {
+                await this.deleteComposedLiterature(request.paperId, {
                     deleteGlobally: request.deleteGlobally
                 }); // 🎯 使用新的options参数
-                results.success.push(request.lid);
+                results.success.push(request.paperId);
             } catch (error) {
                 results.failed.push({
-                    lid: request.lid,
+                    paperId: request.paperId,
                     error: error instanceof Error ? error.message : 'Unknown error'
                 });
             }
@@ -369,11 +369,11 @@ export class CompositionService {
      * 📚 获取单个增强文献
      * 🎯 重构后：自动使用当前用户的元数据进行增强
      */
-    async getEnhancedLiterature(lid: string): Promise<EnhancedLibraryItem | null> {
+    async getEnhancedLiterature(paperId: string): Promise<EnhancedLibraryItem | null> {
         const userId = this.getCurrentUserId(); // 🔐 内部自动获取用户ID
         try {
             // 1. 获取文献数据
-            const literature = await this.literatureService.getLiterature(lid);
+            const literature = await this.literatureService.getLiterature(paperId);
             if (!literature) {
                 return null;
             }
@@ -381,7 +381,7 @@ export class CompositionService {
             // 2. 获取当前用户的元数据
             let userMeta: UserLiteratureMeta | null = null;
             try {
-                userMeta = await this.userMetaService.getUserMeta(userId, lid);
+                userMeta = await this.userMetaService.getUserMeta(userId, paperId);
             } catch (error) {
                 // 用户元数据不存在是正常情况
             }
@@ -404,26 +404,26 @@ export class CompositionService {
             const userMetas = await this.userMetaService.getUserAllMetas(userId);
 
             // 2. 批量获取文献数据
-            const lids = userMetas.map(meta => meta.lid);
+            const lids = userMetas.map(meta => meta.paperId);
             const literatures: LibraryItem[] = [];
 
             // 批量获取文献数据
-            for (const lid of lids) {
+            for (const paperId of lids) {
                 try {
-                    const literature = await this.literatureService.getLiterature(lid);
+                    const literature = await this.literatureService.getLiterature(paperId);
                     if (literature) {
                         literatures.push(literature);
                     }
                 } catch (error) {
                     // 单个文献获取失败不影响整体
-                    console.warn(`Failed to get literature ${lid}:`, error);
+                    console.warn(`Failed to get literature ${paperId}:`, error);
                 }
             }
 
             // 3. 组合数据
             const enhancedItems: EnhancedLibraryItem[] = [];
             for (const literature of literatures) {
-                const userMeta = userMetas.find(meta => meta.lid === literature.lid);
+                const userMeta = userMetas.find(meta => meta.paperId === literature.paperId);
                 enhancedItems.push(this.buildEnhancedItem(literature, userMeta || null));
             }
 
@@ -454,7 +454,7 @@ export class CompositionService {
             for (const literature of searchResult.items) {
                 let userMeta: UserLiteratureMeta | null = null;
                 try {
-                    userMeta = await this.userMetaService.getUserMeta(userId, literature.lid);
+                    userMeta = await this.userMetaService.getUserMeta(userId, literature.paperId);
                 } catch (error) {
                     // 用户元数据不存在是正常情况
                 }

@@ -79,7 +79,7 @@ export class BackendApiService {
      * 📝 单个文献查重和获取LID
      */
     async resolveLiterature(input: LiteratureInput): Promise<{
-        lid: string;
+        paperId: string;
         isNew: boolean;
         literature: LibraryItem;
         taskId?: string;
@@ -96,7 +96,7 @@ export class BackendApiService {
             });
 
             return {
-                lid: response.lid,
+                paperId: response.paperId,
                 isNew: response.isNew,
                 literature: this.mapBackendToFrontend(response.literature),
                 taskId: response.taskId
@@ -209,9 +209,9 @@ export class BackendApiService {
     /**
      * 📚 获取文献详细信息
      */
-    async getLiterature(lid: string): Promise<LibraryItem> {
+    async getLiterature(paperId: string): Promise<LibraryItem> {
         try {
-            const cacheKey = `literature_${lid}`;
+            const cacheKey = `literature_${paperId}`;
 
             // 检查缓存
             const cached = this.cache.get(cacheKey);
@@ -219,8 +219,8 @@ export class BackendApiService {
                 return cached.data;
             }
 
-            console.log('[BackendAPI] Fetching literature:', lid);
-            const response = await this.apiRequest('GET', `/api/literature/${lid}`);
+            console.log('[BackendAPI] Fetching literature:', paperId);
+            const response = await this.apiRequest('GET', `/api/literature/${paperId}`);
             const literature = this.mapBackendToFrontend(response);
 
             // 更新缓存
@@ -247,13 +247,13 @@ export class BackendApiService {
             const cached: LibraryItem[] = [];
             const needFetch: string[] = [];
 
-            lids.forEach(lid => {
-                const cacheKey = `literature_${lid}`;
+            lids.forEach(paperId => {
+                const cacheKey = `literature_${paperId}`;
                 const cachedItem = this.cache.get(cacheKey);
                 if (cachedItem && Date.now() - cachedItem.timestamp < 300000) {
                     cached.push(cachedItem.data);
                 } else {
-                    needFetch.push(lid);
+                    needFetch.push(paperId);
                 }
             });
 
@@ -268,7 +268,7 @@ export class BackendApiService {
 
                 // 更新缓存
                 fetched.forEach(item => {
-                    const cacheKey = `literature_${item.lid}`;
+                    const cacheKey = `literature_${item.paperId}`;
                     this.cache.set(cacheKey, {
                         data: item,
                         timestamp: Date.now()
@@ -277,9 +277,9 @@ export class BackendApiService {
             }
 
             // 合并缓存和新获取的数据，按原顺序返回
-            const result = lids.map(lid => {
-                return cached.find(item => item.lid === lid) ||
-                    fetched.find(item => item.lid === lid);
+            const result = lids.map(paperId => {
+                return cached.find(item => item.paperId === paperId) ||
+                    fetched.find(item => item.paperId === paperId);
             }).filter(Boolean) as LibraryItem[];
 
             return result;
@@ -341,13 +341,13 @@ export class BackendApiService {
     /**
      * 🔗 获取单个文献的引用关系
      */
-    async getLiteratureCitations(lid: string): Promise<{
+    async getLiteratureCitations(paperId: string): Promise<{
         incoming: Array<{ sourceLid: string; citationType: string; confidence: number }>;
         outgoing: Array<{ targetLid: string; citationType: string; confidence: number }>;
         total: number;
     }> {
         try {
-            const cacheKey = `single_citations_${lid}`;
+            const cacheKey = `single_citations_${paperId}`;
 
             // 检查缓存
             const cached = this.cache.get(cacheKey);
@@ -355,8 +355,8 @@ export class BackendApiService {
                 return cached.data;
             }
 
-            console.log('[BackendAPI] Getting citations for literature:', lid);
-            const response = await this.apiRequest('GET', `/api/literature/${lid}/citations`);
+            console.log('[BackendAPI] Getting citations for literature:', paperId);
+            const response = await this.apiRequest('GET', `/api/literature/${paperId}/citations`);
 
             const result = {
                 incoming: response.incoming.map((citation: any) => ({
@@ -429,7 +429,7 @@ export class BackendApiService {
         limit: number = 10
     ): Promise<{
         recommendations: Array<{
-            lid: string;
+            paperId: string;
             score: number;
             reason: string;
             literature: LibraryItem;
@@ -447,7 +447,7 @@ export class BackendApiService {
 
             return {
                 recommendations: response.recommendations.map((rec: any) => ({
-                    lid: rec.lid,
+                    paperId: rec.paperId,
                     score: rec.score,
                     reason: rec.reason,
                     literature: this.mapBackendToFrontend(rec.literature)
@@ -506,7 +506,7 @@ export class BackendApiService {
      */
     private mapBackendToFrontend(backendData: any): ExtendedLibraryItem {
         return {
-            lid: backendData.lid, // 使用后端的LID
+            paperId: backendData.paperId, // 使用后端的LID
             title: backendData.title,
             authors: backendData.authors || [],
             year: backendData.year,

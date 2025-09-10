@@ -102,10 +102,8 @@ export abstract class BaseRepository<T extends { id: K }, K> implements IBaseRep
  */
     async delete(id: K): Promise<void> {
         try {
-            const deletedCount = await this.table.where('id').equals(id as any).delete();
-            if (deletedCount === 0) {
-                throw new Error(`Entity with id ${id} not found`);
-            }
+            // 使用主键删除，避免依赖'id'索引名称
+            await this.table.delete(id);
         } catch (error) {
             console.error(`[${this.constructor.name}] delete failed:`, error);
             throw new Error(`Failed to delete entity: ${id}`);

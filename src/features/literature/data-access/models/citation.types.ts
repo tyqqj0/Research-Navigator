@@ -22,7 +22,7 @@ export const CitationSchema = z.object({
 
 // 📊 引文度数统计 - 按需计算的轻量级统计
 export const CitationDegreeSchema = z.object({
-    lid: z.string().uuid(), // 文献LID
+    paperId: z.string().uuid(), // 文献LID
     inDegree: z.number().int().min(0), // 入度：被引用次数
     outDegree: z.number().int().min(0), // 出度：引用他人次数
     totalDegree: z.number().int().min(0), // 总度数

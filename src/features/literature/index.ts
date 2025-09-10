@@ -227,10 +227,10 @@ export class LiteratureFeature {
      * 📝 更新用户元数据
      */
     async updateUserMeta(
-        lid: string,
+        paperId: string,
         updates: Partial<UserLiteratureMetaCore>
     ): Promise<void> {
-        return this.store.updateUserMeta(lid, updates);
+        return this.store.updateUserMeta(paperId, updates);
     }
 
     /**
@@ -245,8 +245,8 @@ export class LiteratureFeature {
     /**
      * 🤖 获取推荐
      */
-    async getRecommendations(lid: string, force?: boolean): Promise<RecommendationResult> {
-        return this.store.getRecommendations(lid, force);
+    async getRecommendations(paperId: string, force?: boolean): Promise<RecommendationResult> {
+        return this.store.getRecommendations(paperId, force);
     }
 
     /**

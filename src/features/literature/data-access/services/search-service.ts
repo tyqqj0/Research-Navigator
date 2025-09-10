@@ -221,7 +221,7 @@ export class SearchService {
         query: string,
         limit: number = 10,
         userId?: string
-    ): Promise<Array<Pick<LibraryItem, 'lid' | 'title' | 'authors' | 'year' | 'source'>>> {
+    ): Promise<Array<Pick<LibraryItem, 'paperId' | 'title' | 'authors' | 'year' | 'source'>>> {
         try {
             const filter: LiteratureFilter = {
                 searchTerm: query,
@@ -235,7 +235,7 @@ export class SearchService {
             );
 
             return result.items.map((item: any) => ({
-                lid: item.lid,
+                paperId: item.paperId,
                 title: item.title,
                 authors: item.authors,
                 year: item.year,
@@ -323,7 +323,7 @@ export class SearchService {
         let userMetasMap = new Map<string, any>();
         if (userId) {
             const userMetas = await this.userMetaRepo.findByUserId(userId);
-            userMetasMap = new Map(userMetas.map(meta => [meta.lid, meta]));
+            userMetasMap = new Map(userMetas.map(meta => [meta.paperId, meta]));
         }
 
         // 2. 批量获取引文统计
@@ -333,7 +333,7 @@ export class SearchService {
         // 3. 增强每个项目
         return items.map(item => ({
             literature: item,
-            userMeta: userMetasMap.get(item.lid) || undefined,
+            userMeta: userMetasMap.get(item.paperId) || undefined,
         }));
     }
 

@@ -299,7 +299,7 @@ export class AnalyticsService {
             let literatures: LibraryItem[];
             if (userId) {
                 const userMetas = await this.userMetaRepo.findByUserId(userId);
-                const lids = userMetas.map(meta => meta.lid);
+                const lids = userMetas.map(meta => meta.paperId);
                 literatures = await Promise.all(
                     lids.map(id => this.literatureRepo.findByLid(id))
                 ).then(items => items.filter(item => item !== null) as LibraryItem[]);
@@ -629,7 +629,7 @@ export class AnalyticsService {
             }
 
             // 获取文献信息来统计其他字段
-            const literature = await this.literatureRepo.findByLid(meta.lid);
+            const literature = await this.literatureRepo.findByLid(meta.paperId);
             if (literature) {
                 // 作者统计
                 for (const author of literature.authors) {

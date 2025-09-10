@@ -216,7 +216,7 @@ export function LiteratureListPanel({
         if (selectedItems.size === paginatedItems.length) {
             setSelectedItems(new Set());
         } else {
-            setSelectedItems(new Set(paginatedItems.map(item => item.literature.lid)));
+            setSelectedItems(new Set(paginatedItems.map(item => item.literature.paperId)));
         }
     }, [selectedItems.size, paginatedItems]);
 
@@ -370,15 +370,15 @@ export function LiteratureListPanel({
                         <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4' : 'divide-y'}>
                             {paginatedItems.map((item) => (
                                 <div
-                                    key={item.literature.lid}
+                                    key={item.literature.paperId}
                                     className={`${viewMode === 'list' ? 'p-4 hover:bg-gray-50' : 'border rounded-lg p-4 hover:shadow-md'} transition-all cursor-pointer`}
                                     onClick={() => onItemClick?.(item)}
                                 >
                                     <div className="flex items-start gap-3">
                                         {showControls && (
                                             <Checkbox
-                                                checked={selectedItems.has(item.literature.lid)}
-                                                onCheckedChange={() => handleSelectItem(item.literature.lid)}
+                                                checked={selectedItems.has(item.literature.paperId)}
+                                                onCheckedChange={() => handleSelectItem(item.literature.paperId)}
                                                 onClick={(e) => e.stopPropagation()}
                                             />
                                         )}

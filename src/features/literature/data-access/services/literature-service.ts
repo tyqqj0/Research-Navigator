@@ -84,11 +84,11 @@ export class LiteratureService {
     /**
      * 📖 获取文献详情
      */
-    async getLiterature(lid: string): Promise<LibraryItem | null> {
+    async getLiterature(paperId: string): Promise<LibraryItem | null> {
         const startTime = Date.now();
 
         try {
-            const literature = await this.literatureRepo.findByLid(lid);
+            const literature = await this.literatureRepo.findByLid(paperId);
 
             this.updateStats(Date.now() - startTime, true);
             return literature;
@@ -98,7 +98,7 @@ export class LiteratureService {
             throw ErrorHandler.handle(error, {
                 operation: 'service.getLiterature',
                 layer: 'service',
-                additionalInfo: { lid },
+                additionalInfo: { paperId },
             });
         }
     }
@@ -162,14 +162,14 @@ export class LiteratureService {
      * ✏️ 更新文献
      */
     async updateLiterature(
-        lid: string,
+        paperId: string,
         updates: UpdateLibraryItemInput
     ): Promise<LiteratureOperationResult> {
         const startTime = Date.now();
 
         try {
             // 1. 检查文献是否存在
-            const existing = await this.literatureRepo.findByLid(lid);
+            const existing = await this.literatureRepo.findByLid(paperId);
             if (!existing) {
                 throw new AppError('LibraryItem not found', ErrorType.NOT_FOUND_ERROR, ErrorSeverity.HIGH, {
                     operation: 'updateLiterature',
@@ -190,11 +190,11 @@ export class LiteratureService {
             }
 
             // 3. 执行更新
-            await this.literatureRepo.update(lid, updates);
+            await this.literatureRepo.update(paperId, updates);
 
             // 返回操作结果
             const result: LiteratureOperationResult = {
-                lid: lid,
+                paperId: paperId,
                 isNew: false,
                 operation: 'updated',
                 message: 'Literature updated successfully'
@@ -207,7 +207,7 @@ export class LiteratureService {
             throw ErrorHandler.handle(error, {
                 operation: 'service.updateLiterature',
                 layer: 'service',
-                additionalInfo: { lid, updates },
+                additionalInfo: { paperId, updates },
             });
         }
     }
@@ -216,14 +216,14 @@ export class LiteratureService {
      * 🗑️ 删除文献
      */
     async deleteLiterature(
-        lid: string,
+        paperId: string,
         options: LiteratureDeleteOptions = {}
     ): Promise<{ success: boolean; deletedCount: number }> {
         const startTime = Date.now();
 
         try {
             // 1. 检查文献是否存在
-            const existing = await this.literatureRepo.findByLid(lid);
+            const existing = await this.literatureRepo.findByLid(paperId);
             if (!existing) {
                 throw new AppError('LibraryItem not found', ErrorType.NOT_FOUND_ERROR, ErrorSeverity.HIGH, {
                     operation: 'deleteLiterature',
@@ -232,7 +232,7 @@ export class LiteratureService {
             }
 
             // 2. 删除文献记录
-            await this.literatureRepo.delete(lid);
+            await this.literatureRepo.delete(paperId);
 
             this.updateStats(Date.now() - startTime, true);
             return { success: true, deletedCount: 1 };
@@ -241,7 +241,7 @@ export class LiteratureService {
             throw ErrorHandler.handle(error, {
                 operation: 'service.deleteLiterature',
                 layer: 'service',
-                additionalInfo: { lid },
+                additionalInfo: { paperId },
             });
         }
     }
@@ -324,13 +324,13 @@ export class LiteratureService {
             let deletedCount = 0;
 
             // 批量删除文献
-            for (const lid of lids) {
+            for (const paperId of lids) {
                 try {
-                    await this.deleteLiterature(lid, options);
+                    await this.deleteLiterature(paperId, options);
                     deletedCount++;
                 } catch (error) {
                     // 记录错误但继续处理其他项目
-                    console.warn(`Failed to delete literature ${lid}:`, error);
+                    console.warn(`Failed to delete literature ${paperId}:`, error);
                 }
             }
 

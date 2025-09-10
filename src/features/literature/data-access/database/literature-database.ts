@@ -31,7 +31,7 @@ import type {
 // 📊 集合项类型 - 临时定义，待后续统一
 export type CollectionItem = {
     collectionId: string;
-    lid: string;
+    paperId: string;
     addedAt: Date;
     addedBy: string;
     order: number;
@@ -139,7 +139,7 @@ export class literatureDatabase extends Dexie {
         this.version(DATABASE_VERSION).stores({
             // 📚 核心文献表 - 多维度索引
             libraries: `
-                &lid,
+                &paperId,
                 title,
                 *authors,
                 year,
@@ -161,9 +161,9 @@ export class literatureDatabase extends Dexie {
 
             // 👤 用户元数据表 - 用户相关复合索引
             userMetas: `
-                &[userId+lid],
+                &[userId+paperId],
                 userId,
-                lid,
+                paperId,
                 *tags,
                 priority,
                 isFavorite,
@@ -183,54 +183,37 @@ export class literatureDatabase extends Dexie {
                 [readingStatus+priority]
             `.replace(/\s+/g, ' ').trim(),
 
-            // 🔗 引文关系表 - 双向查询优化
+            // 🔗 引文关系表 - 双向查询优化（与模型字段对齐）
             citations: `
-                &[sourceLid+targetLid],
-                sourceLid,
-                targetLid,
-                citationType,
-                discoveryMethod,
-                isVerified,
-                confidence,
-                context,
-                pageNumber,
-                section,
-                createdAt,
-                updatedAt,
-                [citationType+isVerified],
-                [discoveryMethod+confidence],
-                [isVerified+citationType]
+                &[sourceItemId+targetItemId],
+                sourceItemId,
+                targetItemId,
+                createdAt
             `.replace(/\s+/g, ' ').trim(),
 
-            // 📂 文献集合表 - 访问控制和分类索引
+            // 📂 文献集合表 - 与模型字段对齐 (id/ownerUid)
             collections: `
-                &collectionId,
-                userId,
+                &id,
+                ownerUid,
                 name,
                 description,
                 type,
                 isPublic,
-                itemCount,
-                *tags,
-                color,
                 createdAt,
                 updatedAt,
-                [userId+type],
-                [isPublic+type],
-                [userId+createdAt],
-                [type+itemCount]
+                parentId
             `.replace(/\s+/g, ' ').trim(),
 
             // 🖇️ 集合-文献关联表 - 多对多关系优化
             collectionItems: `
-                &[collectionId+lid],
+                &[collectionId+paperId],
                 collectionId,
-                lid,
+                paperId,
                 addedAt,
                 addedBy,
                 order,
                 [collectionId+addedAt],
-                [lid+addedAt]
+                [paperId+addedAt]
             `.replace(/\s+/g, ' ').trim(),
         });
 
@@ -399,12 +382,11 @@ export class literatureDatabase extends Dexie {
                 (obj as Citation).createdAt = now;
 
                 // 防止自引用
-                if (obj.sourceItemId === obj.targetItemId) {
+                if ((obj as any).sourceItemId === (obj as any).targetItemId) {
                     throw new Error('Citation cannot reference itself');
                 }
             } else {
-                // 更新操作 - Citation只有context字段可以更新
-                // 其他字段保持不变
+                // 更新操作 - 仅允许更新 context
             }
 
             this.clearRelatedCache('citations');
@@ -738,12 +720,12 @@ export class literatureDatabase extends Dexie {
             await this.transaction('rw', this.libraries, this.userMetas, this.citations, async () => {
                 // 获取所有有效的文献ID
                 const validLiteratureIds = new Set(
-                    (await this.libraries.toArray()).map((item: any) => item.lid)
+                    (await this.libraries.toArray()).map((item: any) => item.paperId)
                 );
 
                 // 清理孤立的用户元数据
                 orphanedUserMetas = await this.userMetas
-                    .filter((meta: any) => !validLiteratureIds.has(meta.lid))
+                    .filter((meta: any) => !validLiteratureIds.has(meta.paperId))
                     .delete();
 
                 // 清理孤立的引文关系

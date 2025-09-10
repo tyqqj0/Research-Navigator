@@ -11,7 +11,7 @@ import { LiteratureSource, LITERATURE_SOURCES } from './literature-source.types'
 // 🎯 核心文献实体 - 与后端严格对齐
 export const LibraryItemSchema = z.object({
     // 🔑 主键 - 与后端LID保持一致
-    lid: z.string().uuid('Invalid UUID format'),
+    paperId: z.string().uuid('Invalid UUID format'),
 
     // 📝 基础元数据
     title: z.string().min(1, 'Title is required'),
@@ -106,8 +106,8 @@ export type LiteratureStatus = z.infer<typeof LiteratureStatusSchema>;
 export type ComponentStatus = z.infer<typeof ComponentStatusSchema>;
 
 // 🎯 创建文献条目的输入类型
-export type CreateLibraryItemInput = Omit<LibraryItem, 'lid' | 'createdAt' | 'updatedAt'>;
-export type UpdateLibraryItemInput = Partial<Omit<LibraryItem, 'lid' | 'createdAt'>>;
+export type CreateLibraryItemInput = Omit<LibraryItem, 'paperId' | 'createdAt' | 'updatedAt'>;
+export type UpdateLibraryItemInput = Partial<Omit<LibraryItem, 'paperId' | 'createdAt'>>;
 
 // 🔍 搜索和筛选类型
 export type LiteratureFilter = {

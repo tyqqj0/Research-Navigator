@@ -183,7 +183,7 @@ export const useCollectionStore = create<CollectionStoreState & CollectionStoreA
                         const collection = state.collections[collectionId];
                         if (collection) {
                             collection.lids = collection.lids.filter(
-                                (lid: string) => !lids.includes(lid)
+                                (paperId: string) => !lids.includes(paperId)
                             );
                             collection.updatedAt = new Date();
                         }

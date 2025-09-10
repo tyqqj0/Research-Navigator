@@ -14,7 +14,7 @@ export const UserLiteratureMetaSchema = z.object({
 
     // 👤 关联信息
     userId: z.string(), // 这个元数据属于哪个用户
-    lid: z.string().uuid(), // 关联的文献ID (对应LibraryItem.id)
+    paperId: z.string().uuid(), // 关联的文献ID (对应LibraryItem.id)
 
     // 🏷️ 用户标签
     tags: z.array(z.string()).default([]),
@@ -74,7 +74,7 @@ export type CreateUserLiteratureMetaInput = Omit<
 >;
 
 export type UpdateUserLiteratureMetaInput = Partial<
-    Omit<UserLiteratureMeta, 'id' | 'userId' | 'lid' | 'createdAt'>
+    Omit<UserLiteratureMeta, 'id' | 'userId' | 'paperId' | 'createdAt'>
 >;
 
 // 注意：EnhancedLibraryItem 已移动到 composition.types.ts

@@ -70,7 +70,7 @@ export interface CitationDiscoveryResult {
         type: 'direct' | 'indirect' | 'inferred';
     }>;
     recommendations: Array<{
-        lid: string;
+        paperId: string;
         reason: string;
         priority: 'high' | 'medium' | 'low';
     }>;
@@ -246,7 +246,7 @@ export class CitationService {
      * 🤖 自动发现引文关系
      */
     async discoverCitations(
-        lid: string,
+        paperId: string,
         options: {
             method?: 'similarity' | 'text_analysis' | 'metadata' | 'all';
             confidenceThreshold?: number;
@@ -263,7 +263,7 @@ export class CitationService {
             } = options;
 
             // 1. 获取目标文献
-            const targetLiterature = await this.literatureRepo.findByLid(lid);
+            const targetLiterature = await this.literatureRepo.findByLid(paperId);
             if (!targetLiterature) {
                 throw new Error('Target literature not found');
             }
@@ -323,7 +323,7 @@ export class CitationService {
             throw handleError(error, {
                 operation: 'service.discoverCitations',
                 layer: 'service',
-                additionalInfo: { lid },
+                additionalInfo: { paperId },
             });
         }
     }
@@ -564,8 +564,8 @@ export class CitationService {
             .filter((similar: SimilarItem) => similar.score >= threshold)
             .slice(0, limit)
             .map((similar: SimilarItem) => ({
-                sourceId: targetLiterature.lid,
-                targetId: similar.item.lid,
+                sourceId: targetLiterature.paperId,
+                targetId: similar.item.paperId,
                 confidence: similar.score,
                 evidence: ['Content similarity', 'Keyword overlap'],
                 type: 'inferred' as const,
@@ -604,10 +604,10 @@ export class CitationService {
             );
 
             for (const work of authorWorks.items) {
-                if (work.lid !== targetLiterature.lid) {
+                if (work.paperId !== targetLiterature.paperId) {
                     results.push({
-                        sourceId: targetLiterature.lid,
-                        targetId: work.lid,
+                        sourceId: targetLiterature.paperId,
+                        targetId: work.paperId,
                         confidence: 0.6,
                         evidence: [`Same author: ${author}`],
                         type: 'inferred' as const,
@@ -634,7 +634,7 @@ export class CitationService {
             .filter(citation => citation.confidence > 0.7)
             .slice(0, 10)
             .map(citation => ({
-                lid: citation.targetId,
+                paperId: citation.targetId,
                 reason: `High confidence citation (${Math.round(citation.confidence * 100)}%)`,
                 priority: (citation.confidence > 0.8 ? 'high' : 'medium') as 'high' | 'medium' | 'low',
             }));

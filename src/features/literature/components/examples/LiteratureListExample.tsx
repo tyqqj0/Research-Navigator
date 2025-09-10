@@ -77,8 +77,8 @@ export const LiteratureListExample: React.FC<LiteratureListExampleProps> = ({ us
         if (selectedLiteratures.length === 0) return;
 
         try {
-            const lids = selectedLiteratures.map(lit => lit.literature.lid);
-            await Promise.all(lids.map(lid => deleteLiterature(lid, userId)));
+            const lids = selectedLiteratures.map(lit => lit.literature.paperId);
+            await Promise.all(lids.map(paperId => deleteLiterature(paperId, userId)));
             clearSelection();
         } catch (error) {
             console.error('删除失败:', error);
@@ -141,16 +141,16 @@ export const LiteratureListExample: React.FC<LiteratureListExampleProps> = ({ us
             <div className={`literature-list ${uiState.viewMode}`}>
                 {(searchState.query ? searchState.results : literatures).map((item) => (
                     <div
-                        key={item.literature.lid}
-                        className={`literature-item ${uiState.selectedIds.has(item.literature.lid) ? 'selected' : ''
+                        key={item.literature.paperId}
+                        className={`literature-item ${uiState.selectedIds.has(item.literature.paperId) ? 'selected' : ''
                             }`}
-                        onClick={() => selectLiterature(item.literature.lid)}
+                        onClick={() => selectLiterature(item.literature.paperId)}
                     >
                         <h3>{item.literature.title}</h3>
                         <p>作者: {item.literature.authors.join(', ')}</p>
                         <p>状态: {item.userMeta?.readingStatus || '未设置'}</p>
                         <p>标签: {item.userMeta?.tags?.join(', ') || '无'}</p>
-                        {uiState.loadingIds.has(item.literature.lid) && (
+                        {uiState.loadingIds.has(item.literature.paperId) && (
                             <div className="loading">处理中...</div>
                         )}
                     </div>

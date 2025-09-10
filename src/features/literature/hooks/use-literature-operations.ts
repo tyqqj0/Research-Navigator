@@ -83,14 +83,14 @@ export interface UseLiteratureOperationsReturn {
 
     // 📚 数据操作 - 🎯 重构后：移除userId参数，Service内部自动获取
     createLiterature: (input: Omit<CreateComposedLiteratureInput, 'userId'>) => Promise<EnhancedLibraryItem>;
-    updateLiterature: (lid: string, input: UpdateComposedLiteratureInput) => Promise<EnhancedLibraryItem>;
-    deleteLiterature: (lid: string, options?: { deleteGlobally?: boolean }) => Promise<void>;
+    updateLiterature: (paperId: string, input: UpdateComposedLiteratureInput) => Promise<EnhancedLibraryItem>;
+    deleteLiterature: (paperId: string, options?: { deleteGlobally?: boolean }) => Promise<void>;
     batchDeleteLiteratures: (lids: string[], options?: { deleteGlobally?: boolean }) => Promise<void>;
 
     // 🔄 数据同步 - 🎯 重构后：自动使用当前用户
     loadLiteratures: (options?: { force?: boolean }) => Promise<void>;
-    loadLiterature: (lid: string) => Promise<EnhancedLibraryItem | null>;
-    refreshLiterature: (lid: string) => Promise<void>;
+    loadLiterature: (paperId: string) => Promise<EnhancedLibraryItem | null>;
+    refreshLiterature: (paperId: string) => Promise<void>;
 
     // 🔍 搜索操作
     search: (query: string, options?: {
@@ -103,18 +103,18 @@ export interface UseLiteratureOperationsReturn {
     loadMoreResults: () => Promise<void>;
 
     // 🎯 选择操作
-    selectLiterature: (lid: string) => void;
+    selectLiterature: (paperId: string) => void;
     selectMultipleLiteratures: (lids: string[]) => void;
-    deselectLiterature: (lid: string) => void;
+    deselectLiterature: (paperId: string) => void;
     clearSelection: () => void;
-    toggleSelection: (lid: string) => void;
+    toggleSelection: (paperId: string) => void;
     selectAll: () => void;
 
     // 🎨 UI操作
     setViewMode: (mode: 'list' | 'grid' | 'table') => void;
 
     // 📊 数据查询辅助
-    getLiterature: (lid: string) => EnhancedLibraryItem | undefined;
+    getLiterature: (paperId: string) => EnhancedLibraryItem | undefined;
     getLiteratures: (lids: string[]) => EnhancedLibraryItem[];
     getFilteredLiteratures: (filter?: Partial<LiteratureFilter>) => EnhancedLibraryItem[];
 }
@@ -156,7 +156,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
     const selectedLiteratures = useMemo(() => {
         return Array.from(uiState.selectedIds)
-            .map(lid => store.getLiterature(lid))
+            .map(paperId => store.getLiterature(paperId))
             .filter(Boolean) as EnhancedLibraryItem[];
     }, [uiState.selectedIds, store]);
 
@@ -206,33 +206,33 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         }
     }, [store]);
 
-    const updateLiterature = useCallback(async (lid: string, input: UpdateComposedLiteratureInput) => {
+    const updateLiterature = useCallback(async (paperId: string, input: UpdateComposedLiteratureInput) => {
         setUIState(prev => ({
             ...prev,
-            loadingIds: new Set(prev.loadingIds).add(lid),
+            loadingIds: new Set(prev.loadingIds).add(paperId),
             error: null,
         }));
 
         try {
             // 🔐 Service层自动获取用户身份并处理业务逻辑
-            const enhanced = await compositionService.updateComposedLiterature(lid, input);
+            const enhanced = await compositionService.updateComposedLiterature(paperId, input);
 
             // Store层更新数据
-            store.updateLiterature(lid, enhanced);
+            store.updateLiterature(paperId, enhanced);
 
             // 更新搜索结果中的数据
-            if (searchState.query && searchState.results.some(item => item.literature.lid === lid)) {
+            if (searchState.query && searchState.results.some(item => item.literature.paperId === paperId)) {
                 setSearchState(prev => ({
                     ...prev,
                     results: prev.results.map(item =>
-                        item.literature.lid === lid ? enhanced : item
+                        item.literature.paperId === paperId ? enhanced : item
                     ),
                 }));
             }
 
             setUIState(prev => {
                 const newLoadingIds = new Set(prev.loadingIds);
-                newLoadingIds.delete(lid);
+                newLoadingIds.delete(paperId);
                 return { ...prev, loadingIds: newLoadingIds };
             });
 
@@ -240,7 +240,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         } catch (error) {
             setUIState(prev => {
                 const newLoadingIds = new Set(prev.loadingIds);
-                newLoadingIds.delete(lid);
+                newLoadingIds.delete(paperId);
                 return {
                     ...prev,
                     error: error instanceof Error ? error.message : '更新文献失败',
@@ -251,38 +251,38 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         }
     }, [store, searchState]);
 
-    const deleteLiterature = useCallback(async (lid: string, options: { deleteGlobally?: boolean } = {}) => {
+    const deleteLiterature = useCallback(async (paperId: string, options: { deleteGlobally?: boolean } = {}) => {
         setUIState(prev => ({
             ...prev,
-            loadingIds: new Set(prev.loadingIds).add(lid),
+            loadingIds: new Set(prev.loadingIds).add(paperId),
             error: null,
         }));
 
         try {
             // 🔐 Service层自动获取用户身份并处理业务逻辑
-            await compositionService.deleteComposedLiterature(lid, options);
+            await compositionService.deleteComposedLiterature(paperId, options);
 
             // Store层更新数据
-            store.removeLiterature(lid);
+            store.removeLiterature(paperId);
 
             // 更新UI状态
             setUIState(prev => {
                 const newLoadingIds = new Set(prev.loadingIds);
-                newLoadingIds.delete(lid);
+                newLoadingIds.delete(paperId);
                 const newSelectedIds = new Set(prev.selectedIds);
-                newSelectedIds.delete(lid);
+                newSelectedIds.delete(paperId);
                 return { ...prev, loadingIds: newLoadingIds, selectedIds: newSelectedIds };
             });
 
             // 从搜索结果中移除
             setSearchState(prev => ({
                 ...prev,
-                results: prev.results.filter(item => item.literature.lid !== lid),
+                results: prev.results.filter(item => item.literature.paperId !== paperId),
             }));
         } catch (error) {
             setUIState(prev => {
                 const newLoadingIds = new Set(prev.loadingIds);
-                newLoadingIds.delete(lid);
+                newLoadingIds.delete(paperId);
                 return {
                     ...prev,
                     error: error instanceof Error ? error.message : '删除文献失败',
@@ -299,7 +299,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         try {
             // 🔐 Service层自动获取用户身份并处理业务逻辑
             await compositionService.deleteComposedLiteratureBatch(
-                lids.map(lid => ({ lid, deleteGlobally: options.deleteGlobally }))
+                lids.map(paperId => ({ paperId, deleteGlobally: options.deleteGlobally }))
             );
 
             // Store层更新数据
@@ -308,14 +308,14 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
             // 更新UI状态
             setUIState(prev => {
                 const newSelectedIds = new Set(prev.selectedIds);
-                lids.forEach(lid => newSelectedIds.delete(lid));
+                lids.forEach(paperId => newSelectedIds.delete(paperId));
                 return { ...prev, selectedIds: newSelectedIds, isLoading: false };
             });
 
             // 从搜索结果中移除
             setSearchState(prev => ({
                 ...prev,
-                results: prev.results.filter(item => !lids.includes(item.literature.lid)),
+                results: prev.results.filter(item => !lids.includes(item.literature.paperId)),
             }));
         } catch (error) {
             setUIState(prev => ({
@@ -354,16 +354,16 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         }
     }, [store]);
 
-    const loadLiterature = useCallback(async (lid: string) => {
+    const loadLiterature = useCallback(async (paperId: string) => {
         setUIState(prev => ({
             ...prev,
-            loadingIds: new Set(prev.loadingIds).add(lid),
+            loadingIds: new Set(prev.loadingIds).add(paperId),
             error: null,
         }));
 
         try {
             // 🔐 Service层自动获取当前用户的数据
-            const enhanced = await compositionService.getEnhancedLiterature(lid);
+            const enhanced = await compositionService.getEnhancedLiterature(paperId);
 
             if (enhanced) {
                 // Store层更新数据
@@ -372,7 +372,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
             setUIState(prev => {
                 const newLoadingIds = new Set(prev.loadingIds);
-                newLoadingIds.delete(lid);
+                newLoadingIds.delete(paperId);
                 return { ...prev, loadingIds: newLoadingIds };
             });
 
@@ -380,7 +380,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         } catch (error) {
             setUIState(prev => {
                 const newLoadingIds = new Set(prev.loadingIds);
-                newLoadingIds.delete(lid);
+                newLoadingIds.delete(paperId);
                 return {
                     ...prev,
                     error: error instanceof Error ? error.message : '加载文献失败',
@@ -391,8 +391,8 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         }
     }, [store]);
 
-    const refreshLiterature = useCallback(async (lid: string) => {
-        await loadLiterature(lid);
+    const refreshLiterature = useCallback(async (paperId: string) => {
+        await loadLiterature(paperId);
     }, [loadLiterature]);
 
     // 🔍 搜索操作
@@ -490,25 +490,25 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
     }, [searchState, uiState.isSearching]);
 
     // 🎯 选择操作
-    const selectLiterature = useCallback((lid: string) => {
+    const selectLiterature = useCallback((paperId: string) => {
         setUIState(prev => ({
             ...prev,
-            selectedIds: new Set(prev.selectedIds).add(lid),
+            selectedIds: new Set(prev.selectedIds).add(paperId),
         }));
     }, []);
 
     const selectMultipleLiteratures = useCallback((lids: string[]) => {
         setUIState(prev => {
             const newSelectedIds = new Set(prev.selectedIds);
-            lids.forEach(lid => newSelectedIds.add(lid));
+            lids.forEach(paperId => newSelectedIds.add(paperId));
             return { ...prev, selectedIds: newSelectedIds };
         });
     }, []);
 
-    const deselectLiterature = useCallback((lid: string) => {
+    const deselectLiterature = useCallback((paperId: string) => {
         setUIState(prev => {
             const newSelectedIds = new Set(prev.selectedIds);
-            newSelectedIds.delete(lid);
+            newSelectedIds.delete(paperId);
             return { ...prev, selectedIds: newSelectedIds };
         });
     }, []);
@@ -517,13 +517,13 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         setUIState(prev => ({ ...prev, selectedIds: new Set() }));
     }, []);
 
-    const toggleSelection = useCallback((lid: string) => {
+    const toggleSelection = useCallback((paperId: string) => {
         setUIState(prev => {
             const newSelectedIds = new Set(prev.selectedIds);
-            if (newSelectedIds.has(lid)) {
-                newSelectedIds.delete(lid);
+            if (newSelectedIds.has(paperId)) {
+                newSelectedIds.delete(paperId);
             } else {
-                newSelectedIds.add(lid);
+                newSelectedIds.add(paperId);
             }
             return { ...prev, selectedIds: newSelectedIds };
         });
@@ -533,7 +533,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         const items = searchState.query ? searchState.results : store.getAllLiteratures();
         setUIState(prev => ({
             ...prev,
-            selectedIds: new Set(items.map(item => item.literature.lid)),
+            selectedIds: new Set(items.map(item => item.literature.paperId)),
         }));
     }, [searchState, store]);
 
@@ -543,8 +543,8 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
     }, []);
 
     // 📊 数据查询辅助
-    const getLiterature = useCallback((lid: string) => {
-        return store.getLiterature(lid);
+    const getLiterature = useCallback((paperId: string) => {
+        return store.getLiterature(paperId);
     }, [store]);
 
     const getLiteratures = useCallback((lids: string[]) => {

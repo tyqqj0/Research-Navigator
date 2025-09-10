@@ -62,13 +62,13 @@ export class UserMetaService {
     /**
      * 🔍 获取用户文献元数据
      */
-    async getUserMeta(userId: string, lid: string): Promise<UserLiteratureMeta | null> {
+    async getUserMeta(userId: string, paperId: string): Promise<UserLiteratureMeta | null> {
         const startTime = Date.now();
 
         try {
             this.stats.totalOperations++;
 
-            const userMeta = await this.userMetaRepo.findByUserAndLiterature(userId, lid);
+            const userMeta = await this.userMetaRepo.findByUserAndLiterature(userId, paperId);
 
             this.updateStats(startTime, true);
             return userMeta;
@@ -109,7 +109,7 @@ export class UserMetaService {
      */
     async createUserMeta(
         userId: string,
-        lid: string,
+        paperId: string,
         input: CreateUserLiteratureMetaInput,
         options: UserMetaCreateOptions = {}
     ): Promise<UserLiteratureMeta | null> {
@@ -122,7 +122,7 @@ export class UserMetaService {
             const metaData: CreateUserLiteratureMetaInput = {
                 ...input,
                 userId,
-                lid,
+                paperId,
                 readingStatus: options.initialReadingStatus || input.readingStatus || 'unread',
             };
 
@@ -131,8 +131,8 @@ export class UserMetaService {
                 metaData.tags = ['new'];
             }
 
-            const result = await this.userMetaRepo.createOrUpdate(userId, lid, metaData);
-            const createdMeta = await this.userMetaRepo.findByUserAndLiterature(userId, lid);
+            const result = await this.userMetaRepo.createOrUpdate(userId, paperId, metaData);
+            const createdMeta = await this.userMetaRepo.findByUserAndLiterature(userId, paperId);
 
             this.updateStats(startTime, true);
             return createdMeta;
@@ -148,7 +148,7 @@ export class UserMetaService {
      */
     async updateUserMeta(
         userId: string,
-        lid: string,
+        paperId: string,
         updates: UpdateUserLiteratureMetaInput
     ): Promise<UserLiteratureMeta | null> {
         const startTime = Date.now();
@@ -174,8 +174,8 @@ export class UserMetaService {
                 }
             }
 
-            await this.userMetaRepo.update(lid, updateData);
-            const updatedMeta = await this.userMetaRepo.findByUserAndLiterature(userId, lid);
+            await this.userMetaRepo.update(paperId, updateData);
+            const updatedMeta = await this.userMetaRepo.findByUserAndLiterature(userId, paperId);
 
             this.updateStats(startTime, true);
             return updatedMeta;
@@ -189,13 +189,13 @@ export class UserMetaService {
     /**
      * 🗑️ 删除用户文献元数据
      */
-    async deleteUserMeta(userId: string, lid: string): Promise<boolean> {
+    async deleteUserMeta(userId: string, paperId: string): Promise<boolean> {
         const startTime = Date.now();
 
         try {
             this.stats.totalOperations++;
 
-            await this.userMetaRepo.delete(lid);
+            await this.userMetaRepo.delete(paperId);
 
             this.updateStats(startTime, true);
             return true;
@@ -211,15 +211,15 @@ export class UserMetaService {
     /**
      * 🏷️ 添加标签到文献
      */
-    async addTag(userId: string, lid: string, tag: string): Promise<boolean> {
+    async addTag(userId: string, paperId: string, tag: string): Promise<boolean> {
         try {
-            const userMeta = await this.getUserMeta(userId, lid);
+            const userMeta = await this.getUserMeta(userId, paperId);
             if (!userMeta) return false;
 
             const currentTags = userMeta.tags || [];
             if (!currentTags.includes(tag)) {
                 const updatedTags = [...currentTags, tag];
-                await this.updateUserMeta(userId, lid, { tags: updatedTags });
+                await this.updateUserMeta(userId, paperId, { tags: updatedTags });
                 return true;
             }
 
@@ -233,15 +233,15 @@ export class UserMetaService {
     /**
      * 🗑️ 从文献移除标签
      */
-    async removeTag(userId: string, lid: string, tag: string): Promise<boolean> {
+    async removeTag(userId: string, paperId: string, tag: string): Promise<boolean> {
         try {
-            const userMeta = await this.getUserMeta(userId, lid);
+            const userMeta = await this.getUserMeta(userId, paperId);
             if (!userMeta) return false;
 
             const currentTags = userMeta.tags || [];
             if (currentTags.includes(tag)) {
                 const updatedTags = currentTags.filter(t => t !== tag);
-                await this.updateUserMeta(userId, lid, { tags: updatedTags });
+                await this.updateUserMeta(userId, paperId, { tags: updatedTags });
                 return true;
             }
 
@@ -255,13 +255,13 @@ export class UserMetaService {
     /**
      * ⭐ 设置文献评分
      */
-    async setRating(userId: string, lid: string, rating: number): Promise<boolean> {
+    async setRating(userId: string, paperId: string, rating: number): Promise<boolean> {
         try {
             if (rating < 1 || rating > 5) {
                 throw new Error('Rating must be between 1 and 5');
             }
 
-            await this.updateUserMeta(userId, lid, { rating });
+            await this.updateUserMeta(userId, paperId, { rating });
             return true;
         } catch (error) {
             console.error('[UserMetaService] setRating failed:', error);

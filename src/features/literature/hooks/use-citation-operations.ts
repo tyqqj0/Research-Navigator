@@ -63,15 +63,15 @@ export interface UseCitationOperationsReturn {
     clearError: () => void;
 
     // 🔗 引用数据加载
-    loadCitationOverview: (lid: string) => Promise<CitationOverview>;
+    loadCitationOverview: (paperId: string) => Promise<CitationOverview>;
     batchLoadOverviews: (lids: string[]) => Promise<void>;
     refreshCitations: () => Promise<void>;
 
     // 📊 选择操作
-    selectLiterature: (lid: string) => void;
+    selectLiterature: (paperId: string) => void;
     selectMultipleLiteratures: (lids: string[]) => void;
     clearSelection: () => void;
-    toggleSelection: (lid: string) => void;
+    toggleSelection: (paperId: string) => void;
 
     // 🎨 UI操作
     setViewMode: (mode: 'network' | 'tree' | 'list') => void;
@@ -79,7 +79,7 @@ export interface UseCitationOperationsReturn {
 
     // 📊 数据查询辅助
     getCitation: (citationId: string) => Citation | undefined;
-    getOverview: (lid: string) => CitationOverview | undefined;
+    getOverview: (paperId: string) => CitationOverview | undefined;
     getSelectedOverviews: () => CitationOverview[];
 }
 
@@ -114,13 +114,13 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
     }, []);
 
     // 🔗 引用数据加载
-    const loadCitationOverview = useCallback(async (lid: string) => {
+    const loadCitationOverview = useCallback(async (paperId: string) => {
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 
         try {
             // 从store获取相关引文数据构建概览
-            const incomingCitations = citationStore.getIncomingCitations(lid);
-            const outgoingCitations = citationStore.getOutgoingCitations(lid);
+            const incomingCitations = citationStore.getIncomingCitations(paperId);
+            const outgoingCitations = citationStore.getOutgoingCitations(paperId);
             const allCitations = citationStore.getAllCitations();
 
             // 构建概览对象
@@ -132,7 +132,7 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
                 averageInDegree: allCitations.length > 0 ? incomingCitations.length / allCitations.length : 0,
                 lastUpdated: new Date()
             };
-            citationStore.addOverview(lid, overview);
+            citationStore.addOverview(paperId, overview);
             setUIState(prev => ({ ...prev, isLoading: false }));
             return overview;
         } catch (error) {
@@ -161,8 +161,8 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
             };
 
             // 为每个lid添加相同的概览
-            lids.forEach(lid => {
-                citationStore.addOverview(lid, overview);
+            lids.forEach(paperId => {
+                citationStore.addOverview(paperId, overview);
             });
             setUIState(prev => ({ ...prev, isLoading: false }));
         } catch (error) {
@@ -203,10 +203,10 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
     }, [citationStore]);
 
     // 📊 选择操作
-    const selectLiterature = useCallback((lid: string) => {
+    const selectLiterature = useCallback((paperId: string) => {
         setUIState(prev => ({
             ...prev,
-            selectedLids: new Set([...prev.selectedLids, lid]),
+            selectedLids: new Set([...prev.selectedLids, paperId]),
         }));
     }, []);
 
@@ -224,13 +224,13 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
         }));
     }, []);
 
-    const toggleSelection = useCallback((lid: string) => {
+    const toggleSelection = useCallback((paperId: string) => {
         setUIState(prev => {
             const newSelection = new Set(prev.selectedLids);
-            if (newSelection.has(lid)) {
-                newSelection.delete(lid);
+            if (newSelection.has(paperId)) {
+                newSelection.delete(paperId);
             } else {
-                newSelection.add(lid);
+                newSelection.add(paperId);
             }
             return {
                 ...prev,
@@ -259,14 +259,14 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
         return citationStore.getCitation(citationId);
     }, [citationStore]);
 
-    const getOverview = useCallback((lid: string) => {
-        return citationStore.getOverview(lid);
+    const getOverview = useCallback((paperId: string) => {
+        return citationStore.getOverview(paperId);
     }, [citationStore]);
 
     const getSelectedOverviews = useCallback(() => {
         const selectedLids = Array.from(uiState.selectedLids);
         return selectedLids
-            .map(lid => citationStore.getOverview(lid))
+            .map(paperId => citationStore.getOverview(paperId))
             .filter((overview): overview is CitationOverview => overview !== undefined);
     }, [citationStore, uiState.selectedLids]);
 

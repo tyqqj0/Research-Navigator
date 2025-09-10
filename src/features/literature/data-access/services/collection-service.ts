@@ -410,7 +410,7 @@ export class CollectionService {
 
         // 验证文献是否存在
         const existingLiterature = await this.literatureRepo.findByLids(lids);
-        const existingIds = new Set(existingLiterature.map((item: LibraryItem) => item.lid));
+        const existingIds = new Set(existingLiterature.map((item: LibraryItem) => item.paperId));
         const missingIds = lids.filter(id => !existingIds.has(id));
 
         if (missingIds.length > 0) {

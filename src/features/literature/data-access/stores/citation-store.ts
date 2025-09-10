@@ -33,7 +33,7 @@ export interface CitationStoreState {
     citations: Record<string, Citation>; // key: citationId
 
     // 📊 引用概览数据 - 按文献ID索引
-    overviews: Record<string, CitationOverview>; // key: lid
+    overviews: Record<string, CitationOverview>; // key: paperId
 
     // 📊 简单统计
     stats: {
@@ -56,19 +56,19 @@ export interface CitationStoreActions {
     replaceCitations: (citations: Citation[]) => void;
 
     // 📊 概览数据操作
-    addOverview: (lid: string, overview: CitationOverview) => void;
-    updateOverview: (lid: string, overview: CitationOverview) => void;
-    removeOverview: (lid: string) => void;
+    addOverview: (paperId: string, overview: CitationOverview) => void;
+    updateOverview: (paperId: string, overview: CitationOverview) => void;
+    removeOverview: (paperId: string) => void;
     clearOverviews: () => void;
 
     // 📊 数据查询 - 简单的选择器
     getCitation: (citationId: string) => Citation | undefined;
     getAllCitations: () => Citation[];
     getCitations: (citationIds: string[]) => Citation[];
-    getCitationsByLid: (lid: string) => Citation[];
-    getIncomingCitations: (lid: string) => Citation[];
-    getOutgoingCitations: (lid: string) => Citation[];
-    getOverview: (lid: string) => CitationOverview | undefined;
+    getCitationsByLid: (paperId: string) => Citation[];
+    getIncomingCitations: (paperId: string) => Citation[];
+    getOutgoingCitations: (paperId: string) => Citation[];
+    getOverview: (paperId: string) => CitationOverview | undefined;
     getAllOverviews: () => CitationOverview[];
     hasCitation: (citationId: string) => boolean;
 
@@ -158,24 +158,24 @@ export const useCitationStore = create<CitationStoreState & CitationStoreActions
                 },
 
                 // 📊 概览数据操作
-                addOverview: (lid, overview) => {
+                addOverview: (paperId, overview) => {
                     set((state) => {
-                        state.overviews[lid] = overview;
+                        state.overviews[paperId] = overview;
                     });
                     get().updateStats();
                 },
 
-                updateOverview: (lid, overview) => {
+                updateOverview: (paperId, overview) => {
                     set((state) => {
-                        if (state.overviews[lid]) {
-                            state.overviews[lid] = overview;
+                        if (state.overviews[paperId]) {
+                            state.overviews[paperId] = overview;
                         }
                     });
                 },
 
-                removeOverview: (lid) => {
+                removeOverview: (paperId) => {
                     set((state) => {
-                        delete state.overviews[lid];
+                        delete state.overviews[paperId];
                     });
                     get().updateStats();
                 },
@@ -203,29 +203,29 @@ export const useCitationStore = create<CitationStoreState & CitationStoreActions
                         .filter(Boolean) as Citation[];
                 },
 
-                getCitationsByLid: (lid) => {
+                getCitationsByLid: (paperId) => {
                     const { citations } = get();
                     return Object.values(citations).filter(
-                        citation => citation.sourceItemId === lid || citation.targetItemId === lid
+                        citation => citation.sourceItemId === paperId || citation.targetItemId === paperId
                     );
                 },
 
-                getIncomingCitations: (lid) => {
+                getIncomingCitations: (paperId) => {
                     const { citations } = get();
                     return Object.values(citations).filter(
-                        citation => citation.targetItemId === lid
+                        citation => citation.targetItemId === paperId
                     );
                 },
 
-                getOutgoingCitations: (lid) => {
+                getOutgoingCitations: (paperId) => {
                     const { citations } = get();
                     return Object.values(citations).filter(
-                        citation => citation.sourceItemId === lid
+                        citation => citation.sourceItemId === paperId
                     );
                 },
 
-                getOverview: (lid) => {
-                    return get().overviews[lid];
+                getOverview: (paperId) => {
+                    return get().overviews[paperId];
                 },
 
                 getAllOverviews: () => {
@@ -264,25 +264,25 @@ export const selectCitationById = (citationId: string) =>
     (state: CitationStoreState & CitationStoreActions) =>
         state.getCitation(citationId);
 
-export const selectCitationsByLid = (lid: string) =>
+export const selectCitationsByLid = (paperId: string) =>
     (state: CitationStoreState & CitationStoreActions) =>
-        state.getCitationsByLid(lid);
+        state.getCitationsByLid(paperId);
 
-export const selectIncomingCitations = (lid: string) =>
+export const selectIncomingCitations = (paperId: string) =>
     (state: CitationStoreState & CitationStoreActions) =>
-        state.getIncomingCitations(lid);
+        state.getIncomingCitations(paperId);
 
-export const selectOutgoingCitations = (lid: string) =>
+export const selectOutgoingCitations = (paperId: string) =>
     (state: CitationStoreState & CitationStoreActions) =>
-        state.getOutgoingCitations(lid);
+        state.getOutgoingCitations(paperId);
 
 // 📊 概览选择器
 export const selectAllOverviews = (state: CitationStoreState & CitationStoreActions) =>
     state.getAllOverviews();
 
-export const selectOverviewByLid = (lid: string) =>
+export const selectOverviewByLid = (paperId: string) =>
     (state: CitationStoreState & CitationStoreActions) =>
-        state.getOverview(lid);
+        state.getOverview(paperId);
 
 // 📈 统计选择器
 export const selectCitationCount = (state: CitationStoreState & CitationStoreActions) =>

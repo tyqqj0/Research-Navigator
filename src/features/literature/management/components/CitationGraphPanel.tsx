@@ -58,7 +58,7 @@ export function CitationGraphPanel({
 
         // 计算连接度分布
         const connectionCounts = items.map(item => {
-            const itemId = item.literature.lid;
+            const itemId = item.literature.paperId;
             const inbound = citationList.filter(c => c.targetItemId === itemId).length;
             const outbound = citationList.filter(c => c.sourceItemId === itemId).length;
             return inbound + outbound;

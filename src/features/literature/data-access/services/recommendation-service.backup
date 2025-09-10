@@ -244,13 +244,13 @@ export class RecommendationService {
      */
     @withErrorBoundary('getCitationNetworkRecommendations', 'service')
     async getCitationNetworkRecommendations(
-        lid: string,
+        paperId: string,
         userId?: string,
         limit: number = 10
     ): Promise<RecommendedLiterature[]> {
         try {
             // 1. 获取引文网络
-            const citationStats = await this.citationRepo.getBidirectionalCitations(lid);
+            const citationStats = await this.citationRepo.getBidirectionalCitations(paperId);
 
             // 2. 分析引文模式
             const recommendations: RecommendedLiterature[] = [];
@@ -288,7 +288,7 @@ export class RecommendationService {
             throw ErrorHandler.handle(error, {
                 operation: 'service.getCitationNetworkRecommendations',
                 layer: 'service',
-                entityId: lid,
+                entityId: paperId,
                 userId,
             });
         }
@@ -322,7 +322,7 @@ export class RecommendationService {
                     .slice(0, limit / 3);
 
                 for (const meta of highRatedItems) {
-                    const item = await this.literatureRepo.findByLid(meta.lid);
+                    const item = await this.literatureRepo.findByLid(meta.paperId);
                     if (item) {
                         recommendations.push({
                             item,
@@ -559,7 +559,7 @@ export class RecommendationService {
             }
 
             // 获取文献信息来统计作者和来源
-            const literature = await this.literatureRepo.findByLid(meta.lid);
+            const literature = await this.literatureRepo.findByLid(meta.paperId);
             if (literature) {
                 // 统计作者
                 for (const author of literature.authors) {
@@ -717,10 +717,10 @@ export class RecommendationService {
     private deduplicateRecommendations(recommendations: RecommendedLiterature[]): RecommendedLiterature[] {
         const seen = new Set<string>();
         return recommendations.filter(rec => {
-            if (seen.has(rec.item.lid)) {
+            if (seen.has(rec.item.paperId)) {
                 return false;
             }
-            seen.add(rec.item.lid);
+            seen.add(rec.item.paperId);
             return true;
         });
     }

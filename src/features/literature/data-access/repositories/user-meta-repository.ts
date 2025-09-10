@@ -35,11 +35,11 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
     /**
      * 🔍 根据用户ID和文献ID查找元数据
      */
-    async findByUserAndLiterature(userId: string, lid: string): Promise<UserLiteratureMeta | null> {
+    async findByUserAndLiterature(userId: string, paperId: string): Promise<UserLiteratureMeta | null> {
         try {
             const meta = await this.table
-                .where('[userId+lid]')
-                .equals([userId, lid])
+                .where('[userId+paperId]')
+                .equals([userId, paperId])
                 .first();
 
             return meta || null;
@@ -64,9 +64,9 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
     /**
      * 📚 获取文献的所有用户元数据
      */
-    async findByLiteratureId(lid: string): Promise<UserLiteratureMeta[]> {
+    async findByLiteratureId(paperId: string): Promise<UserLiteratureMeta[]> {
         try {
-            return await this.table.where('lid').equals(lid).toArray();
+            return await this.table.where('paperId').equals(paperId).toArray();
         } catch (error) {
             console.error('[UserMetaRepository] findByLiteratureId failed:', error);
             return [];
@@ -150,11 +150,11 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
      */
     async createOrUpdate(
         userId: string,
-        lid: string,
-        input: Omit<CreateUserLiteratureMetaInput, 'userId' | 'lid'>
+        paperId: string,
+        input: Omit<CreateUserLiteratureMetaInput, 'userId' | 'paperId'>
     ): Promise<string> {
         try {
-            const existing = await this.findByUserAndLiterature(userId, lid);
+            const existing = await this.findByUserAndLiterature(userId, paperId);
 
             if (existing) {
                 // 更新现有元数据
@@ -169,7 +169,7 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                 const newMeta: UserLiteratureMeta = {
                     id: this.generateId(),
                     userId,
-                    lid,
+                    paperId,
                     ...input,
                     tags: input.tags || [],
                     readingStatus: input.readingStatus || 'unread',
@@ -196,9 +196,9 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
     /**
      * 🏷️ 添加标签到文献
      */
-    async addTag(userId: string, lid: string, tag: string): Promise<void> {
+    async addTag(userId: string, paperId: string, tag: string): Promise<void> {
         try {
-            const meta = await this.findByUserAndLiterature(userId, lid);
+            const meta = await this.findByUserAndLiterature(userId, paperId);
 
             if (meta) {
                 if (!meta.tags.includes(tag)) {
@@ -207,7 +207,7 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                 }
             } else {
                 // 创建新元数据
-                await this.createOrUpdate(userId, lid, {
+                await this.createOrUpdate(userId, paperId, {
                     tags: [tag],
                     readingStatus: 'unread',
                     associatedSessions: [],
@@ -225,9 +225,9 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
     /**
      * 🗑️ 从文献移除标签
      */
-    async removeTag(userId: string, lid: string, tag: string): Promise<void> {
+    async removeTag(userId: string, paperId: string, tag: string): Promise<void> {
         try {
-            const meta = await this.findByUserAndLiterature(userId, lid);
+            const meta = await this.findByUserAndLiterature(userId, paperId);
 
             if (meta && meta.tags.includes(tag)) {
                 const updatedTags = meta.tags.filter(t => t !== tag);
@@ -310,12 +310,12 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
      */
     async updateSessionAssociation(
         userId: string,
-        lid: string,
+        paperId: string,
         sessionId: string,
         action: 'add' | 'remove'
     ): Promise<void> {
         try {
-            const meta = await this.findByUserAndLiterature(userId, lid);
+            const meta = await this.findByUserAndLiterature(userId, paperId);
 
             if (meta) {
                 let updatedSessions = [...meta.associatedSessions];
@@ -329,7 +329,7 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                 await this.update(meta.id, { associatedSessions: updatedSessions });
             } else if (action === 'add') {
                 // 创建新元数据
-                await this.createOrUpdate(userId, lid, {
+                await this.createOrUpdate(userId, paperId, {
                     associatedSessions: [sessionId],
                     tags: [],
                     readingStatus: 'unread',
@@ -353,7 +353,7 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
             const allMetas = await this.table.toArray();
 
             const orphanedMetas = allMetas.filter(meta =>
-                !validIdsSet.has(meta.lid)
+                !validIdsSet.has(meta.paperId)
             );
 
             if (orphanedMetas.length > 0) {

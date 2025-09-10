@@ -22,7 +22,7 @@ import type { Table } from 'dexie';
  * 🔗 简化的引文关系仓储实现
  */
 export class CitationRepository {
-    protected table: Table<Citation, string>; // 暂时使用string主键，等待数据库架构更新
+    protected table: Table<Citation, any>; // 复合主键，使用any以兼容Dexie复合键
 
     constructor() {
         this.table = literatureDB.citations as any; // 临时类型断言，等待数据库更新
@@ -32,14 +32,15 @@ export class CitationRepository {
 
     /**
      * ➕ 创建引文关系（避免重复）
+     * 返回复合主键的字符串形式：`${sourceItemId}-${targetItemId}`，如果已存在返回 null
      */
-    async createCitation(input: CreateCitationInput): Promise<boolean> {
+    async createCitation(input: CreateCitationInput): Promise<string | null> {
         try {
             // 检查是否已存在
             const exists = await this.citationExists(input.sourceItemId, input.targetItemId);
             if (exists) {
                 console.log('[CitationRepository] Citation already exists, skipping');
-                return false;
+                return null;
             }
 
             // 验证数据并创建
@@ -49,7 +50,7 @@ export class CitationRepository {
             });
 
             await this.table.add(citation);
-            return true;
+            return `${input.sourceItemId}-${input.targetItemId}`;
         } catch (error) {
             console.error('[CitationRepository] createCitation failed:', error);
             throw new Error('Failed to create citation');
@@ -61,9 +62,8 @@ export class CitationRepository {
      */
     async citationExists(sourceItemId: string, targetItemId: string): Promise<boolean> {
         try {
-            // 注意：数据库使用sourceLid和targetLid字段名
             const citation = await this.table
-                .where(['sourceLid', 'targetLid'])
+                .where(['sourceItemId', 'targetItemId'])
                 .equals([sourceItemId, targetItemId])
                 .first();
             return !!citation;
@@ -109,6 +109,70 @@ export class CitationRepository {
         }
     }
 
+    // ==================== 通用辅助方法（兼容Service调用） ====================
+
+    /**
+     * 🔎 根据复合主键查找
+     * 支持传入 `${source}-${target}` 字符串或 [source, target] 元组
+     */
+    async findById(key: string | [string, string]): Promise<Citation | null> {
+        try {
+            const [sourceItemId, targetItemId] = Array.isArray(key)
+                ? key
+                : (key.includes('-') ? (key.split('-') as [string, string]) : [undefined as any, undefined as any]);
+
+            if (!sourceItemId || !targetItemId) return null;
+
+            const citation = await this.table
+                .where(['sourceItemId', 'targetItemId'])
+                .equals([sourceItemId, targetItemId])
+                .first();
+            return citation || null;
+        } catch (error) {
+            console.error('[CitationRepository] findById failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * ✏️ 更新引文（仅允许更新 context 字段）
+     */
+    async update(key: string | [string, string], updates: Partial<Citation> & Record<string, unknown>): Promise<boolean> {
+        try {
+            const [sourceItemId, targetItemId] = Array.isArray(key)
+                ? key
+                : (key.includes('-') ? (key.split('-') as [string, string]) : [undefined as any, undefined as any]);
+
+            if (!sourceItemId || !targetItemId) return false;
+
+            const allowedUpdates: Partial<Citation> = {};
+            if (Object.prototype.hasOwnProperty.call(updates, 'context')) {
+                allowedUpdates.context = updates.context as any;
+            }
+
+            const modified = await this.table
+                .where(['sourceItemId', 'targetItemId'])
+                .equals([sourceItemId, targetItemId])
+                .modify(allowedUpdates as any);
+            return modified > 0;
+        } catch (error) {
+            console.error('[CitationRepository] update failed:', error);
+            throw new Error('Failed to update citation');
+        }
+    }
+
+    /**
+     * 📋 获取全部引文
+     */
+    async findAll(): Promise<Citation[]> {
+        try {
+            return await this.table.toArray();
+        } catch (error) {
+            console.error('[CitationRepository] findAll failed:', error);
+            return [];
+        }
+    }
+
     // ==================== 引文查询操作 ====================
 
     /**
@@ -138,14 +202,14 @@ export class CitationRepository {
     /**
      * 🔍 获取文献的所有引文关系
      */
-    async findAllCitationsByLid(lid: string): Promise<{
+    async findAllCitationsByLid(paperId: string): Promise<{
         outgoing: Citation[]; // 它引用的文献
         incoming: Citation[]; // 引用它的文献
     }> {
         try {
             const [outgoing, incoming] = await Promise.all([
-                this.findOutgoingCitations(lid),
-                this.findIncomingCitations(lid)
+                this.findOutgoingCitations(paperId),
+                this.findIncomingCitations(paperId)
             ]);
 
             return { outgoing, incoming };
@@ -160,15 +224,15 @@ export class CitationRepository {
     /**
      * 📊 计算某个文献的度数统计
      */
-    async calculateDegreeForLid(lid: string): Promise<CitationDegree> {
+    async calculateDegreeForLid(paperId: string): Promise<CitationDegree> {
         try {
             const [outgoingCount, incomingCount] = await Promise.all([
-                this.table.where('sourceItemId').equals(lid).count(),
-                this.table.where('targetItemId').equals(lid).count()
+                this.table.where('sourceItemId').equals(paperId).count(),
+                this.table.where('targetItemId').equals(paperId).count()
             ]);
 
             return {
-                lid,
+                paperId,
                 inDegree: incomingCount,
                 outDegree: outgoingCount,
                 totalDegree: incomingCount + outgoingCount,
@@ -177,7 +241,7 @@ export class CitationRepository {
         } catch (error) {
             console.error('[CitationRepository] calculateDegreeForLid failed:', error);
             return {
-                lid,
+                paperId,
                 inDegree: 0,
                 outDegree: 0,
                 totalDegree: 0,
@@ -192,13 +256,13 @@ export class CitationRepository {
     async calculateDegreesForLids(lids: string[]): Promise<CitationDegree[]> {
         try {
             const results = await Promise.all(
-                lids.map(lid => this.calculateDegreeForLid(lid))
+                lids.map(paperId => this.calculateDegreeForLid(paperId))
             );
             return results;
         } catch (error) {
             console.error('[CitationRepository] calculateDegreesForLids failed:', error);
-            return lids.map(lid => ({
-                lid,
+            return lids.map(paperId => ({
+                paperId,
                 inDegree: 0,
                 outDegree: 0,
                 totalDegree: 0,
@@ -335,9 +399,14 @@ export class CitationRepository {
             );
 
             if (orphanedCitations.length > 0) {
-                // 删除孤儿引文
-                await this.table.bulkDelete(
-                    orphanedCitations.map(citation => `${citation.sourceItemId}-${citation.targetItemId}`)
+                // 删除孤儿引文（复合主键删除）
+                await Promise.all(
+                    orphanedCitations.map(citation =>
+                        this.table
+                            .where(['sourceItemId', 'targetItemId'])
+                            .equals([citation.sourceItemId, citation.targetItemId])
+                            .delete()
+                    )
                 );
                 console.log(`[CitationRepository] Cleaned up ${orphanedCitations.length} orphaned citations`);
             }
@@ -352,19 +421,19 @@ export class CitationRepository {
     /**
      * 🗑️ 删除某个文献的所有引文关系
      */
-    async deleteAllCitationsByLid(lid: string): Promise<number> {
+    async deleteAllCitationsByLid(paperId: string): Promise<number> {
         try {
             const [outgoingDeleted, incomingDeleted] = await Promise.all([
-                this.table.where('sourceItemId').equals(lid).delete(),
-                this.table.where('targetItemId').equals(lid).delete()
+                this.table.where('sourceItemId').equals(paperId).delete(),
+                this.table.where('targetItemId').equals(paperId).delete()
             ]);
 
             const totalDeleted = outgoingDeleted + incomingDeleted;
-            console.log(`[CitationRepository] Deleted ${totalDeleted} citations for LID: ${lid}`);
+            console.log(`[CitationRepository] Deleted ${totalDeleted} citations for paperId: ${paperId}`);
             return totalDeleted;
         } catch (error) {
             console.error('[CitationRepository] deleteAllCitationsByLid failed:', error);
-            throw new Error('Failed to delete citations for LID');
+            throw new Error('Failed to delete citations for paperId');
         }
     }
 

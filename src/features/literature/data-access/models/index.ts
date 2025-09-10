@@ -203,7 +203,7 @@ export type PaginatedResult<T> = {
 export class LibraryItemFactory {
     static createLibraryItem(input: CreateLibraryItemInput): LibraryItem {
         return {
-            lid: crypto.randomUUID(),
+            paperId: crypto.randomUUID(),
             title: input.title,
             authors: input.authors || [],
             year: input.year,

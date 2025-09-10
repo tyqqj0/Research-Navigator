@@ -28,7 +28,7 @@ import { AppError, ErrorType, ErrorSeverity, handleError, withErrorBoundary } fr
  * 🎯 文献操作结果接口
  */
 export interface LiteratureOperationResult {
-    lid: string;
+    paperId: string;
     isNew: boolean;
     operation: 'created' | 'updated' | 'merged';
     mergedFields?: string[];
@@ -96,19 +96,19 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
     /**
      * 🔍 根据文献ID查找（支持缓存）
      */
-    async findByLid(lid: string): Promise<LibraryItem | null> {
-        if (!lid) {
+    async findByLid(paperId: string): Promise<LibraryItem | null> {
+        if (!paperId) {
             const error = new AppError('文献ID不能为空', ErrorType.VALIDATION_ERROR, ErrorSeverity.HIGH, {
                 operation: 'findByLid',
                 layer: 'repository',
-                additionalInfo: { lid }
+                additionalInfo: { paperId }
             });
             handleError(error);
             throw error;
         }
 
         try {
-            const item = await this.table.get(lid);
+            const item = await this.table.get(paperId);
             return item || null;
         } catch (error) {
             const appError = new AppError(
@@ -118,7 +118,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
                 {
                     operation: 'repository.findByLid',
                     layer: 'repository',
-                    additionalInfo: { lid, originalError: error }
+                    additionalInfo: { paperId, originalError: error }
                 }
             );
             handleError(appError);
@@ -135,13 +135,13 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
         }
 
         // 过滤掉空的lid
-        const validLids = lids.filter(lid => lid && lid.trim());
+        const validLids = lids.filter(paperId => paperId && paperId.trim());
         if (validLids.length === 0) {
             return [];
         }
 
         try {
-            const items = await this.table.where('lid').anyOf(validLids).toArray();
+            const items = await this.table.where('paperId').anyOf(validLids).toArray();
             return items || [];
         } catch (error) {
             const appError = new AppError(
@@ -187,7 +187,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
                 await this.table.add(newItem);
 
                 return {
-                    lid: newItem.lid,
+                    paperId: newItem.paperId,
                     isNew: true,
                     operation: 'created',
                     duplicateScore: mediumSimilarity.score,
@@ -200,7 +200,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
             await this.table.add(newItem);
 
             return {
-                lid: newItem.lid,
+                paperId: newItem.paperId,
                 isNew: true,
                 operation: 'created',
                 message: 'Literature item created successfully',
@@ -515,19 +515,19 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
 
             // 查找重复组
             for (const item of allItems) {
-                if (processedIds.has(item.lid)) continue;
+                if (processedIds.has(item.paperId)) continue;
 
                 const duplicates = [item];
-                processedIds.add(item.lid);
+                processedIds.add(item.paperId);
 
                 // 查找与当前项目相似的其他项目
                 for (const otherItem of allItems) {
-                    if (processedIds.has(otherItem.lid)) continue;
+                    if (processedIds.has(otherItem.paperId)) continue;
 
                     const similarity = this.calculateComprehensiveSimilarity(item, otherItem);
                     if (similarity.score >= this.SIMILARITY_THRESHOLDS.HIGH) {
                         duplicates.push(otherItem);
-                        processedIds.add(otherItem.lid);
+                        processedIds.add(otherItem.paperId);
                     }
                 }
 
@@ -544,8 +544,8 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
                 // 选择最完整的记录作为主记录
                 const primaryItem = this.selectPrimaryItem(group);
                 const duplicateIds = group
-                    .filter(item => item.lid !== primaryItem.lid)
-                    .map(item => item.lid);
+                    .filter(item => item.paperId !== primaryItem.paperId)
+                    .map(item => item.paperId);
 
                 // 删除重复项
                 await this.table.bulkDelete(duplicateIds);
@@ -726,11 +726,11 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
 
         // 如果有更新，执行合并
         if (Object.keys(updates).length > 0) {
-            await this.update(existingItem.lid, updates);
+            await this.update(existingItem.paperId, updates);
         }
 
         return {
-            lid: existingItem.lid,
+            paperId: existingItem.paperId,
             isNew: false,
             operation: 'merged',
             mergedFields,

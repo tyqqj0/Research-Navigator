@@ -117,7 +117,7 @@ export class LiteratureDomainRepositories {
             console.log('[LiteratureDomainRepositories] Starting domain maintenance...');
 
             // 获取有效的文献ID列表
-            const validLiteratureIds = (await this.literature.findAll()).map((item: any) => item.lid);
+            const validLiteratureIds = (await this.literature.findAll()).map((item: any) => item.paperId);
 
             // 并行执行清理操作
             const [

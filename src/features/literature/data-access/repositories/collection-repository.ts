@@ -166,22 +166,36 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                 );
             }
 
-            // 排序
+            // 排序与分页
+            // Dexie 的 toCollection().sortBy 返回 Promise，不能链式 reverse/offset
+            let items: Collection[] = [];
             if (sort.field === 'name') {
-                collection = collection.sortBy('name');
+                items = await this.table.orderBy('name').toArray();
             } else if (sort.field === 'itemCount') {
-                collection = collection.sortBy('itemCount');
+                // itemCount 非索引字段时，退化为内存排序
+                items = await collection.toArray();
+                items.sort((a, b) => (a.itemCount || 0) - (b.itemCount || 0));
             } else if (sort.field === 'updatedAt') {
-                collection = collection.sortBy('updatedAt');
+                items = await this.table.orderBy('updatedAt').toArray();
             } else {
-                collection = collection.sortBy('createdAt');
+                items = await this.table.orderBy('createdAt').toArray();
             }
 
             if (sort.order === 'desc') {
-                collection = collection.reverse();
+                items.reverse();
             }
 
-            return await this.paginate(collection, page, pageSize);
+            const total = items.length;
+            const start = (page - 1) * pageSize;
+            const paged = items.slice(start, start + pageSize);
+
+            return {
+                items: paged,
+                total,
+                page,
+                pageSize,
+                totalPages: Math.ceil(total / pageSize)
+            };
         } catch (error) {
             console.error('[CollectionRepository] searchWithFilters failed:', error);
             throw new Error('Failed to search collections with filters');

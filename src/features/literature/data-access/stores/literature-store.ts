@@ -42,17 +42,17 @@ export interface LiteratureStoreActions {
     // 📚 数据操作 - 原子化的同步操作
     addLiterature: (literature: EnhancedLibraryItem) => void;
     addLiteratures: (literatures: EnhancedLibraryItem[]) => void;
-    updateLiterature: (lid: string, literature: EnhancedLibraryItem) => void;
-    removeLiterature: (lid: string) => void;
+    updateLiterature: (paperId: string, literature: EnhancedLibraryItem) => void;
+    removeLiterature: (paperId: string) => void;
     removeLiteratures: (lids: string[]) => void;
     clearLiteratures: () => void;
     replaceLiteratures: (literatures: EnhancedLibraryItem[]) => void;
 
     // 📊 数据查询 - 简单的选择器
-    getLiterature: (lid: string) => EnhancedLibraryItem | undefined;
+    getLiterature: (paperId: string) => EnhancedLibraryItem | undefined;
     getAllLiteratures: () => EnhancedLibraryItem[];
     getLiteratures: (lids: string[]) => EnhancedLibraryItem[];
-    hasLiterature: (lid: string) => boolean;
+    hasLiterature: (paperId: string) => boolean;
 
     // 📈 统计更新
     updateStats: () => void;
@@ -79,7 +79,7 @@ export const useLiteratureStore = create<LiteratureStoreState & LiteratureStoreA
                 // 📚 数据操作 - 原子化操作
                 addLiterature: (literature) => {
                     set((state) => {
-                        state.literatures.set(literature.literature.lid, literature);
+                        state.literatures.set(literature.literature.paperId, literature);
                     });
                     get().updateStats();
                 },
@@ -87,31 +87,31 @@ export const useLiteratureStore = create<LiteratureStoreState & LiteratureStoreA
                 addLiteratures: (literatures) => {
                     set((state) => {
                         literatures.forEach(literature => {
-                            state.literatures.set(literature.literature.lid, literature);
+                            state.literatures.set(literature.literature.paperId, literature);
                         });
                     });
                     get().updateStats();
                 },
 
-                updateLiterature: (lid, literature) => {
+                updateLiterature: (paperId, literature) => {
                     set((state) => {
-                        if (state.literatures.has(lid)) {
-                            state.literatures.set(lid, literature);
+                        if (state.literatures.has(paperId)) {
+                            state.literatures.set(paperId, literature);
                         }
                     });
                     get().updateStats();
                 },
 
-                removeLiterature: (lid) => {
+                removeLiterature: (paperId) => {
                     set((state) => {
-                        state.literatures.delete(lid);
+                        state.literatures.delete(paperId);
                     });
                     get().updateStats();
                 },
 
                 removeLiteratures: (lids) => {
                     set((state) => {
-                        lids.forEach(lid => state.literatures.delete(lid));
+                        lids.forEach(paperId => state.literatures.delete(paperId));
                     });
                     get().updateStats();
                 },
@@ -127,15 +127,15 @@ export const useLiteratureStore = create<LiteratureStoreState & LiteratureStoreA
                     set((state) => {
                         state.literatures.clear();
                         literatures.forEach(literature => {
-                            state.literatures.set(literature.literature.lid, literature);
+                            state.literatures.set(literature.literature.paperId, literature);
                         });
                     });
                     get().updateStats();
                 },
 
                 // 📊 数据查询 - 简单选择器
-                getLiterature: (lid) => {
-                    return get().literatures.get(lid);
+                getLiterature: (paperId) => {
+                    return get().literatures.get(paperId);
                 },
 
                 getAllLiteratures: () => {
@@ -145,12 +145,12 @@ export const useLiteratureStore = create<LiteratureStoreState & LiteratureStoreA
                 getLiteratures: (lids) => {
                     const { literatures } = get();
                     return lids
-                        .map(lid => literatures.get(lid))
+                        .map(paperId => literatures.get(paperId))
                         .filter(Boolean) as EnhancedLibraryItem[];
                 },
 
-                hasLiterature: (lid) => {
-                    return get().literatures.has(lid);
+                hasLiterature: (paperId) => {
+                    return get().literatures.has(paperId);
                 },
 
                 // 📈 统计更新
@@ -176,9 +176,9 @@ export const useLiteratureStore = create<LiteratureStoreState & LiteratureStoreA
 export const selectAllLiteratures = (state: LiteratureStoreState & LiteratureStoreActions) =>
     state.getAllLiteratures();
 
-export const selectLiteratureById = (lid: string) =>
+export const selectLiteratureById = (paperId: string) =>
     (state: LiteratureStoreState & LiteratureStoreActions) =>
-        state.getLiterature(lid);
+        state.getLiterature(paperId);
 
 export const selectLiteratureCount = (state: LiteratureStoreState & LiteratureStoreActions) =>
     state.stats.total;
