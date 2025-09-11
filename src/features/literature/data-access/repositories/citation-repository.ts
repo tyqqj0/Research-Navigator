@@ -229,6 +229,29 @@ export class CitationRepository {
         return this.findAllCitationsByPaperId(paperId);
     }
 
+    /**
+     * 🔎 获取一组文献ID内部的引文边（仅返回两端都在集合内的边）
+     */
+    async getEdgesWithinPaperIds(
+        paperIds: string[],
+        direction: 'out' | 'in' | 'both' = 'both'
+    ): Promise<Citation[]> {
+        try {
+            if (!paperIds || paperIds.length === 0) return [];
+            const idSet = new Set(paperIds);
+
+            // 仅需查询集合内源点的出边，再在内存中过滤目标是否在集合内
+            const outgoing = await this.table.where('sourceItemId').anyOf(paperIds).toArray();
+            const internal = outgoing.filter(c => idSet.has(c.targetItemId));
+
+            // direction 参数兼容占位：内部边对称，保持同一返回
+            return internal;
+        } catch (error) {
+            console.error('[CitationRepository] getEdgesWithinPaperIds failed:', error);
+            return [];
+        }
+    }
+
     // ==================== 度数统计操作 ====================
 
     /**
@@ -447,10 +470,23 @@ export class CitationRepository {
         }
     }
 
+    /**
+     * 🗑️ 仅删除某个文献的出边（保留入边以支持悬挂）
+     */
+    async deleteOutgoingCitationsByPaperId(paperId: string): Promise<number> {
+        try {
+            const deleted = await this.table.where('sourceItemId').equals(paperId).delete();
+            console.log(`[CitationRepository] Deleted ${deleted} outgoing citations for paperId: ${paperId}`);
+            return deleted;
+        } catch (error) {
+            console.error('[CitationRepository] deleteOutgoingCitationsByPaperId failed:', error);
+            throw new Error('Failed to delete outgoing citations for paperId');
+        }
+    }
+
     // ======== 兼容旧方法名（将逐步移除） ========
     async findAllCitationsByLid(paperId: string) { return this.findAllCitationsByPaperId(paperId); }
     async calculateDegreeForLid(paperId: string) { return this.calculateDegreeForPaperId(paperId); }
-    async calculateDegreesForPaperIds(paperIds: string[]) { return this.calculateDegreesForPaperIds(paperIds); }
     async deleteAllCitationsByLid(paperId: string) { return this.deleteAllCitationsByPaperId(paperId); }
 
 }

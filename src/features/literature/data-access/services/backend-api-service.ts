@@ -373,6 +373,33 @@ export class BackendApiService {
         const createdAt = backendData.created_at || backendData.createdAt || Date.now();
         const updatedAt = backendData.updated_at || backendData.updatedAt || createdAt;
 
+        // Normalize references into parsedContent.extractedReferences if provided by backend
+        const refsRaw = backendData.references || backendData.reference_list || undefined;
+        let normalizedExtractedReferences: string[] | undefined;
+        if (Array.isArray(refsRaw)) {
+            normalizedExtractedReferences = refsRaw
+                .map((r: any) => {
+                    if (typeof r === 'string') return r;
+                    if (r && typeof r === 'object') {
+                        return r.paperId || r.paper_id || r.id || r.targetPaperId || r.target_paper_id || r.targetId || r.target_id;
+                    }
+                    return undefined;
+                })
+                .filter((x: any) => typeof x === 'string' && x.length > 0) as string[];
+        }
+
+        // Merge with backend provided parsed_content if any
+        const parsedContent = (() => {
+            const original = backendData.parsed_content || undefined;
+            if (normalizedExtractedReferences && normalizedExtractedReferences.length > 0) {
+                return {
+                    ...(original || {}),
+                    extractedReferences: normalizedExtractedReferences,
+                };
+            }
+            return original || undefined;
+        })();
+
         return {
             paperId: backendData.paperId || backendData.paper_id || backendData.id,
             title: backendData.title,
@@ -385,7 +412,7 @@ export class BackendApiService {
             doi,
             url,
             pdfPath,
-            parsedContent: backendData.parsed_content || undefined,
+            parsedContent,
             backendTask: backendData.backend_task || undefined,
             createdAt: new Date(createdAt),
             updatedAt: new Date(updatedAt)

@@ -212,6 +212,7 @@ export class LibraryItemFactory {
             summary: input.summary,
             doi: input.doi,
             url: input.url,
+            parsedContent: input.parsedContent,
             // keywords: input.keywords || [],
             // language: input.language || 'en',
             // status: input.status || 'active',

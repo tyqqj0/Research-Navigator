@@ -45,25 +45,7 @@ export {
 } from './collection-store';
 
 // ==================== 🔗 Citation Store ====================
-// 引用网络数据的只读存储 - 纯粹的数据存储
-export {
-    useCitationStore,
-    type CitationStoreState,
-    // type CitationStoreActions,
-    // // 网络选择器
-    // selectAllNetworks,
-    // selectNetworkById,
-    // // 节点选择器
-    // selectAllNodes,
-    // selectNodeById,
-    // selectNodesInNetwork,
-    // // 边选择器
-    // selectAllEdges,
-    // selectEdgesInNetwork,
-    // // 统计选择器
-    // selectNodeStats,
-    // selectGlobalStats,
-} from './citation-store';
+// （已移除）引用网络数据不再使用全局Store，请通过Hook或Service获取
 
 // ==================== 🎯 默认导出 ====================
 // 主要的Literature Store作为默认导出

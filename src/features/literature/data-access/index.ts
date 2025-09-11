@@ -17,14 +17,11 @@
 export {
     // 核心存储
     useLiteratureStore,
-    useCitationStore,
     useCollectionStore,
 
     // 存储状态类型
     type LiteratureStoreState,
     type LiteratureStoreActions,
-    type CitationStoreState,
-    // type CitationStoreActions,
     type CollectionStoreState,
     type CollectionStoreActions
 } from './stores';
@@ -75,6 +72,7 @@ import type {
     LiteratureSource,
     UpdateLibraryItemInput,
     UpdateUserLiteratureMetaInput,
+    EnhancedLibraryItem,
 } from './models';
 
 export interface LiteratureEntryPoint {
@@ -135,6 +133,10 @@ export interface LiteratureDataAccessAPI {
     searchLiterature(query: string, options?: any): Promise<LibraryItem[]>;
     findSimilarLiterature(itemId: string): Promise<LibraryItem[]>;
     analyzeCitationNetwork(itemId: string): Promise<any>;
+    getInternalCitations(
+        paperIds: string[],
+        options?: { direction?: 'out' | 'in' | 'both'; includeStats?: boolean }
+    ): Promise<{ edges: Array<{ source: string; target: string }>; stats?: { totalEdges: number; totalNodes: number; density: number; averageDegree: number } }>;
 
     // 数据导出
     exportData(format: 'json' | 'csv' | 'bibtex', options?: any): Promise<string>;
@@ -233,10 +235,25 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                 for (const cid of collectionIds) {
                     try {
                         await this.services.collection.addLiteratureToCollection(cid, [created.literature.paperId], userId);
+                        // 本地 CollectionStore 同步
+                        try {
+                            const collectionStore = require('./stores').useCollectionStore;
+                            (collectionStore as any).getState().addLiteraturesToCollection(cid, [created.literature.paperId]);
+                        } catch (e) {
+                            console.warn('[LiteratureEntry] Failed to sync to CollectionStore', cid, e);
+                        }
                     } catch (e) {
                         console.warn('[LiteratureEntry] Failed to add to collection', cid, e);
                     }
                 }
+            }
+
+            // 4) 同步到本地 Store（文献）
+            try {
+                const literatureStore = require('./stores').useLiteratureStore;
+                (literatureStore as any).getState().addLiterature(created as EnhancedLibraryItem);
+            } catch (e) {
+                console.warn('[LiteratureEntry] Failed to sync to LiteratureStore', e);
             }
 
             // 注：autoExtractCitations 为只读关系，暂不在前端写入
@@ -290,7 +307,29 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
     async deleteLiterature(paperId: string): Promise<boolean> {
         try {
             const res = await this.services.literature.deleteLiterature(paperId, { cascadeDelete: true });
-            return !!res?.success;
+            const ok = !!res?.success;
+
+            // 同步到本地 Store（文献）
+            if (ok) {
+                try {
+                    const literatureStore = require('./stores').useLiteratureStore;
+                    (literatureStore as any).getState().removeLiterature(paperId);
+                } catch (e) {
+                    console.warn('[LiteratureEntry] Failed to sync deletion to LiteratureStore', e);
+                }
+
+                // 同步到本地 Store（集合：从所有集合移除该文献）
+                try {
+                    const collectionStore = require('./stores').useCollectionStore;
+                    const state = (collectionStore as any).getState();
+                    const allCollections = state.getAllCollections();
+                    allCollections.forEach((c: any) => state.removeLiteratureFromCollection(c.id, paperId));
+                } catch (e) {
+                    console.warn('[LiteratureEntry] Failed to sync deletion to CollectionStore', e);
+                }
+            }
+
+            return ok;
         } catch (error) {
             console.error('[LiteratureEntry] Failed to delete literature:', error);
             return false;
@@ -300,6 +339,18 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
     async updateLiterature(paperId: string, updates: UpdateLibraryItemInput): Promise<boolean> {
         try {
             await this.services.literature.updateLiterature(paperId, updates);
+
+            // 获取增强后的文献并同步到 Store
+            try {
+                const enhanced = await this.composition.getEnhancedLiterature(paperId);
+                if (enhanced) {
+                    const literatureStore = require('./stores').useLiteratureStore;
+                    (literatureStore as any).getState().updateLiterature(paperId, enhanced as EnhancedLibraryItem);
+                }
+            } catch (e) {
+                console.warn('[LiteratureEntry] Failed to sync update to LiteratureStore', e);
+            }
+
             return true;
         } catch (error) {
             console.error('[LiteratureEntry] Failed to update literature:', error);
@@ -309,9 +360,17 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
 
     async updateUserMeta(paperId: string, updates: UpdateUserLiteratureMetaInput): Promise<boolean> {
         try {
-            const userId = this.authUtils.getStoreInstance().requireAuth();
-            const updated = await this.services.userMeta.updateUserMeta(userId, paperId, updates);
-            return !!updated;
+            // 使用组合服务更新并拿到增强结果，便于同步 Store
+            const enhanced = await this.composition.updateUserMeta(paperId, updates);
+
+            try {
+                const literatureStore = require('./stores').useLiteratureStore;
+                (literatureStore as any).getState().updateLiterature(paperId, enhanced as EnhancedLibraryItem);
+            } catch (e) {
+                console.warn('[LiteratureEntry] Failed to sync userMeta update to LiteratureStore', e);
+            }
+
+            return !!enhanced;
         } catch (error) {
             console.error('[LiteratureEntry] Failed to update user meta:', error);
             return false;
@@ -327,9 +386,9 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
     public readonly entry: LiteratureEntryPoint;
 
     constructor(
-        public readonly repositories = require('./repositories').literatureDomainRepositories,
-        public readonly services = require('./services').literatureDomainServices,
-        public readonly database = require('./database').literatureDB
+        private readonly repositories = require('./repositories').literatureDomainRepositories,
+        private readonly services = require('./services').literatureDomainServices,
+        private readonly database = require('./database').literatureDB
     ) {
         this.entry = new LiteratureEntryPointImpl();
     }
@@ -505,6 +564,19 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
         } catch (error) {
             console.error('[LiteratureDataAccess] Citation network analysis failed:', error);
             throw new Error(`Failed to analyze citation network for: ${itemId}`);
+        }
+    }
+
+    async getInternalCitations(
+        paperIds: string[],
+        options: { direction?: 'out' | 'in' | 'both'; includeStats?: boolean } = {}
+    ): Promise<{ edges: Array<{ source: string; target: string }>; stats?: { totalEdges: number; totalNodes: number; density: number; averageDegree: number } }> {
+        try {
+            const result = await this.services.citation.getInternalCitations(paperIds, options);
+            return result;
+        } catch (error) {
+            console.error('[LiteratureDataAccess] getInternalCitations failed:', error);
+            throw new Error('Failed to get internal citations');
         }
     }
 

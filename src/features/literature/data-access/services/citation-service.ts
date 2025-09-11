@@ -195,6 +195,46 @@ export class CitationService {
         }
     }
 
+    // ==================== 轻量关系写入与子图查询 ====================
+
+    /**
+     * 🧩 解析并写入引用关系（允许悬挂边）
+     * 传入源 paperId 和其 references（paperId 列表），逐条写入 citations（幂等）。
+     */
+    async parseAndStoreReferences(sourcePaperId: string, references: string[] | undefined | null): Promise<{ created: number; skipped: number; errors: number }> {
+        if (!references || references.length === 0) return { created: 0, skipped: 0, errors: 0 };
+        const inputs = references
+            .filter((t) => typeof t === 'string' && t && t !== sourcePaperId)
+            .map((targetId) => ({ sourceItemId: sourcePaperId, targetItemId: targetId }));
+
+        return await this.citationRepo.bulkCreateCitations(inputs as any);
+    }
+
+    /**
+     * 🔍 获取给定子集内部的有向边（仅本地 DB 过滤）
+     */
+    async getInternalCitations(
+        paperIds: string[],
+        options: { direction?: 'out' | 'in' | 'both'; includeStats?: boolean } = {}
+    ): Promise<{
+        edges: Array<{ source: string; target: string }>;
+        stats?: { totalEdges: number; totalNodes: number; density: number; averageDegree: number };
+    }> {
+        const { direction = 'both', includeStats = true } = options;
+        const citations = await this.citationRepo.getEdgesWithinPaperIds(paperIds, direction);
+        const edges = citations.map((c) => ({ source: c.sourceItemId, target: c.targetItemId }));
+
+        const result: any = { edges };
+        if (includeStats) {
+            const totalNodes = paperIds.length;
+            const totalEdges = edges.length;
+            const density = totalNodes > 1 ? (2 * totalEdges) / (totalNodes * (totalNodes - 1)) : 0;
+            const averageDegree = totalNodes > 0 ? (2 * totalEdges) / totalNodes : 0;
+            result.stats = { totalEdges, totalNodes, density, averageDegree };
+        }
+        return result;
+    }
+
     /**
      * 🔍 获取文献的引文网络
      */

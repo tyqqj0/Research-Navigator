@@ -36,6 +36,12 @@ export {
     type UseCitationOperationsReturn,
 } from './use-citation-operations';
 
+// ==================== 🔗 Internal Citations Hooks ====================
+export {
+    useInternalCitationsByPaperIds,
+    useCollectionInternalCitations,
+} from './use-internal-citations';
+
 // ==================== 🔄 Legacy Hooks (待迁移) ====================
 // 这些是旧的Hook，需要逐步迁移到新的Operations Hook
 export {

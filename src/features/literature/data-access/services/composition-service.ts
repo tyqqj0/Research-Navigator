@@ -28,6 +28,7 @@ import type {
     PaginatedResult,
 } from '../models';
 import { LiteratureService, literatureService } from './literature-service';
+import { citationService } from './citation-service';
 import { UserMetaService, userMetaService } from './user-meta-service';
 import { handleError } from '../../../../lib/errors';
 import { authStoreUtils, type AuthStoreState } from '../../../../stores/auth.store';
@@ -137,7 +138,20 @@ export class CompositionService {
                 );
             }
 
-            // 3. 返回组合结果
+            // 3. 引用解析：根据元数据中的 references（paperIds）写入 citations（允许悬挂边）
+            try {
+                const refs = literature.parsedContent?.extractedReferences as any;
+                const refIds: string[] | undefined = Array.isArray(refs)
+                    ? refs.filter((r: any) => typeof r === 'string')
+                    : undefined;
+                if (refIds && refIds.length > 0) {
+                    await citationService.parseAndStoreReferences(literature.paperId, refIds);
+                }
+            } catch (e) {
+                console.warn('[CompositionService] parseAndStoreReferences failed:', e);
+            }
+
+            // 4. 返回组合结果
             return this.buildEnhancedItem(literature, userMeta);
         } catch (error) {
             ErrorHandler.handle(error, {

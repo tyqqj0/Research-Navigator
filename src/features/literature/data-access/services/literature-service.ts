@@ -30,6 +30,7 @@ import {
     LITERATURE_CONSTANTS,
 } from '../models';
 import { AppError, ErrorType, ErrorSeverity, handleError } from '../../../../lib/errors';
+import { citationRepository } from '../repositories/citation-repository';
 
 // 错误处理器别名
 const ErrorHandler = { handle: handleError };
@@ -233,6 +234,15 @@ export class LiteratureService {
 
             // 2. 删除文献记录
             await this.literatureRepo.delete(paperId);
+
+            // 3. 级联删除：仅删除出边，保留入边以支持悬挂
+            try {
+                if (options.cascadeDelete) {
+                    await citationRepository.deleteOutgoingCitationsByPaperId(paperId);
+                }
+            } catch (e) {
+                console.warn('[LiteratureService] Failed to delete outgoing citations:', e);
+            }
 
             this.updateStats(Date.now() - startTime, true);
             return { success: true, deletedCount: 1 };
