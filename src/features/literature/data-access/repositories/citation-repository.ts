@@ -115,7 +115,7 @@ export class CitationRepository {
      * 🔎 根据复合主键查找
      * 支持传入 `${source}-${target}` 字符串或 [source, target] 元组
      */
-    async findById(key: string | [string, string]): Promise<Citation | null> {
+    async findById(key: any): Promise<Citation | null> {
         try {
             const [sourceItemId, targetItemId] = Array.isArray(key)
                 ? key
@@ -137,7 +137,7 @@ export class CitationRepository {
     /**
      * ✏️ 更新引文（仅允许更新 context 字段）
      */
-    async update(key: string | [string, string], updates: Partial<Citation> & Record<string, unknown>): Promise<boolean> {
+    async update(key: any, updates: Partial<Citation> & Record<string, unknown>): Promise<boolean> {
         try {
             const [sourceItemId, targetItemId] = Array.isArray(key)
                 ? key
@@ -202,7 +202,7 @@ export class CitationRepository {
     /**
      * 🔍 获取文献的所有引文关系
      */
-    async findAllCitationsByLid(paperId: string): Promise<{
+    async findAllCitationsByPaperId(paperId: string): Promise<{
         outgoing: Citation[]; // 它引用的文献
         incoming: Citation[]; // 引用它的文献
     }> {
@@ -214,9 +214,19 @@ export class CitationRepository {
 
             return { outgoing, incoming };
         } catch (error) {
-            console.error('[CitationRepository] findAllCitationsByLid failed:', error);
+            console.error('[CitationRepository] findAllCitationsByPaperId failed:', error);
             return { outgoing: [], incoming: [] };
         }
+    }
+
+    /**
+     * 🔁 获取双向引文（兼容旧调用）
+     */
+    async getBidirectionalCitations(paperId: string): Promise<{
+        outgoing: Citation[];
+        incoming: Citation[];
+    }> {
+        return this.findAllCitationsByPaperId(paperId);
     }
 
     // ==================== 度数统计操作 ====================
@@ -224,7 +234,7 @@ export class CitationRepository {
     /**
      * 📊 计算某个文献的度数统计
      */
-    async calculateDegreeForLid(paperId: string): Promise<CitationDegree> {
+    async calculateDegreeForPaperId(paperId: string): Promise<CitationDegree> {
         try {
             const [outgoingCount, incomingCount] = await Promise.all([
                 this.table.where('sourceItemId').equals(paperId).count(),
@@ -239,7 +249,7 @@ export class CitationRepository {
                 lastCalculated: DatabaseUtils.now()
             };
         } catch (error) {
-            console.error('[CitationRepository] calculateDegreeForLid failed:', error);
+            console.error('[CitationRepository] calculateDegreeForPaperId failed:', error);
             return {
                 paperId,
                 inDegree: 0,
@@ -253,15 +263,15 @@ export class CitationRepository {
     /**
      * 📊 批量计算多个文献的度数统计
      */
-    async calculateDegreesForLids(lids: string[]): Promise<CitationDegree[]> {
+    async calculateDegreesForPaperIds(paperIds: string[]): Promise<CitationDegree[]> {
         try {
             const results = await Promise.all(
-                lids.map(paperId => this.calculateDegreeForLid(paperId))
+                paperIds.map(paperId => this.calculateDegreeForPaperId(paperId))
             );
             return results;
         } catch (error) {
-            console.error('[CitationRepository] calculateDegreesForLids failed:', error);
-            return lids.map(paperId => ({
+            console.error('[CitationRepository] calculateDegreesForPaperIds failed:', error);
+            return paperIds.map(paperId => ({
                 paperId,
                 inDegree: 0,
                 outDegree: 0,
@@ -421,7 +431,7 @@ export class CitationRepository {
     /**
      * 🗑️ 删除某个文献的所有引文关系
      */
-    async deleteAllCitationsByLid(paperId: string): Promise<number> {
+    async deleteAllCitationsByPaperId(paperId: string): Promise<number> {
         try {
             const [outgoingDeleted, incomingDeleted] = await Promise.all([
                 this.table.where('sourceItemId').equals(paperId).delete(),
@@ -432,10 +442,16 @@ export class CitationRepository {
             console.log(`[CitationRepository] Deleted ${totalDeleted} citations for paperId: ${paperId}`);
             return totalDeleted;
         } catch (error) {
-            console.error('[CitationRepository] deleteAllCitationsByLid failed:', error);
+            console.error('[CitationRepository] deleteAllCitationsByPaperId failed:', error);
             throw new Error('Failed to delete citations for paperId');
         }
     }
+
+    // ======== 兼容旧方法名（将逐步移除） ========
+    async findAllCitationsByLid(paperId: string) { return this.findAllCitationsByPaperId(paperId); }
+    async calculateDegreeForLid(paperId: string) { return this.calculateDegreeForPaperId(paperId); }
+    async calculateDegreesForPaperIds(paperIds: string[]) { return this.calculateDegreesForPaperIds(paperIds); }
+    async deleteAllCitationsByLid(paperId: string) { return this.deleteAllCitationsByPaperId(paperId); }
 
 }
 

@@ -36,8 +36,7 @@ export default function LiteratureAPIDemo() {
     const [error, setError] = useState<string | null>(null);
 
     // 表单状态
-    const [doi, setDoi] = useState('10.1038/nature12373');
-    const [url, setUrl] = useState('https://arxiv.org/abs/2301.00001');
+    const [identifier, setIdentifier] = useState('10.1038/nature12373');
     const [searchQuery, setSearchQuery] = useState('machine learning');
     const [metadata, setMetadata] = useState({
         title: 'Example Research Paper',
@@ -64,23 +63,10 @@ export default function LiteratureAPIDemo() {
         }
     };
 
-    const addByDOI = () => handleAsyncOperation(async () => {
-        return await literatureEntry.addByDOI(doi, {
+    const addByIdentifier = () => handleAsyncOperation(async () => {
+        return await literatureEntry.addByIdentifier(identifier, {
             autoExtractCitations: true,
             tags: ['demo', 'api-test']
-        });
-    });
-
-    const addByURL = () => handleAsyncOperation(async () => {
-        return await literatureEntry.addByURL(url, {
-            autoExtractCitations: true,
-            tags: ['demo', 'api-test']
-        });
-    });
-
-    const addByMetadata = () => handleAsyncOperation(async () => {
-        return await literatureEntry.addByMetadata(metadata, {
-            tags: ['demo', 'manual-entry']
         });
     });
 
@@ -100,8 +86,7 @@ export default function LiteratureAPIDemo() {
 
     const batchImport = () => handleAsyncOperation(async () => {
         return await literatureEntry.batchImport([
-            { type: 'doi', data: '10.1038/nature12373', options: { tags: ['batch-1'] } },
-            { type: 'metadata', data: metadata, options: { tags: ['batch-2'] } }
+            { type: 'identifier', data: '10.1038/nature12373', options: { tags: ['batch-1'] } }
         ]);
     });
 
@@ -125,42 +110,21 @@ export default function LiteratureAPIDemo() {
                 {/* 文献入口点演示 */}
                 <TabsContent value="entry" className="space-y-4">
                     <div className="grid md:grid-cols-2 gap-4">
-                        {/* DOI 添加 */}
+                        {/* 统一标识添加 */}
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <Link2 className="h-5 w-5" />
-                                    通过 DOI 添加
+                                    通过标识添加 (支持 S2/DOI/URL/...)
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 <Input
-                                    placeholder="输入 DOI"
-                                    value={doi}
-                                    onChange={(e) => setDoi(e.target.value)}
+                                    placeholder="输入 S2/DOI/URL 或其他标识"
+                                    value={identifier}
+                                    onChange={(e) => setIdentifier(e.target.value)}
                                 />
-                                <Button onClick={addByDOI} disabled={loading} className="w-full">
-                                    {loading ? <Clock className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-                                    添加文献
-                                </Button>
-                            </CardContent>
-                        </Card>
-
-                        {/* URL 添加 */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <FileText className="h-5 w-5" />
-                                    通过 URL 添加
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                <Input
-                                    placeholder="输入 URL"
-                                    value={url}
-                                    onChange={(e) => setUrl(e.target.value)}
-                                />
-                                <Button onClick={addByURL} disabled={loading} className="w-full">
+                                <Button onClick={addByIdentifier} disabled={loading} className="w-full">
                                     {loading ? <Clock className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
                                     添加文献
                                 </Button>
@@ -194,13 +158,11 @@ export default function LiteratureAPIDemo() {
                                     onChange={(e) => setMetadata({ ...metadata, abstract: e.target.value })}
                                 />
                                 <div className="flex gap-2">
-                                    <Button onClick={addByMetadata} disabled={loading}>
+                                    <Button onClick={batchImport} disabled={loading}>
                                         {loading ? <Clock className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-                                        添加文献
+                                        通过元数据添加（批量示例）
                                     </Button>
-                                    <Button onClick={batchImport} disabled={loading} variant="outline">
-                                        批量导入演示
-                                    </Button>
+                                    <Button onClick={batchImport} disabled={loading} variant="outline">批量导入演示</Button>
                                 </div>
                             </CardContent>
                         </Card>
@@ -329,10 +291,8 @@ export default function LiteratureAPIDemo() {
                         <div>
                             <h4 className="font-semibold mb-2">🚪 文献入口 (literatureEntry)</h4>
                             <ul className="text-sm space-y-1 text-muted-foreground">
-                                <li>• addByDOI() - DOI添加文献</li>
-                                <li>• addByURL() - URL添加文献</li>
-                                <li>• addByMetadata() - 手动添加</li>
-                                <li>• batchImport() - 批量导入</li>
+                                <li>• addByIdentifier() - 统一标识添加 (S2/DOI/URL/...)</li>
+                                <li>• batchImport() - 'identifier' 或 'metadata'</li>
                             </ul>
                         </div>
                         <div>

@@ -70,54 +70,47 @@ export type {
 // =============================================================================
 
 // 导入内部使用的类型
-import type { LibraryItem, LiteratureSource } from './models';
+import type {
+    LibraryItem,
+    LiteratureSource,
+    UpdateLibraryItemInput,
+    UpdateUserLiteratureMetaInput,
+} from './models';
 
 export interface LiteratureEntryPoint {
     /**
-     * 通过DOI添加文献
+     * 通过统一标识添加文献（S2风格标识）
+     * 支持: `S2:<sha>`, `CorpusId:<id>`, `DOI:<doi>`, `ARXIV:<id>`, `MAG:<id>`, `ACL:<id>`, `PMID:<id>`, `PMCID:<id>`, `URL:<url>`
+     * 也支持直接传入裸的 DOI 或 URL（将自动规范化为前缀形式）
      */
-    addByDOI(doi: string, options?: {
+    addByIdentifier(identifier: string, options?: {
         autoExtractCitations?: boolean;
-        addToCollection?: string;
-        tags?: string[];
+        addToCollection?: string; // deprecated in favor of addToCollections
+        addToCollections?: string[];
+        tags?: string[]; // deprecated in favor of userMeta
+        userMeta?: Partial<import('./models').CreateUserLiteratureMetaInput> | Partial<import('./models').UpdateUserLiteratureMetaInput>;
     }): Promise<LibraryItem>;
 
     /**
-     * 通过URL添加文献
-     */
-    addByURL(url: string, options?: {
-        autoExtractCitations?: boolean;
-        addToCollection?: string;
-        tags?: string[];
-    }): Promise<LibraryItem>;
-
-    /**
-     * 通过标题和作者手动添加
-     */
-    addByMetadata(metadata: {
-        title: string;
-        authors: string[];
-        year?: number;
-        journal?: string;
-        abstract?: string;
-        keywords?: string[];
-    }, options?: {
-        autoExtractCitations?: boolean;
-        addToCollection?: string;
-        tags?: string[];
-    }): Promise<LibraryItem>;
-
-    /**
-     * 批量导入文献
+     * 批量导入文献（仅支持 identifier）
      */
     batchImport(entries: Array<{
-        type: 'doi' | 'url' | 'metadata';
-        data: string | object;
+        type: 'identifier';
+        data: string;
         options?: any;
     }>): Promise<{
         successful: LibraryItem[];
         failed: Array<{ entry: any; error: string }>;
     }>;
+
+    /** 在前端文献库中彻底删除一条文献记录（仅前端本地库，但是并非是从某个集合中移除，请注意区分） */
+    deleteLiterature(paperId: string): Promise<boolean>;
+
+    /** 更新文献核心数据（标题、作者、年份等） */
+    updateLiterature(paperId: string, updates: UpdateLibraryItemInput): Promise<boolean>;
+
+    /** 更新与用户相关的文献元数据（标签、评分、阅读状态、笔记等） */
+    updateUserMeta(paperId: string, updates: UpdateUserLiteratureMetaInput): Promise<boolean>;
 }
 
 // =============================================================================
@@ -156,123 +149,111 @@ export interface LiteratureDataAccessAPI {
 
 class LiteratureEntryPointImpl implements LiteratureEntryPoint {
     constructor(
-        private readonly literatureStore = require('./stores').useLiteratureStore(),
-        private readonly services = require('./services').literatureDomainServices
+        private readonly services = require('./services').literatureDomainServices,
+        // private readonly repositories = require('./repositories').literatureDomainRepositories,
+        private readonly composition = require('./services').compositionService,
+        private readonly authUtils = require('../../../stores/auth.store').authStoreUtils
     ) { }
 
-    async addByDOI(doi: string, options: {
+    private normalizeIdentifier(raw: string): { normalized: string; encoded: string } {
+        const v = (raw || '').trim();
+        const hasPrefix = /^(S2:|CorpusId:|DOI:|ARXIV:|MAG:|ACL:|PMID:|PMCID:|URL:)/i.test(v);
+        let normalized = v;
+        if (!hasPrefix) {
+            if (/^https?:\/\//i.test(v)) {
+                normalized = `URL:${v}`;
+            } else if (/^10\.\S+\/\S+/.test(v)) {
+                normalized = `DOI:${v}`;
+            } else {
+                // 默认走 S2 标识
+                normalized = `S2:${v}`;
+            }
+        }
+        return { normalized, encoded: encodeURIComponent(normalized) };
+    }
+
+    // 公共helper导出
+    public static normalizeIdentifierHelper(raw: string): { normalized: string; encoded: string } {
+        const v = (raw || '').trim();
+        const hasPrefix = /^(S2:|CorpusId:|DOI:|ARXIV:|MAG:|ACL:|PMID:|PMCID:|URL:)/i.test(v);
+        let normalized = v;
+        if (!hasPrefix) {
+            if (/^https?:\/\//i.test(v)) {
+                normalized = `URL:${v}`;
+            } else if (/^10\.\S+\/\S+/.test(v)) {
+                normalized = `DOI:${v}`;
+            } else {
+                normalized = `S2:${v}`;
+            }
+        }
+        return { normalized, encoded: encodeURIComponent(normalized) };
+    }
+
+    async addByIdentifier(identifier: string, options: {
         autoExtractCitations?: boolean;
         addToCollection?: string;
+        addToCollections?: string[];
         tags?: string[];
+        userMeta?: Partial<import('./models').CreateUserLiteratureMetaInput> | Partial<import('./models').UpdateUserLiteratureMetaInput>;
     } = {}): Promise<LibraryItem> {
         try {
-            // 1. 通过DOI获取元数据
-            const metadata = await this.services.literature.fetchMetadataByDOI(doi);
+            const { normalized, encoded } = this.normalizeIdentifier(identifier);
 
-            // 2. 创建文献项
-            const item = await this.literatureStore.createItem({
-                ...metadata,
-                doi,
-                tags: options.tags || [],
-                source: 'doi' as LiteratureSource
+            // 1) 优先使用搜索接口（兼容更多后端实现）
+            const searchRes = await this.services.backend.searchPapers({ query: normalized, limit: 1, offset: 0 });
+            const found = (searchRes.results || [])[0];
+            const paper = found || await this.services.backend.getPaper(encoded);
+            if (!paper) throw new Error('No paper found for identifier');
+
+            // 2) 构造创建输入并创建（含可选的完整用户元数据）
+            const created = await this.composition.createComposedLiterature({
+                literature: {
+                    title: paper.title,
+                    authors: paper.authors || [],
+                    year: paper.year,
+                    publication: paper.publication || undefined,
+                    abstract: paper.abstract || undefined,
+                    summary: paper.summary || undefined,
+                    doi: paper.doi || undefined,
+                    url: paper.url || undefined,
+                    pdfPath: paper.pdfPath || undefined,
+                },
+                userMeta: options.userMeta
+                    ? { ...options.userMeta, tags: options.userMeta.tags || options.tags || [] }
+                    : (options.tags && options.tags.length ? { tags: options.tags } : undefined),
             });
 
-            // 3. 可选操作
-            if (options.autoExtractCitations) {
-                await this.services.citation.extractAndLinkCitations(item.id);
+            // 3) 可选：加入一个或多个集合
+            const collectionIds = [
+                ...(options.addToCollections || []),
+                ...(options.addToCollection ? [options.addToCollection] : [])
+            ];
+            if (collectionIds.length) {
+                const userId = this.authUtils.getStoreInstance().requireAuth();
+                for (const cid of collectionIds) {
+                    try {
+                        await this.services.collection.addLiteratureToCollection(cid, [created.literature.paperId], userId);
+                    } catch (e) {
+                        console.warn('[LiteratureEntry] Failed to add to collection', cid, e);
+                    }
+                }
             }
 
-            if (options.addToCollection) {
-                const collectionStore = require('./stores').useCollectionStore();
-                await collectionStore.addItemToCollection(options.addToCollection, item.id);
-            }
+            // 注：autoExtractCitations 为只读关系，暂不在前端写入
 
-            return item;
+            return created.literature as LibraryItem;
         } catch (error) {
-            console.error('[LiteratureEntry] Failed to add by DOI:', error);
-            throw new Error(`Failed to add literature by DOI: ${doi}`);
+            console.error('[LiteratureEntry] Failed to add by identifier:', error);
+            throw new Error(`Failed to add literature by identifier: ${identifier}`);
         }
     }
 
-    async addByURL(url: string, options: {
-        autoExtractCitations?: boolean;
-        addToCollection?: string;
-        tags?: string[];
-    } = {}): Promise<LibraryItem> {
-        try {
-            // 1. 从URL提取元数据
-            const metadata = await this.services.literature.fetchMetadataByURL(url);
-
-            // 2. 创建文献项
-            const item = await this.literatureStore.createItem({
-                ...metadata,
-                url,
-                tags: options.tags || [],
-                source: 'url' as LiteratureSource
-            });
-
-            // 3. 可选操作
-            if (options.autoExtractCitations) {
-                await this.services.citation.extractAndLinkCitations(item.id);
-            }
-
-            if (options.addToCollection) {
-                const collectionStore = require('./stores').useCollectionStore();
-                await collectionStore.addItemToCollection(options.addToCollection, item.id);
-            }
-
-            return item;
-        } catch (error) {
-            console.error('[LiteratureEntry] Failed to add by URL:', error);
-            throw new Error(`Failed to add literature by URL: ${url}`);
-        }
-    }
-
-    async addByMetadata(metadata: {
-        title: string;
-        authors: string[];
-        year?: number;
-        journal?: string;
-        abstract?: string;
-        keywords?: string[];
-    }, options: {
-        autoExtractCitations?: boolean;
-        addToCollection?: string;
-        tags?: string[];
-    } = {}): Promise<LibraryItem> {
-        try {
-            // 创建文献项
-            const item = await this.literatureStore.createItem({
-                title: metadata.title,
-                authors: metadata.authors,
-                year: metadata.year,
-                journal: metadata.journal,
-                abstract: metadata.abstract,
-                keywords: metadata.keywords || [],
-                tags: options.tags || [],
-                source: 'manual' as LiteratureSource
-            });
-
-            // 可选操作
-            if (options.autoExtractCitations && metadata.abstract) {
-                await this.services.citation.extractAndLinkCitations(item.id);
-            }
-
-            if (options.addToCollection) {
-                const collectionStore = require('./stores').useCollectionStore();
-                await collectionStore.addItemToCollection(options.addToCollection, item.id);
-            }
-
-            return item;
-        } catch (error) {
-            console.error('[LiteratureEntry] Failed to add by metadata:', error);
-            throw new Error(`Failed to add literature by metadata: ${metadata.title}`);
-        }
-    }
+    // 旧的 addByDOI/addByURL/addByMetadata 已移除，统一使用 addByIdentifier；
+    // 手动元数据请通过 batchImport 的 metadata 类型传入
 
     async batchImport(entries: Array<{
-        type: 'doi' | 'url' | 'metadata';
-        data: string | object;
+        type: 'identifier';
+        data: string;
         options?: any;
     }>): Promise<{
         successful: LibraryItem[];
@@ -286,15 +267,10 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                 let item: LibraryItem;
 
                 switch (entry.type) {
-                    case 'doi':
-                        item = await this.addByDOI(entry.data as string, entry.options);
+                    case 'identifier': {
+                        item = await this.addByIdentifier(entry.data as string, entry.options);
                         break;
-                    case 'url':
-                        item = await this.addByURL(entry.data as string, entry.options);
-                        break;
-                    case 'metadata':
-                        item = await this.addByMetadata(entry.data as any, entry.options);
-                        break;
+                    }
                     default:
                         throw new Error(`Unsupported entry type: ${entry.type}`);
                 }
@@ -309,6 +285,37 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
         }
 
         return { successful, failed };
+    }
+
+    async deleteLiterature(paperId: string): Promise<boolean> {
+        try {
+            const res = await this.services.literature.deleteLiterature(paperId, { cascadeDelete: true });
+            return !!res?.success;
+        } catch (error) {
+            console.error('[LiteratureEntry] Failed to delete literature:', error);
+            return false;
+        }
+    }
+
+    async updateLiterature(paperId: string, updates: UpdateLibraryItemInput): Promise<boolean> {
+        try {
+            await this.services.literature.updateLiterature(paperId, updates);
+            return true;
+        } catch (error) {
+            console.error('[LiteratureEntry] Failed to update literature:', error);
+            return false;
+        }
+    }
+
+    async updateUserMeta(paperId: string, updates: UpdateUserLiteratureMetaInput): Promise<boolean> {
+        try {
+            const userId = this.authUtils.getStoreInstance().requireAuth();
+            const updated = await this.services.userMeta.updateUserMeta(userId, paperId, updates);
+            return !!updated;
+        } catch (error) {
+            console.error('[LiteratureEntry] Failed to update user meta:', error);
+            return false;
+        }
     }
 }
 
@@ -469,7 +476,9 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
 
     async searchLiterature(query: string, options: any = {}): Promise<LibraryItem[]> {
         try {
-            return await this.services.literature.searchLiterature(query, options);
+            const backend = this.services.backend;
+            const res = await backend.searchPapers({ query, limit: options.limit || 20, offset: options.offset || 0 });
+            return res.results || [];
         } catch (error) {
             console.error('[LiteratureDataAccess] Search failed:', error);
             throw new Error(`Failed to search literature: ${query}`);
@@ -478,7 +487,11 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
 
     async findSimilarLiterature(itemId: string): Promise<LibraryItem[]> {
         try {
-            return await this.services.ai.findSimilarLiterature(itemId);
+            // 简化：基于标题近似搜索
+            const item = await this.repositories.literature.findByLid(itemId);
+            if (!item) return [];
+            const result = await this.repositories.literature.findByTitleSimilar(item.title, 0.6, 10);
+            return result.filter((lit: LibraryItem) => lit.paperId !== itemId);
         } catch (error) {
             console.error('[LiteratureDataAccess] Similar literature search failed:', error);
             throw new Error(`Failed to find similar literature for: ${itemId}`);
@@ -487,7 +500,8 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
 
     async analyzeCitationNetwork(itemId: string): Promise<any> {
         try {
-            return await this.services.citation.analyzeCitationNetwork(itemId);
+            // 使用现有的网络获取函数（基于起点）
+            return await this.services.citation.getCitationNetwork([itemId], 2, true);
         } catch (error) {
             console.error('[LiteratureDataAccess] Citation network analysis failed:', error);
             throw new Error(`Failed to analyze citation network for: ${itemId}`);
@@ -552,8 +566,8 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
  * ```typescript
  * import { literatureDataAccess } from '@/features/literature/data-access';
  * 
- * // 添加文献
- * const item = await literatureDataAccess.entry.addByDOI('10.1000/example');
+ * // 添加文献（统一标识）
+ * const item = await literatureDataAccess.entry.addByIdentifier('10.1000/example');
  * 
  * // 搜索文献
  * const results = await literatureDataAccess.searchLiterature('machine learning');
@@ -568,3 +582,9 @@ export const literatureDataAccess = new LiteratureDataAccess();
  * 🚪 便捷的文献入口点 - 直接导出以简化使用
  */
 export const literatureEntry = literatureDataAccess.entry;
+
+/**
+ * 🔧 Helper: 规范化文献标识
+ */
+export const normalizeLiteratureIdentifier = (raw: string) =>
+    (LiteratureEntryPointImpl as any).normalizeIdentifierHelper(raw);

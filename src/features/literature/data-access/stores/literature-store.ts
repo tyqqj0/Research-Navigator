@@ -44,14 +44,14 @@ export interface LiteratureStoreActions {
     addLiteratures: (literatures: EnhancedLibraryItem[]) => void;
     updateLiterature: (paperId: string, literature: EnhancedLibraryItem) => void;
     removeLiterature: (paperId: string) => void;
-    removeLiteratures: (lids: string[]) => void;
+    removeLiteratures: (paperIds: string[]) => void;
     clearLiteratures: () => void;
     replaceLiteratures: (literatures: EnhancedLibraryItem[]) => void;
 
     // 📊 数据查询 - 简单的选择器
     getLiterature: (paperId: string) => EnhancedLibraryItem | undefined;
     getAllLiteratures: () => EnhancedLibraryItem[];
-    getLiteratures: (lids: string[]) => EnhancedLibraryItem[];
+    getLiteratures: (paperIds: string[]) => EnhancedLibraryItem[];
     hasLiterature: (paperId: string) => boolean;
 
     // 📈 统计更新
@@ -109,9 +109,9 @@ export const useLiteratureStore = create<LiteratureStoreState & LiteratureStoreA
                     get().updateStats();
                 },
 
-                removeLiteratures: (lids) => {
+                removeLiteratures: (paperIds) => {
                     set((state) => {
-                        lids.forEach(paperId => state.literatures.delete(paperId));
+                        paperIds.forEach(paperId => state.literatures.delete(paperId));
                     });
                     get().updateStats();
                 },
@@ -142,9 +142,9 @@ export const useLiteratureStore = create<LiteratureStoreState & LiteratureStoreA
                     return Array.from(get().literatures.values());
                 },
 
-                getLiteratures: (lids) => {
+                getLiteratures: (paperIds) => {
                     const { literatures } = get();
-                    return lids
+                    return paperIds
                         .map(paperId => literatures.get(paperId))
                         .filter(Boolean) as EnhancedLibraryItem[];
                 },

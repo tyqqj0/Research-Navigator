@@ -86,23 +86,13 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                 collectionsMap.set(collection.id, collection);
             });
 
-            // 计算层次深度和子集合ID
+            // 计算层次关系（子集合ID）
             allCollections.forEach(collection => {
                 if (collection.parentId && collectionsMap.has(collection.parentId)) {
                     const parent = collectionsMap.get(collection.parentId)!;
                     if (!parent.childIds.includes(collection.id)) {
                         parent.childIds.push(collection.id);
                     }
-
-                    // 计算深度
-                    let depth = 0;
-                    let current = collection;
-                    while (current.parentId && collectionsMap.has(current.parentId)) {
-                        depth++;
-                        current = collectionsMap.get(current.parentId)!;
-                        if (depth > 10) break; // 防止循环引用
-                    }
-                    collection.depth = depth;
                 }
             });
 
@@ -145,7 +135,8 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             }
 
             if (query.parentId !== undefined) {
-                collection = collection.filter(item => item.parentId === query.parentId);
+                const pid = query.parentId;
+                collection = collection.filter(item => (item.parentId ?? null) === pid);
             }
 
             if (query.isArchived !== undefined) {
@@ -156,7 +147,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                 const searchTerm = query.searchTerm.toLowerCase();
                 collection = collection.filter(item =>
                     item.name.toLowerCase().includes(searchTerm) ||
-                    (item.description && item.description.toLowerCase().includes(searchTerm))
+                    (!!item.description && item.description.toLowerCase().includes(searchTerm))
                 );
             }
 
@@ -211,9 +202,9 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             const collection: Collection = {
                 id: this.generateId(),
                 ...input,
-                lids: input.lids || [],
+                paperIds: input.paperIds || [],
                 childIds: [],
-                itemCount: input.lids?.length || 0,
+                itemCount: input.paperIds?.length || 0,
                 isArchived: false,
                 createdAt: now,
                 updatedAt: now
@@ -235,7 +226,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async addLiterature(
         collectionId: string,
-        lids: string[]
+        paperIds: string[]
     ): Promise<void> {
         try {
             const collection = await this.findById(collectionId);
@@ -244,13 +235,13 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             }
 
             // 去重添加
-            const existingIds = new Set(collection.lids);
-            const newIds = lids.filter(id => !existingIds.has(id));
+            const existingIds = new Set(collection.paperIds);
+            const newIds = paperIds.filter(id => !existingIds.has(id));
 
             if (newIds.length > 0) {
-                const updatedLiteratureIds = [...collection.lids, ...newIds];
+                const updatedLiteratureIds = [...collection.paperIds, ...newIds];
                 await this.update(collectionId, {
-                    lids: updatedLiteratureIds,
+                    paperIds: updatedLiteratureIds,
                     itemCount: updatedLiteratureIds.length,
                     lastItemAddedAt: DatabaseUtils.now()
                 });
@@ -266,7 +257,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async removeLiterature(
         collectionId: string,
-        lids: string[]
+        paperIds: string[]
     ): Promise<void> {
         try {
             const collection = await this.findById(collectionId);
@@ -274,13 +265,13 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                 throw new Error(`Collection ${collectionId} not found`);
             }
 
-            const idsToRemove = new Set(lids);
-            const updatedLiteratureIds = collection.lids.filter(
+            const idsToRemove = new Set(paperIds);
+            const updatedLiteratureIds = collection.paperIds.filter(
                 id => !idsToRemove.has(id)
             );
 
             await this.update(collectionId, {
-                lids: updatedLiteratureIds,
+                paperIds: updatedLiteratureIds,
                 itemCount: updatedLiteratureIds.length
             });
         } catch (error) {
@@ -314,7 +305,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                     if (!operation.targetCollectionId) {
                         throw new Error('Target collection ID required for copy operation');
                     }
-                    await this.addLiterature(operation.targetCollectionId, operation.lids);
+                    await this.addLiterature(operation.targetCollectionId, operation.paperIds);
                     break;
             }
         } catch (error) {
@@ -328,7 +319,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async executeSmartRule(
         collectionId: string,
-        lids: string[]
+        paperIds: string[]
     ): Promise<SmartCollectionResult> {
         try {
             const collection = await this.findById(collectionId);
@@ -341,15 +332,15 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
 
             // 这里需要实现复杂的筛选逻辑
             // 为简化实现，我们先返回基础结果
-            const matchedItems = lids; // 实际需要根据规则筛选
-            const currentItems = new Set(collection.lids);
+            const matchedItems = paperIds; // 实际需要根据规则筛选
+            const currentItems = new Set(collection.paperIds);
 
             const addedItems = matchedItems.filter(id => !currentItems.has(id));
-            const removedItems = collection.lids.filter(id => !matchedItems.includes(id));
+            const removedItems = collection.paperIds.filter(id => !matchedItems.includes(id));
 
             // 更新集合
             await this.update(collectionId, {
-                lids: matchedItems,
+                paperIds: matchedItems,
                 itemCount: matchedItems.length,
                 lastItemAddedAt: addedItems.length > 0 ? DatabaseUtils.now() : collection.lastItemAddedAt
             });
@@ -384,19 +375,13 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             // 这里需要与文献仓储协作获取详细统计
             // 为简化实现，返回基础统计
             const stats: CollectionStats = {
-                totalItems: collection.itemCount,
+                collectionId: collection.id,
+                itemCount: collection.itemCount,
+                lastItemAddedAt: collection.lastItemAddedAt,
                 sourceDistribution: {},
                 yearDistribution: {},
-                authorDistribution: [],
-                tagDistribution: [],
-                additionTrend: [],
-                completionRate: 0,
-                citationStats: {
-                    totalCitations: 0,
-                    averageCitationsPerItem: 0
-                },
-                lastUpdated: DatabaseUtils.now()
-            };
+                calculatedAt: DatabaseUtils.now()
+            } as any;
 
             return stats;
         } catch (error) {
@@ -412,8 +397,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
         try {
             await this.update(collectionId, {
                 isArchived: true,
-                archivedAt: DatabaseUtils.now()
-            });
+            } as any);
         } catch (error) {
             console.error('[CollectionRepository] archiveCollection failed:', error);
             throw new Error('Failed to archive collection');
@@ -427,8 +411,7 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
         try {
             await this.update(collectionId, {
                 isArchived: false,
-                archivedAt: undefined
-            });
+            } as any);
         } catch (error) {
             console.error('[CollectionRepository] restoreCollection failed:', error);
             throw new Error('Failed to restore collection');

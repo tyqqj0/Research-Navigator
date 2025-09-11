@@ -85,7 +85,7 @@ export interface UseLiteratureOperationsReturn {
     createLiterature: (input: Omit<CreateComposedLiteratureInput, 'userId'>) => Promise<EnhancedLibraryItem>;
     updateLiterature: (paperId: string, input: UpdateComposedLiteratureInput) => Promise<EnhancedLibraryItem>;
     deleteLiterature: (paperId: string, options?: { deleteGlobally?: boolean }) => Promise<void>;
-    batchDeleteLiteratures: (lids: string[], options?: { deleteGlobally?: boolean }) => Promise<void>;
+    batchDeleteLiteratures: (paperIds: string[], options?: { deleteGlobally?: boolean }) => Promise<void>;
 
     // 🔄 数据同步 - 🎯 重构后：自动使用当前用户
     loadLiteratures: (options?: { force?: boolean }) => Promise<void>;
@@ -104,7 +104,7 @@ export interface UseLiteratureOperationsReturn {
 
     // 🎯 选择操作
     selectLiterature: (paperId: string) => void;
-    selectMultipleLiteratures: (lids: string[]) => void;
+    selectMultipleLiteratures: (paperIds: string[]) => void;
     deselectLiterature: (paperId: string) => void;
     clearSelection: () => void;
     toggleSelection: (paperId: string) => void;
@@ -115,7 +115,7 @@ export interface UseLiteratureOperationsReturn {
 
     // 📊 数据查询辅助
     getLiterature: (paperId: string) => EnhancedLibraryItem | undefined;
-    getLiteratures: (lids: string[]) => EnhancedLibraryItem[];
+    getLiteratures: (paperIds: string[]) => EnhancedLibraryItem[];
     getFilteredLiteratures: (filter?: Partial<LiteratureFilter>) => EnhancedLibraryItem[];
 }
 
@@ -293,29 +293,29 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         }
     }, [store]);
 
-    const batchDeleteLiteratures = useCallback(async (lids: string[], options: { deleteGlobally?: boolean } = {}) => {
+    const batchDeleteLiteratures = useCallback(async (paperIds: string[], options: { deleteGlobally?: boolean } = {}) => {
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 
         try {
             // 🔐 Service层自动获取用户身份并处理业务逻辑
             await compositionService.deleteComposedLiteratureBatch(
-                lids.map(paperId => ({ paperId, deleteGlobally: options.deleteGlobally }))
+                paperIds.map(paperId => ({ paperId, deleteGlobally: options.deleteGlobally }))
             );
 
             // Store层更新数据
-            store.removeLiteratures(lids);
+            store.removeLiteratures(paperIds);
 
             // 更新UI状态
             setUIState(prev => {
                 const newSelectedIds = new Set(prev.selectedIds);
-                lids.forEach(paperId => newSelectedIds.delete(paperId));
+                paperIds.forEach(paperId => newSelectedIds.delete(paperId));
                 return { ...prev, selectedIds: newSelectedIds, isLoading: false };
             });
 
             // 从搜索结果中移除
             setSearchState(prev => ({
                 ...prev,
-                results: prev.results.filter(item => !lids.includes(item.literature.paperId)),
+                results: prev.results.filter(item => !paperIds.includes(item.literature.paperId)),
             }));
         } catch (error) {
             setUIState(prev => ({
@@ -497,10 +497,10 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         }));
     }, []);
 
-    const selectMultipleLiteratures = useCallback((lids: string[]) => {
+    const selectMultipleLiteratures = useCallback((paperIds: string[]) => {
         setUIState(prev => {
             const newSelectedIds = new Set(prev.selectedIds);
-            lids.forEach(paperId => newSelectedIds.add(paperId));
+            paperIds.forEach(paperId => newSelectedIds.add(paperId));
             return { ...prev, selectedIds: newSelectedIds };
         });
     }, []);
@@ -547,8 +547,8 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
         return store.getLiterature(paperId);
     }, [store]);
 
-    const getLiteratures = useCallback((lids: string[]) => {
-        return store.getLiteratures(lids);
+    const getLiteratures = useCallback((paperIds: string[]) => {
+        return store.getLiteratures(paperIds);
     }, [store]);
 
     const getFilteredLiteratures = useCallback((filter: Partial<LiteratureFilter> = {}) => {

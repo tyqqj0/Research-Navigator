@@ -77,8 +77,8 @@ export const LiteratureListExample: React.FC<LiteratureListExampleProps> = ({ us
         if (selectedLiteratures.length === 0) return;
 
         try {
-            const lids = selectedLiteratures.map(lit => lit.literature.paperId);
-            await Promise.all(lids.map(paperId => deleteLiterature(paperId, userId)));
+            const paperIds = selectedLiteratures.map(lit => lit.literature.paperId);
+            await Promise.all(paperIds.map(paperId => deleteLiterature(paperId, userId)));
             clearSelection();
         } catch (error) {
             console.error('删除失败:', error);

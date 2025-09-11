@@ -199,19 +199,19 @@ export class CitationService {
      * 🔍 获取文献的引文网络
      */
     async getCitationNetwork(
-        lids: string[],
+        paperIds: string[],
         depth: number = 2,
         includeMetrics: boolean = true
     ): Promise<CitationNetworkResult> {
         const startTime = Date.now();
 
         try {
-            const cacheKey = `network_${lids.sort().join(',')}_${depth}`;
+            const cacheKey = `network_${paperIds.sort().join(',')}_${depth}`;
             const cached = this.getCache<CitationNetworkResult>(cacheKey);
             if (cached) return cached;
 
             // 1. 获取网络数据
-            const networkData = await this.buildCitationNetwork(lids, depth);
+            const networkData = await this.buildCitationNetwork(paperIds, depth);
 
             // 2. 计算网络指标（如果需要）
             if (includeMetrics) {
@@ -235,7 +235,7 @@ export class CitationService {
             throw handleError(error, {
                 operation: 'service.getCitationNetwork',
                 layer: 'service',
-                additionalInfo: { lids, depth },
+                additionalInfo: { paperIds, depth },
             });
         }
     }
@@ -428,14 +428,14 @@ export class CitationService {
     // ==================== 私有方法 ====================
 
     private async buildCitationNetwork(
-        lids: string[],
+        paperIds: string[],
         depth: number
     ): Promise<Omit<CitationNetworkResult, 'statistics'>> {
         const nodes = new Map();
         const edges: CitationNetworkResult['edges'] = [];
         const visited = new Set<string>();
         const queue: Array<{ id: string; currentDepth: number }> =
-            lids.map(id => ({ id, currentDepth: 0 }));
+            paperIds.map(id => ({ id, currentDepth: 0 }));
 
         while (queue.length > 0) {
             const { id, currentDepth } = queue.shift()!;
@@ -453,7 +453,7 @@ export class CitationService {
                 title: literature.title,
                 authors: literature.authors,
                 year: literature.year,
-                type: lids.includes(id) ? 'source' : 'intermediate',
+                type: paperIds.includes(id) ? 'source' : 'intermediate',
                 metrics: {
                     inDegree: 0,
                     outDegree: 0,

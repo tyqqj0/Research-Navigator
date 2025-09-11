@@ -292,12 +292,10 @@ export class UserMetaService {
                     urgent: 0,
                 },
                 tagStats: [],
-                categoryStats: [],
             };
 
             // 计算统计信息
             const tagCounts = new Map<string, number>();
-            const categoryCounts = new Map<string, number>();
 
             userMetas.forEach(meta => {
                 // 阅读状态统计
@@ -313,10 +311,7 @@ export class UserMetaService {
                     tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
                 });
 
-                // 分类统计
-                meta.customCategories?.forEach(category => {
-                    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
-                });
+                // 分类统计移除
             });
 
             // 转换为数组格式
@@ -324,9 +319,7 @@ export class UserMetaService {
                 .map(([tag, count]) => ({ tag, count }))
                 .sort((a, b) => b.count - a.count);
 
-            stats.categoryStats = Array.from(categoryCounts.entries())
-                .map(([category, count]) => ({ category, count }))
-                .sort((a, b) => b.count - a.count);
+            // 分类统计移除
 
             return stats;
         } catch (error) {
@@ -336,7 +329,6 @@ export class UserMetaService {
                 readingStats: { unread: 0, reading: 0, completed: 0, referenced: 0, abandoned: 0 },
                 priorityStats: { low: 0, medium: 0, high: 0, urgent: 0 },
                 tagStats: [],
-                categoryStats: [],
             };
         }
     }

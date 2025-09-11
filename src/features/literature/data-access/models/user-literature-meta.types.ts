@@ -42,15 +42,6 @@ export const UserLiteratureMetaSchema = z.object({
         'urgent'       // 紧急
     ]).optional(),
 
-    // 🔗 会话关联 - 保留旧版功能
-    associatedSessions: z.array(z.string()).default([]),
-
-    // 🏛️ 项目关联
-    associatedProjects: z.array(z.string()).default([]),
-
-    // 📂 自定义分类
-    customCategories: z.array(z.string()).default([]),
-
     // 🔧 自定义字段 - 灵活扩展
     customFields: z.record(z.string(), z.any()).default({}),
 
@@ -100,10 +91,6 @@ export type UserLiteratureStats = {
         tag: string;
         count: number;
     }>;
-    categoryStats: Array<{
-        category: string;
-        count: number;
-    }>;
 };
 
 // 🔍 用户元数据筛选类型
@@ -115,8 +102,5 @@ export type UserMetaFilter = {
         min?: number;
         max?: number;
     };
-    associatedSessions?: string[];
-    associatedProjects?: string[];
-    customCategories?: string[];
     hasPersonalNotes?: boolean;
 };

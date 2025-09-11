@@ -299,9 +299,9 @@ export class AnalyticsService {
             let literatures: LibraryItem[];
             if (userId) {
                 const userMetas = await this.userMetaRepo.findByUserId(userId);
-                const lids = userMetas.map(meta => meta.paperId);
+                const paperIds = userMetas.map(meta => meta.paperId);
                 literatures = await Promise.all(
-                    lids.map(id => this.literatureRepo.findByLid(id))
+                    paperIds.map(id => this.literatureRepo.findByLid(id))
                 ).then(items => items.filter(item => item !== null) as LibraryItem[]);
             } else {
                 // 获取所有文献（需要实现分页或限制）
@@ -364,18 +364,18 @@ export class AnalyticsService {
      * 🕸️ 获取引文网络分析
      */
     async getCitationNetworkAnalytics(
-        lids?: string[],
+        paperIds?: string[],
         userId?: string
     ): Promise<CitationNetworkAnalytics> {
         const startTime = Date.now();
 
         try {
-            const cacheKey = `citation_network_${lids?.join(',') || 'all'}_${userId || 'system'}`;
+            const cacheKey = `citation_network_${paperIds?.join(',') || 'all'}_${userId || 'system'}`;
             const cached = this.getCache<CitationNetworkAnalytics>(cacheKey);
             if (cached) return cached;
 
             // 1. 获取引文数据
-            const citationData = await this.gatherCitationData(lids, userId);
+            const citationData = await this.gatherCitationData(paperIds, userId);
 
             // 2. 计算网络概览
             const overview = this.calculateNetworkOverview(citationData);
@@ -779,7 +779,7 @@ export class AnalyticsService {
         };
     }
 
-    private async gatherCitationData(lids?: string[], userId?: string) {
+    private async gatherCitationData(paperIds?: string[], userId?: string) {
         // 简化实现
         return {};
     }

@@ -51,8 +51,8 @@ export interface CollectionStoreActions {
     // 📚 集合内容管理 - 原子操作
     addLiteratureToCollection: (collectionId: string, literatureId: string) => void;
     removeLiteratureFromCollection: (collectionId: string, literatureId: string) => void;
-    addLiteraturesToCollection: (collectionId: string, lids: string[]) => void;
-    removeLiteraturesFromCollection: (collectionId: string, lids: string[]) => void;
+    addLiteraturesToCollection: (collectionId: string, paperIds: string[]) => void;
+    removeLiteraturesFromCollection: (collectionId: string, paperIds: string[]) => void;
 
     // 📊 数据查询 - 简单的选择器
     getCollection: (id: string) => Collection | undefined;
@@ -144,8 +144,8 @@ export const useCollectionStore = create<CollectionStoreState & CollectionStoreA
                 addLiteratureToCollection: (collectionId, literatureId) => {
                     set((state) => {
                         const collection = state.collections[collectionId];
-                        if (collection && !collection.lids.includes(literatureId)) {
-                            collection.lids.push(literatureId);
+                        if (collection && !collection.paperIds.includes(literatureId)) {
+                            collection.paperIds.push(literatureId);
                             collection.updatedAt = new Date();
                         }
                     });
@@ -155,22 +155,22 @@ export const useCollectionStore = create<CollectionStoreState & CollectionStoreA
                     set((state) => {
                         const collection = state.collections[collectionId];
                         if (collection) {
-                            const index = collection.lids.indexOf(literatureId);
+                            const index = collection.paperIds.indexOf(literatureId);
                             if (index !== -1) {
-                                collection.lids.splice(index, 1);
+                                collection.paperIds.splice(index, 1);
                                 collection.updatedAt = new Date();
                             }
                         }
                     });
                 },
 
-                addLiteraturesToCollection: (collectionId, lids) => {
+                addLiteraturesToCollection: (collectionId, paperIds) => {
                     set((state) => {
                         const collection = state.collections[collectionId];
                         if (collection) {
-                            lids.forEach(literatureId => {
-                                if (!collection.lids.includes(literatureId)) {
-                                    collection.lids.push(literatureId);
+                            paperIds.forEach(literatureId => {
+                                if (!collection.paperIds.includes(literatureId)) {
+                                    collection.paperIds.push(literatureId);
                                 }
                             });
                             collection.updatedAt = new Date();
@@ -178,12 +178,12 @@ export const useCollectionStore = create<CollectionStoreState & CollectionStoreA
                     });
                 },
 
-                removeLiteraturesFromCollection: (collectionId, lids) => {
+                removeLiteraturesFromCollection: (collectionId, paperIds) => {
                     set((state) => {
                         const collection = state.collections[collectionId];
                         if (collection) {
-                            collection.lids = collection.lids.filter(
-                                (paperId: string) => !lids.includes(paperId)
+                            collection.paperIds = collection.paperIds.filter(
+                                (paperId: string) => !paperIds.includes(paperId)
                             );
                             collection.updatedAt = new Date();
                         }

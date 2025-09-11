@@ -129,19 +129,19 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
     /**
      * 🔍 批量根据文献ID查找
      */
-    async findByLids(lids: string[]): Promise<LibraryItem[]> {
-        if (!lids || lids.length === 0) {
+    async findByPaperIds(paperIds: string[]): Promise<LibraryItem[]> {
+        if (!paperIds || paperIds.length === 0) {
             return [];
         }
 
         // 过滤掉空的lid
-        const validLids = lids.filter(paperId => paperId && paperId.trim());
-        if (validLids.length === 0) {
+        const validPaperIds = paperIds.filter(paperId => paperId && paperId.trim());
+        if (validPaperIds.length === 0) {
             return [];
         }
 
         try {
-            const items = await this.table.where('paperId').anyOf(validLids).toArray();
+            const items = await this.table.where('paperId').anyOf(validPaperIds).toArray();
             return items || [];
         } catch (error) {
             const appError = new AppError(
@@ -149,9 +149,9 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
                 ErrorType.DATABASE_ERROR,
                 ErrorSeverity.HIGH,
                 {
-                    operation: 'repository.findByLids',
+                    operation: 'repository.findByPaperIds',
                     layer: 'repository',
-                    additionalInfo: { lids: validLids, originalError: error }
+                    additionalInfo: { paperIds: validPaperIds, originalError: error }
                 }
             );
             handleError(appError);

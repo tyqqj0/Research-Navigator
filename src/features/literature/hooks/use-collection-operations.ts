@@ -93,8 +93,8 @@ export interface UseCollectionOperationsReturn {
     // 📚 集合内容管理
     addLiteratureToCollection: (collectionId: string, literatureId: string) => Promise<void>;
     removeLiteratureFromCollection: (collectionId: string, literatureId: string) => Promise<void>;
-    addLiteraturesToCollection: (collectionId: string, lids: string[]) => Promise<void>;
-    removeLiteraturesFromCollection: (collectionId: string, lids: string[]) => Promise<void>;
+    addLiteraturesToCollection: (collectionId: string, paperIds: string[]) => Promise<void>;
+    removeLiteraturesFromCollection: (collectionId: string, paperIds: string[]) => Promise<void>;
 
     // 🔄 数据同步
     loadCollections: (userId: string, options?: { force?: boolean }) => Promise<void>;
@@ -348,13 +348,13 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }
     }, [collectionStore]);
 
-    const addLiteraturesToCollection = useCallback(async (collectionId: string, lids: string[]) => {
+    const addLiteraturesToCollection = useCallback(async (collectionId: string, paperIds: string[]) => {
         try {
             // Service层处理业务逻辑（Service层自动获取用户身份）
-            await collectionService.addItemsToCollection(collectionId, lids);
+            await collectionService.addItemsToCollection(collectionId, paperIds);
 
             // Store层更新数据
-            collectionStore.addLiteraturesToCollection(collectionId, lids);
+            collectionStore.addLiteraturesToCollection(collectionId, paperIds);
         } catch (error) {
             setUIState(prev => ({
                 ...prev,
@@ -364,13 +364,13 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }
     }, [collectionStore]);
 
-    const removeLiteraturesFromCollection = useCallback(async (collectionId: string, lids: string[]) => {
+    const removeLiteraturesFromCollection = useCallback(async (collectionId: string, paperIds: string[]) => {
         try {
             // Service层处理业务逻辑（Service层自动获取用户身份）
-            await collectionService.removeItemsFromCollection(collectionId, lids);
+            await collectionService.removeItemsFromCollection(collectionId, paperIds);
 
             // Store层更新数据
-            collectionStore.removeLiteraturesFromCollection(collectionId, lids);
+            collectionStore.removeLiteraturesFromCollection(collectionId, paperIds);
         } catch (error) {
             setUIState(prev => ({
                 ...prev,
@@ -652,7 +652,7 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         const collection = collectionStore.getCollection(id);
         if (!collection) return null;
 
-        const literatures = literatureStore.getLiteratures(collection.lids);
+        const literatures = literatureStore.getLiteratures(collection.paperIds);
         return { collection, literatures };
     }, [collectionStore, literatureStore]);
 
@@ -670,7 +670,7 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
             }
 
             if (filter.hasItems !== undefined) {
-                const hasItems = collection.lids.length > 0;
+                const hasItems = collection.paperIds.length > 0;
                 if (hasItems !== filter.hasItems) {
                     return false;
                 }

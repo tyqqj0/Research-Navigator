@@ -171,9 +171,6 @@ export class literatureDatabase extends Dexie {
                 rating,
                 readingProgress,
                 lastAccessedAt,
-                *associatedSessions,
-                *associatedProjects,
-                *customCategories,
                 createdAt,
                 updatedAt,
                 [userId+priority],
@@ -337,9 +334,7 @@ export class literatureDatabase extends Dexie {
                 (obj as UserLiteratureMeta).tags = obj.tags || [];
                 (obj as UserLiteratureMeta).priority = obj.priority || 'medium';
                 (obj as UserLiteratureMeta).readingStatus = obj.readingStatus || 'unread';
-                (obj as UserLiteratureMeta).associatedSessions = obj.associatedSessions || [];
-                (obj as UserLiteratureMeta).associatedProjects = obj.associatedProjects || [];
-                (obj as UserLiteratureMeta).customCategories = obj.customCategories || [];
+                // removed deprecated association fields
             } else {
                 obj.updatedAt = now;
 
@@ -423,14 +418,14 @@ export class literatureDatabase extends Dexie {
                 (obj as Collection).updatedAt = now;
                 (obj as Collection).type = obj.type || 'general';
                 (obj as Collection).isPublic = obj.isPublic || false;
-                (obj as Collection).lids = obj.lids || [];
+                (obj as Collection).paperIds = obj.paperIds || [];
             } else {
                 obj.updatedAt = now;
 
-                // 如果更新了lids，记录变化
-                if (obj.lids) {
-                    // 集合项数量由lids数组长度决定
-                    console.log(`Collection ${existingObj?.id || 'unknown'} updated with ${obj.lids.length} items`);
+                // 如果更新了paperIds，记录变化
+                if (obj.paperIds) {
+                    // 集合项数量由paperIds数组长度决定
+                    console.log(`Collection ${existingObj?.id || 'unknown'} updated with ${obj.paperIds.length} items`);
                 }
             }
 

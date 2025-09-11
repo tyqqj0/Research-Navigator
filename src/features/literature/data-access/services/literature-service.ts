@@ -315,7 +315,7 @@ export class LiteratureService {
      * 🗑️ 批量删除文献
      */
     async bulkDeleteLiterature(
-        lids: string[],
+        paperIds: string[],
         options: LiteratureDeleteOptions = {}
     ): Promise<{ success: boolean; deletedCount: number }> {
         const startTime = Date.now();
@@ -324,7 +324,7 @@ export class LiteratureService {
             let deletedCount = 0;
 
             // 批量删除文献
-            for (const paperId of lids) {
+            for (const paperId of paperIds) {
                 try {
                     await this.deleteLiterature(paperId, options);
                     deletedCount++;
@@ -341,7 +341,7 @@ export class LiteratureService {
             throw ErrorHandler.handle(error, {
                 operation: 'service.bulkDeleteLiterature',
                 layer: 'service',
-                additionalInfo: { lids, options },
+                additionalInfo: { paperIds, options },
             });
         }
     }

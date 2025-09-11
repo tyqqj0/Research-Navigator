@@ -6,40 +6,18 @@
  * 设计: API-First + 缓存优化 + 错误处理
  */
 
-import { LibraryItem, ExtendedLibraryItem, BackendTask, LiteratureStatus } from '../models';
+import { LibraryItem, ExtendedLibraryItem } from '../models';
 
-/**
- * 📥 文献输入类型
- */
-export interface LiteratureInput {
-    url?: string;
-    doi?: string;
-    pdfFile?: File;
-    title?: string;
-    authors?: string[];
-    metadata?: Record<string, any>;
-}
-
-/**
- * 📊 批量处理结果
- */
-export interface BatchProcessResult {
-    taskId: string;
-    totalItems: number;
-    processedItems: number;
-    lids: string[];
-    status: 'pending' | 'processing' | 'completed' | 'failed';
-    progress: number;
-}
+// ⛳ 已移除旧的解析与批处理类型与方法，切换到 S2 风格 /api/v1/paper 接口
 
 /**
  * 🔗 引用关系结果
  */
 export interface CitationNetworkResult {
-    lids: string[];
+    paperIds: string[];
     citations: Array<{
-        sourceLid: string;
-        targetLid: string;
+        sourcePaperId: string;
+        targetPaperId: string;
         citationType: string;
         confidence: number;
     }>;
@@ -73,145 +51,22 @@ export class BackendApiService {
         this.apiKey = config.apiKey;
     }
 
-    // ==================== 文献处理 API ====================
+    // ==================== 健康检查 ====================
 
-    /**
-     * 📝 单个文献查重和获取LID
-     */
-    async resolveLiterature(input: LiteratureInput): Promise<{
-        paperId: string;
-        isNew: boolean;
-        literature: LibraryItem;
-        taskId?: string;
-    }> {
-        try {
-            console.log('[BackendAPI] Resolving single literature:', input);
+    async health(): Promise<any> {
+        return await this.apiRequest('GET', `/api/v1/health`);
+    }
 
-            const response = await this.apiRequest('POST', '/api/literature/resolve', {
-                url: input.url,
-                doi: input.doi,
-                title: input.title,
-                authors: input.authors,
-                metadata: input.metadata
-            });
-
-            return {
-                paperId: response.paperId,
-                isNew: response.isNew,
-                literature: this.mapBackendToFrontend(response.literature),
-                taskId: response.taskId
-            };
-        } catch (error) {
-            console.error('[BackendAPI] Failed to resolve literature:', error);
-            throw new Error('Failed to resolve literature');
-        }
+    async healthDetailed(): Promise<any> {
+        return await this.apiRequest('GET', `/api/v1/health/detailed`);
     }
 
     /**
-     * 📦 批量文献处理
+     * 📚 获取论文详情
      */
-    async batchProcessLiterature(
-        inputs: LiteratureInput[],
-        progressCallback?: (progress: BatchProcessResult) => void
-    ): Promise<BatchProcessResult> {
+    async getPaper(paperId: string): Promise<LibraryItem> {
         try {
-            console.log(`[BackendAPI] Starting batch process for ${inputs.length} items`);
-
-            // 启动批量任务
-            const response = await this.apiRequest('POST', '/api/literature/batch', {
-                items: inputs.map(input => ({
-                    url: input.url,
-                    doi: input.doi,
-                    title: input.title,
-                    authors: input.authors,
-                    metadata: input.metadata
-                }))
-            });
-
-            const taskId = response.taskId;
-            let result: BatchProcessResult = {
-                taskId,
-                totalItems: inputs.length,
-                processedItems: 0,
-                lids: [],
-                status: 'pending',
-                progress: 0
-            };
-
-            // 轮询任务状态
-            const pollInterval = setInterval(async () => {
-                try {
-                    const status = await this.getBatchTaskStatus(taskId);
-                    result = {
-                        ...result,
-                        processedItems: status.processedItems,
-                        lids: status.lids,
-                        status: status.status,
-                        progress: status.progress
-                    };
-
-                    if (progressCallback) {
-                        progressCallback(result);
-                    }
-
-                    if (status.status === 'completed' || status.status === 'failed') {
-                        clearInterval(pollInterval);
-                    }
-                } catch (error) {
-                    console.error('[BackendAPI] Polling error:', error);
-                    clearInterval(pollInterval);
-                }
-            }, 2000); // 每2秒轮询一次
-
-            return result;
-        } catch (error) {
-            console.error('[BackendAPI] Batch process failed:', error);
-            throw new Error('Failed to start batch process');
-        }
-    }
-
-    /**
-     * 📊 获取批量任务状态
-     */
-    async getBatchTaskStatus(taskId: string): Promise<{
-        taskId: string;
-        status: 'pending' | 'processing' | 'completed' | 'failed';
-        progress: number;
-        processedItems: number;
-        totalItems: number;
-        lids: string[];
-        errors?: string[];
-    }> {
-        try {
-            const cacheKey = `task_status_${taskId}`;
-
-            // 检查缓存（避免频繁请求）
-            const cached = this.cache.get(cacheKey);
-            if (cached && Date.now() - cached.timestamp < 1000) { // 1秒缓存
-                return cached.data;
-            }
-
-            const response = await this.apiRequest('GET', `/api/literature/batch/${taskId}/status`);
-
-            // 更新缓存
-            this.cache.set(cacheKey, {
-                data: response,
-                timestamp: Date.now()
-            });
-
-            return response;
-        } catch (error) {
-            console.error('[BackendAPI] Failed to get task status:', error);
-            throw new Error('Failed to get batch task status');
-        }
-    }
-
-    /**
-     * 📚 获取文献详细信息
-     */
-    async getLiterature(paperId: string): Promise<LibraryItem> {
-        try {
-            const cacheKey = `literature_${paperId}`;
+            const cacheKey = `paper_${paperId}`;
 
             // 检查缓存
             const cached = this.cache.get(cacheKey);
@@ -219,8 +74,8 @@ export class BackendApiService {
                 return cached.data;
             }
 
-            console.log('[BackendAPI] Fetching literature:', paperId);
-            const response = await this.apiRequest('GET', `/api/literature/${paperId}`);
+            console.log('[BackendAPI] Fetching paper:', paperId);
+            const response = await this.apiRequest('GET', `/api/v1/paper/${paperId}`);
             const literature = this.mapBackendToFrontend(response);
 
             // 更新缓存
@@ -231,24 +86,24 @@ export class BackendApiService {
 
             return literature;
         } catch (error) {
-            console.error('[BackendAPI] Failed to get literature:', error);
-            throw new Error('Failed to get literature');
+            console.error('[BackendAPI] Failed to get paper:', error);
+            throw new Error('Failed to get paper');
         }
     }
 
     /**
-     * 📦 批量获取文献信息
+     * 📦 批量获取论文
      */
-    async getBatchLiterature(lids: string[]): Promise<LibraryItem[]> {
+    async getPapersBatch(paperIds: string[]): Promise<LibraryItem[]> {
         try {
-            console.log(`[BackendAPI] Fetching ${lids.length} literature items`);
+            console.log(`[BackendAPI] Fetching ${paperIds.length} papers`);
 
             // 检查缓存中已有的文献
             const cached: LibraryItem[] = [];
             const needFetch: string[] = [];
 
-            lids.forEach(paperId => {
-                const cacheKey = `literature_${paperId}`;
+            paperIds.forEach(paperId => {
+                const cacheKey = `paper_${paperId}`;
                 const cachedItem = this.cache.get(cacheKey);
                 if (cachedItem && Date.now() - cachedItem.timestamp < 300000) {
                     cached.push(cachedItem.data);
@@ -260,15 +115,16 @@ export class BackendApiService {
             // 批量获取未缓存的文献
             let fetched: LibraryItem[] = [];
             if (needFetch.length > 0) {
-                const response = await this.apiRequest('POST', '/api/literature/batch/get', {
-                    lids: needFetch
+                const response = await this.apiRequest('POST', '/api/v1/paper/batch', {
+                    paper_ids: needFetch
                 });
 
-                fetched = response.literature.map((item: any) => this.mapBackendToFrontend(item));
+                const items = Array.isArray(response) ? response : (response.papers || response.items || []);
+                fetched = items.map((item: any) => this.mapBackendToFrontend(item));
 
                 // 更新缓存
                 fetched.forEach(item => {
-                    const cacheKey = `literature_${item.paperId}`;
+                    const cacheKey = `paper_${item.paperId}`;
                     this.cache.set(cacheKey, {
                         data: item,
                         timestamp: Date.now()
@@ -277,126 +133,136 @@ export class BackendApiService {
             }
 
             // 合并缓存和新获取的数据，按原顺序返回
-            const result = lids.map(paperId => {
+            const result = paperIds.map(paperId => {
                 return cached.find(item => item.paperId === paperId) ||
                     fetched.find(item => item.paperId === paperId);
             }).filter(Boolean) as LibraryItem[];
 
             return result;
         } catch (error) {
-            console.error('[BackendAPI] Failed to get batch literature:', error);
-            throw new Error('Failed to get batch literature');
+            console.error('[BackendAPI] Failed to get batch papers:', error);
+            throw new Error('Failed to get batch papers');
         }
     }
 
     // ==================== 引用关系 API ====================
 
     /**
-     * 🔗 获取文献引用网络
+     * 🔗 获取单个论文的引用（incoming）
      */
-    async getCitationNetwork(lids: string[]): Promise<CitationNetworkResult> {
+    async getPaperCitations(paperId: string): Promise<Array<{ sourcePaperId: string; citationType?: string; confidence?: number }>> {
         try {
-            console.log(`[BackendAPI] Getting citation network for ${lids.length} items`);
-
-            const cacheKey = `citations_${lids.sort().join(',')}`; // 排序确保一致性
-
-            // 检查缓存
+            const cacheKey = `citations_in_${paperId}`;
             const cached = this.cache.get(cacheKey);
-            if (cached && Date.now() - cached.timestamp < 600000) { // 10分钟缓存
+            if (cached && Date.now() - cached.timestamp < 300000) {
                 return cached.data;
             }
 
-            const response = await this.apiRequest('POST', '/api/literature/citations', {
-                lids
-            });
+            const response = await this.apiRequest('GET', `/api/v1/paper/${paperId}/citations`);
+            const arr = (response.citations || response.items || response || []) as any[];
+            const result = arr.map((c: any) => ({
+                sourcePaperId: c.paperId || c.paper_id || c.sourcePaperId || c.source_paper_id || c.sourceId || c.source_id,
+                citationType: c.type || c.citationType,
+                confidence: c.confidence || c.score || 1
+            })).filter(x => !!x.sourcePaperId);
 
-            const result: CitationNetworkResult = {
-                lids: response.lids,
-                citations: response.citations.map((citation: any) => ({
-                    sourceLid: citation.source_lid,
-                    targetLid: citation.target_lid,
-                    citationType: citation.type,
-                    confidence: citation.confidence
-                })),
-                metadata: {
-                    totalNodes: response.metadata.total_nodes,
-                    totalEdges: response.metadata.total_edges,
-                    analysisTime: response.metadata.analysis_time_ms
-                }
-            };
-
-            // 更新缓存
-            this.cache.set(cacheKey, {
-                data: result,
-                timestamp: Date.now()
-            });
-
+            this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
             return result;
         } catch (error) {
-            console.error('[BackendAPI] Failed to get citation network:', error);
-            throw new Error('Failed to get citation network');
+            console.error('[BackendAPI] Failed to get citations:', error);
+            throw new Error('Failed to get citations');
         }
     }
 
     /**
-     * 🔗 获取单个文献的引用关系
+     * 🔗 获取单个论文的参考文献（outgoing）
      */
-    async getLiteratureCitations(paperId: string): Promise<{
-        incoming: Array<{ sourceLid: string; citationType: string; confidence: number }>;
-        outgoing: Array<{ targetLid: string; citationType: string; confidence: number }>;
-        total: number;
-    }> {
+    async getPaperReferences(paperId: string): Promise<Array<{ targetPaperId: string; citationType?: string; confidence?: number }>> {
         try {
-            const cacheKey = `single_citations_${paperId}`;
-
-            // 检查缓存
+            const cacheKey = `references_out_${paperId}`;
             const cached = this.cache.get(cacheKey);
-            if (cached && Date.now() - cached.timestamp < 300000) { // 5分钟缓存
+            if (cached && Date.now() - cached.timestamp < 300000) {
                 return cached.data;
             }
 
-            console.log('[BackendAPI] Getting citations for literature:', paperId);
-            const response = await this.apiRequest('GET', `/api/literature/${paperId}/citations`);
+            const response = await this.apiRequest('GET', `/api/v1/paper/${paperId}/references`);
+            const arr = (response.references || response.items || response || []) as any[];
+            const result = arr.map((c: any) => ({
+                targetPaperId: c.paperId || c.paper_id || c.targetPaperId || c.target_paper_id || c.targetId || c.target_id,
+                citationType: c.type || c.citationType,
+                confidence: c.confidence || c.score || 1
+            })).filter(x => !!x.targetPaperId);
 
-            const result = {
-                incoming: response.incoming.map((citation: any) => ({
-                    sourceLid: citation.source_lid,
-                    citationType: citation.type,
-                    confidence: citation.confidence
-                })),
-                outgoing: response.outgoing.map((citation: any) => ({
-                    targetLid: citation.target_lid,
-                    citationType: citation.type,
-                    confidence: citation.confidence
-                })),
-                total: response.total
-            };
-
-            // 更新缓存
-            this.cache.set(cacheKey, {
-                data: result,
-                timestamp: Date.now()
-            });
-
+            this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
             return result;
         } catch (error) {
-            console.error('[BackendAPI] Failed to get literature citations:', error);
-            throw new Error('Failed to get literature citations');
+            console.error('[BackendAPI] Failed to get references:', error);
+            throw new Error('Failed to get references');
         }
     }
 
-    // ==================== 搜索和推荐 API ====================
+    /**
+     * 🔗 构建引用网络（基于 citations + references 本地拼装）
+     */
+    async getCitationNetwork(paperIds: string[]): Promise<CitationNetworkResult> {
+        const start = Date.now();
+        const edges: Array<{ sourcePaperId: string; targetPaperId: string; citationType: string; confidence: number }> = [];
+        const seen = new Set<string>();
+
+        for (const id of paperIds) {
+            const [incoming, outgoing] = await Promise.all([
+                this.getPaperCitations(id),
+                this.getPaperReferences(id)
+            ]);
+
+            incoming.forEach(c => {
+                if (!c.sourcePaperId) return;
+                const key = `${c.sourcePaperId}->${id}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                edges.push({
+                    sourcePaperId: c.sourcePaperId,
+                    targetPaperId: id,
+                    citationType: c.citationType || 'citation',
+                    confidence: c.confidence || 1
+                });
+            });
+
+            outgoing.forEach(r => {
+                if (!r.targetPaperId) return;
+                const key = `${id}->${r.targetPaperId}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                edges.push({
+                    sourcePaperId: id,
+                    targetPaperId: r.targetPaperId,
+                    citationType: r.citationType || 'reference',
+                    confidence: r.confidence || 1
+                });
+            });
+        }
+
+        return {
+            paperIds,
+            citations: edges,
+            metadata: {
+                totalNodes: paperIds.length,
+                totalEdges: edges.length,
+                analysisTime: Date.now() - start
+            }
+        };
+    }
+
+    // ==================== 搜索 API ====================
 
     /**
-     * 🔍 搜索文献
+     * 🔍 搜索论文（S2风格）
      */
-    async searchLiterature(query: {
-        text?: string;
-        authors?: string[];
-        yearRange?: { start: number; end: number };
-        topics?: string[];
-        limit?: number;
+    async searchPapers(query: {
+        query: string;
         offset?: number;
+        limit?: number;
+        fields?: string[];
     }): Promise<{
         results: LibraryItem[];
         total: number;
@@ -404,59 +270,50 @@ export class BackendApiService {
         searchTime: number;
     }> {
         try {
-            console.log('[BackendAPI] Searching literature:', query);
+            console.log('[BackendAPI] Searching papers:', query);
 
-            const response = await this.apiRequest('POST', '/api/literature/search', query);
+            const params = new URLSearchParams();
+            if (query.query) params.set('query', query.query);
+            if (typeof query.offset === 'number') params.set('offset', String(query.offset));
+            if (typeof query.limit === 'number') params.set('limit', String(query.limit));
+            if (query.fields && query.fields.length > 0) params.set('fields', query.fields.join(','));
+
+            const response = await this.apiRequest('GET', `/api/v1/paper/search?${params.toString()}`);
 
             return {
-                results: response.results.map((item: any) => this.mapBackendToFrontend(item)),
-                total: response.total,
-                query: response.query,
-                searchTime: response.search_time_ms
+                results: (response.data || response.results || []).map((item: any) => this.mapBackendToFrontend(item)),
+                total: response.total || response.total_results || (response.data ? response.data.length : 0),
+                query: response.query || { query: query.query },
+                searchTime: response.search_time_ms || response.searchTime || 0
             };
         } catch (error) {
-            console.error('[BackendAPI] Literature search failed:', error);
-            throw new Error('Failed to search literature');
+            console.error('[BackendAPI] Paper search failed:', error);
+            throw new Error('Failed to search papers');
         }
     }
 
-    /**
-     * 🎯 获取推荐文献
-     */
-    async getRecommendations(
-        userId: string,
-        baseLids?: string[],
-        limit: number = 10
-    ): Promise<{
-        recommendations: Array<{
-            paperId: string;
-            score: number;
-            reason: string;
-            literature: LibraryItem;
-        }>;
-        generatedAt: Date;
-    }> {
+    // ==================== 缓存 API ====================
+
+    async clearPaperCache(paperId: string): Promise<{ success: boolean }> {
         try {
-            console.log('[BackendAPI] Getting recommendations for user:', userId);
-
-            const response = await this.apiRequest('POST', '/api/literature/recommendations', {
-                user_id: userId,
-                base_lids: baseLids,
-                limit
-            });
-
-            return {
-                recommendations: response.recommendations.map((rec: any) => ({
-                    paperId: rec.paperId,
-                    score: rec.score,
-                    reason: rec.reason,
-                    literature: this.mapBackendToFrontend(rec.literature)
-                })),
-                generatedAt: new Date(response.generated_at)
-            };
+            await this.apiRequest('DELETE', `/api/v1/paper/${paperId}/cache`);
+            this.cache.delete(`paper_${paperId}`);
+            this.cache.delete(`citations_in_${paperId}`);
+            this.cache.delete(`references_out_${paperId}`);
+            return { success: true };
         } catch (error) {
-            console.error('[BackendAPI] Failed to get recommendations:', error);
-            throw new Error('Failed to get recommendations');
+            console.error('[BackendAPI] Failed to clear cache:', error);
+            return { success: false };
+        }
+    }
+
+    async warmPaperCache(paperId: string): Promise<{ success: boolean }> {
+        try {
+            await this.apiRequest('POST', `/api/v1/paper/${paperId}/cache/warm`);
+            return { success: true };
+        } catch (error) {
+            console.error('[BackendAPI] Failed to warm cache:', error);
+            return { success: false };
         }
     }
 
@@ -502,25 +359,36 @@ export class BackendApiService {
     }
 
     /**
-     * 🔄 后端数据到前端数据的映射
+     * 🔄 后端数据到前端数据的映射（兼容 S2 字段）
      */
     private mapBackendToFrontend(backendData: any): ExtendedLibraryItem {
+        const authorsArr = Array.isArray(backendData.authors)
+            ? backendData.authors.map((a: any) => a?.name || a).filter(Boolean)
+            : [];
+
+        const publication = backendData.publication || backendData.venue || backendData.publicationVenue?.name || null;
+        const doi = backendData.doi || backendData.externalIds?.DOI || backendData.externalIds?.ArXiv || null;
+        const url = backendData.url || backendData.s2Url || backendData.openAccessPdf?.url || null;
+        const pdfPath = backendData.openAccessPdf?.url || backendData.pdf_url || backendData.pdf_path || null;
+        const createdAt = backendData.created_at || backendData.createdAt || Date.now();
+        const updatedAt = backendData.updated_at || backendData.updatedAt || createdAt;
+
         return {
-            paperId: backendData.paperId, // 使用后端的LID
+            paperId: backendData.paperId || backendData.paper_id || backendData.id,
             title: backendData.title,
-            authors: backendData.authors || [],
+            authors: authorsArr,
             year: backendData.year,
-            source: backendData.source || 'manual',
-            publication: backendData.publication,
+            source: backendData.source || 'search',
+            publication,
             abstract: backendData.abstract,
             summary: backendData.summary,
-            doi: backendData.doi,
-            url: backendData.url,
-            pdfPath: backendData.pdf_path,
-            parsedContent: backendData.parsed_content,
-            backendTask: backendData.backend_task,
-            createdAt: new Date(backendData.created_at),
-            updatedAt: new Date(backendData.updated_at || backendData.created_at)
+            doi,
+            url,
+            pdfPath,
+            parsedContent: backendData.parsed_content || undefined,
+            backendTask: backendData.backend_task || undefined,
+            createdAt: new Date(createdAt),
+            updatedAt: new Date(updatedAt)
         };
     }
 

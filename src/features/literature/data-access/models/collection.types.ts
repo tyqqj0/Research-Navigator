@@ -95,7 +95,9 @@ export const CollectionSchema = z.object({
     isPublic: z.boolean().default(false),
 
     // 📚 文献关联 - 核心关系数据
-    lids: z.array(z.string()).default([]),
+    paperIds: z.array(z.string()).default([]),
+    itemCount: z.number().default(0),
+    lastItemAddedAt: z.date().optional(),
 
     // 🤖 智能规则 (仅SMART类型使用)
     smartRule: SmartCollectionRuleSchema.optional(),
@@ -271,7 +273,7 @@ export type CollectionSort = {
 // 🔄 集合操作类型
 export type CollectionOperation = {
     type: 'add_literature' | 'remove_literature' | 'move_literature' | 'copy_literature';
-    lids: string[];
+    paperIds: string[];
     targetCollectionId?: string; // 用于move/copy操作
 };
 

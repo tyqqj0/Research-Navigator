@@ -30,26 +30,16 @@ import type {
 ```typescript
 import { literatureEntry } from '@/features/literature/data-access';
 
-// 通过DOI添加
-const item = await literatureEntry.addByDOI('10.1000/example', {
+// 统一标识添加（支持 S2/DOI/URL/CorpusId/...）
+// 无前缀时默认按 S2 解析；裸 DOI/URL 会自动识别
+const item = await literatureEntry.addByIdentifier('10.1000/example', {
   autoExtractCitations: true,
   tags: ['research']
 });
 
-// 通过URL添加
-const item = await literatureEntry.addByURL('https://arxiv.org/abs/2301.00001');
-
-// 手动添加
-const item = await literatureEntry.addByMetadata({
-  title: 'Research Paper',
-  authors: ['John Doe'],
-  year: 2023
-});
-
 // 批量导入
 const result = await literatureEntry.batchImport([
-  { type: 'doi', data: '10.1000/example' },
-  { type: 'metadata', data: metadata }
+  { type: 'identifier', data: '10.1000/example' }
 ]);
 ```
 

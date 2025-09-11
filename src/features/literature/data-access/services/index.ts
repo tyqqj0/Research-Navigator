@@ -86,8 +86,6 @@ export {
 export {
   backendApiService,
   BackendApiService,
-  type LiteratureInput,
-  type BatchProcessResult,
   type CitationNetworkResult as BackendCitationNetworkResult,
 } from './backend-api-service';
 
@@ -327,9 +325,9 @@ export const quickLiteratureActions = {
   // },
 
   // 🕸️ 获取引文网络
-  async getCitationNetwork(lids: string[], depth: number = 2) {
+  async getCitationNetwork(paperIds: string[], depth: number = 2) {
     return await literatureDomainServices.citation.getCitationNetwork(
-      lids,
+      paperIds,
       depth,
       true
     );
@@ -348,7 +346,9 @@ export const quickLiteratureActions = {
       description: options?.description || '',
       ownerUid: userId,
       isPublic: false,
-      lids: [],
+      paperIds: [],
+      itemCount: 0,
+      lastItemAddedAt: undefined,
       isArchived: false,
       // rules: options?.rules,
     });

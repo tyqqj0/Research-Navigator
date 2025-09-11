@@ -122,15 +122,6 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                 });
             }
 
-            // 🔗 会话关联筛选
-            if (filter.associatedSessions && filter.associatedSessions.length > 0) {
-                query = query.filter(meta =>
-                    filter.associatedSessions!.some(session =>
-                        meta.associatedSessions.includes(session)
-                    )
-                );
-            }
-
             // 📝 笔记筛选
             if (filter.hasPersonalNotes !== undefined) {
                 query = query.filter(meta =>
@@ -173,9 +164,6 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                     ...input,
                     tags: input.tags || [],
                     readingStatus: input.readingStatus || 'unread',
-                    associatedSessions: input.associatedSessions || [],
-                    associatedProjects: input.associatedProjects || [],
-                    customCategories: input.customCategories || [],
                     customFields: input.customFields || {},
                     createdAt: now,
                     updatedAt: now
@@ -210,9 +198,6 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                 await this.createOrUpdate(userId, paperId, {
                     tags: [tag],
                     readingStatus: 'unread',
-                    associatedSessions: [],
-                    associatedProjects: [],
-                    customCategories: [],
                     customFields: {}
                 });
             }
@@ -286,18 +271,6 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                 .map(([tag, count]) => ({ tag, count }))
                 .sort((a, b) => b.count - a.count);
 
-            // 计算分类统计
-            const categoryCounts = new Map<string, number>();
-            userMetas.forEach(meta => {
-                meta.customCategories.forEach(category => {
-                    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
-                });
-            });
-
-            stats.categoryStats = Array.from(categoryCounts.entries())
-                .map(([category, count]) => ({ category, count }))
-                .sort((a, b) => b.count - a.count);
-
             return stats;
         } catch (error) {
             console.error('[UserMetaRepository] getUserStatistics failed:', error);
@@ -308,41 +281,7 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
     /**
      * 🔗 更新会话关联
      */
-    async updateSessionAssociation(
-        userId: string,
-        paperId: string,
-        sessionId: string,
-        action: 'add' | 'remove'
-    ): Promise<void> {
-        try {
-            const meta = await this.findByUserAndLiterature(userId, paperId);
-
-            if (meta) {
-                let updatedSessions = [...meta.associatedSessions];
-
-                if (action === 'add' && !updatedSessions.includes(sessionId)) {
-                    updatedSessions.push(sessionId);
-                } else if (action === 'remove') {
-                    updatedSessions = updatedSessions.filter(id => id !== sessionId);
-                }
-
-                await this.update(meta.id, { associatedSessions: updatedSessions });
-            } else if (action === 'add') {
-                // 创建新元数据
-                await this.createOrUpdate(userId, paperId, {
-                    associatedSessions: [sessionId],
-                    tags: [],
-                    readingStatus: 'unread',
-                    associatedProjects: [],
-                    customCategories: [],
-                    customFields: {}
-                });
-            }
-        } catch (error) {
-            console.error('[UserMetaRepository] updateSessionAssociation failed:', error);
-            throw new Error('Failed to update session association');
-        }
-    }
+    // deprecated session associations removed
 
     /**
      * 🧹 清理孤儿元数据

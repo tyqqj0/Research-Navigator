@@ -135,11 +135,11 @@ export function useCollectionLiterature(collectionId: string) {
 
     // 添加文献到集合
     const addLiterature = useCallback(
-        async (lids: string[]) => {
+        async (paperIds: string[]) => {
             try {
-                await collectionService.addItemsToCollection(collectionId, lids);
+                await collectionService.addItemsToCollection(collectionId, paperIds);
                 // 更新本地状态
-                store.addLiteraturesToCollection(collectionId, lids);
+                store.addLiteraturesToCollection(collectionId, paperIds);
             } catch (error) {
                 console.error('Failed to add literature:', error);
                 throw error;
@@ -150,11 +150,11 @@ export function useCollectionLiterature(collectionId: string) {
 
     // 从集合移除文献
     const removeLiterature = useCallback(
-        async (lids: string[]) => {
+        async (paperIds: string[]) => {
             try {
-                await collectionService.removeItemsFromCollection(collectionId, lids);
+                await collectionService.removeItemsFromCollection(collectionId, paperIds);
                 // 更新本地状态
-                store.removeLiteraturesFromCollection(collectionId, lids);
+                store.removeLiteraturesFromCollection(collectionId, paperIds);
             } catch (error) {
                 console.error('Failed to remove literature:', error);
                 throw error;
@@ -164,7 +164,7 @@ export function useCollectionLiterature(collectionId: string) {
     );
 
     return {
-        lids: collection?.lids || [],
+        paperIds: collection?.paperIds || [],
         addLiterature,
         removeLiterature,
     };

@@ -31,7 +31,7 @@ interface CitationUIState {
     isAnalyzing: boolean;
 
     // 🎯 选择状态
-    selectedLids: Set<string>;
+    selectedPaperIds: Set<string>;
 
     // 🎨 视图状态
     viewMode: 'network' | 'tree' | 'list';
@@ -64,12 +64,12 @@ export interface UseCitationOperationsReturn {
 
     // 🔗 引用数据加载
     loadCitationOverview: (paperId: string) => Promise<CitationOverview>;
-    batchLoadOverviews: (lids: string[]) => Promise<void>;
+    batchLoadOverviews: (paperIds: string[]) => Promise<void>;
     refreshCitations: () => Promise<void>;
 
     // 📊 选择操作
     selectLiterature: (paperId: string) => void;
-    selectMultipleLiteratures: (lids: string[]) => void;
+    selectMultipleLiteratures: (paperIds: string[]) => void;
     clearSelection: () => void;
     toggleSelection: (paperId: string) => void;
 
@@ -94,7 +94,7 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
     const [uiState, setUIState] = useState<CitationUIState>({
         isLoading: false,
         isAnalyzing: false,
-        selectedLids: new Set(),
+        selectedPaperIds: new Set(),
         viewMode: 'network',
         showStats: true,
         error: null,
@@ -104,9 +104,9 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
     const stats = useMemo(() => ({
         totalCitations: citationStore.stats.totalCitations,
         totalOverviews: Object.keys(citationStore.overviews).length,
-        selectedItems: uiState.selectedLids.size,
+        selectedItems: uiState.selectedPaperIds.size,
         lastUpdated: citationStore.stats.lastUpdated,
-    }), [citationStore.stats, citationStore.overviews, uiState.selectedLids.size]);
+    }), [citationStore.stats, citationStore.overviews, uiState.selectedPaperIds.size]);
 
     // 🔧 基础操作
     const clearError = useCallback(() => {
@@ -145,7 +145,7 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
         }
     }, [citationStore]);
 
-    const batchLoadOverviews = useCallback(async (lids: string[]) => {
+    const batchLoadOverviews = useCallback(async (paperIds: string[]) => {
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 
         try {
@@ -155,13 +155,13 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
                 totalCitations: allCitations.length,
                 uniqueSourceItems: new Set(allCitations.map(c => c.sourceItemId)).size,
                 uniqueTargetItems: new Set(allCitations.map(c => c.targetItemId)).size,
-                averageOutDegree: allCitations.length > 0 ? allCitations.filter(c => lids.includes(c.sourceItemId)).length / lids.length : 0,
-                averageInDegree: allCitations.length > 0 ? allCitations.filter(c => lids.includes(c.targetItemId)).length / lids.length : 0,
+                averageOutDegree: allCitations.length > 0 ? allCitations.filter(c => paperIds.includes(c.sourceItemId)).length / paperIds.length : 0,
+                averageInDegree: allCitations.length > 0 ? allCitations.filter(c => paperIds.includes(c.targetItemId)).length / paperIds.length : 0,
                 lastUpdated: new Date()
             };
 
             // 为每个lid添加相同的概览
-            lids.forEach(paperId => {
+            paperIds.forEach(paperId => {
                 citationStore.addOverview(paperId, overview);
             });
             setUIState(prev => ({ ...prev, isLoading: false }));
@@ -206,27 +206,27 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
     const selectLiterature = useCallback((paperId: string) => {
         setUIState(prev => ({
             ...prev,
-            selectedLids: new Set([...prev.selectedLids, paperId]),
+            selectedPaperIds: new Set([...prev.selectedPaperIds, paperId]),
         }));
     }, []);
 
-    const selectMultipleLiteratures = useCallback((lids: string[]) => {
+    const selectMultipleLiteratures = useCallback((paperIds: string[]) => {
         setUIState(prev => ({
             ...prev,
-            selectedLids: new Set([...prev.selectedLids, ...lids]),
+            selectedPaperIds: new Set([...prev.selectedPaperIds, ...paperIds]),
         }));
     }, []);
 
     const clearSelection = useCallback(() => {
         setUIState(prev => ({
             ...prev,
-            selectedLids: new Set(),
+            selectedPaperIds: new Set(),
         }));
     }, []);
 
     const toggleSelection = useCallback((paperId: string) => {
         setUIState(prev => {
-            const newSelection = new Set(prev.selectedLids);
+            const newSelection = new Set(prev.selectedPaperIds);
             if (newSelection.has(paperId)) {
                 newSelection.delete(paperId);
             } else {
@@ -234,7 +234,7 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
             }
             return {
                 ...prev,
-                selectedLids: newSelection,
+                selectedPaperIds: newSelection,
             };
         });
     }, []);
@@ -264,11 +264,11 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
     }, [citationStore]);
 
     const getSelectedOverviews = useCallback(() => {
-        const selectedLids = Array.from(uiState.selectedLids);
-        return selectedLids
+        const selectedPaperIds = Array.from(uiState.selectedPaperIds);
+        return selectedPaperIds
             .map(paperId => citationStore.getOverview(paperId))
             .filter((overview): overview is CitationOverview => overview !== undefined);
-    }, [citationStore, uiState.selectedLids]);
+    }, [citationStore, uiState.selectedPaperIds]);
 
     return {
         // 🔗 数据状态

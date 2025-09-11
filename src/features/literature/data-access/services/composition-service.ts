@@ -127,9 +127,6 @@ export class CompositionService {
                     userId, // 🎯 使用内部获取的userId
                     tags: input.userMeta.tags || [],
                     readingStatus: input.userMeta.readingStatus || 'unread',
-                    associatedSessions: input.userMeta.associatedSessions || [],
-                    associatedProjects: input.userMeta.associatedProjects || [],
-                    customCategories: input.userMeta.customCategories || [],
                     customFields: input.userMeta.customFields || {},
                 };
                 userMeta = await this.userMetaService.createUserMeta(
@@ -224,9 +221,6 @@ export class CompositionService {
                         userId,
                         tags: updates.userMeta.tags || [],
                         readingStatus: updates.userMeta.readingStatus || 'unread',
-                        associatedSessions: updates.userMeta.associatedSessions || [],
-                        associatedProjects: updates.userMeta.associatedProjects || [],
-                        customCategories: updates.userMeta.customCategories || [],
                         customFields: updates.userMeta.customFields || {},
                     };
                     userMeta = await this.userMetaService.createUserMeta(
@@ -313,7 +307,7 @@ export class CompositionService {
         try {
             // 1. 删除当前用户的元数据
             try {
-                await this.userMetaService.deleteUserMeta(paperId, userId);
+                await this.userMetaService.deleteUserMeta(userId, paperId);
             } catch (error) {
                 // 用户元数据可能不存在，忽略错误
             }
@@ -404,11 +398,11 @@ export class CompositionService {
             const userMetas = await this.userMetaService.getUserAllMetas(userId);
 
             // 2. 批量获取文献数据
-            const lids = userMetas.map(meta => meta.paperId);
+            const paperIds = userMetas.map(meta => meta.paperId);
             const literatures: LibraryItem[] = [];
 
             // 批量获取文献数据
-            for (const paperId of lids) {
+            for (const paperId of paperIds) {
                 try {
                     const literature = await this.literatureService.getLiterature(paperId);
                     if (literature) {

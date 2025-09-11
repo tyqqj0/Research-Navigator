@@ -193,7 +193,7 @@ export class CollectionService {
      */
     async addLiteratureToCollection(
         collectionId: string,
-        lids: string[],
+        paperIds: string[],
         userId: string
     ): Promise<void> {
         try {
@@ -201,13 +201,13 @@ export class CollectionService {
             await this.validateCollectionAccess(collectionId, userId, 'write');
 
             // 2. 业务规则验证
-            await this.validateAddLiterature(collectionId, lids);
+            await this.validateAddLiterature(collectionId, paperIds);
 
             // 3. 执行添加
-            await this.collectionRepo.addLiterature(collectionId, lids);
+            await this.collectionRepo.addLiterature(collectionId, paperIds);
 
             // 4. 后处理
-            await this.postAddLiterature(collectionId, lids);
+            await this.postAddLiterature(collectionId, paperIds);
 
         } catch (error) {
             throw handleError(error, { operation: 'addLiteratureToCollection', additionalInfo: { message: 'Failed to add literature to collection' } });
@@ -219,7 +219,7 @@ export class CollectionService {
      */
     async removeLiteratureFromCollection(
         collectionId: string,
-        lids: string[],
+        paperIds: string[],
         userId: string
     ): Promise<void> {
         try {
@@ -227,10 +227,10 @@ export class CollectionService {
             await this.validateCollectionAccess(collectionId, userId, 'write');
 
             // 2. 执行移除
-            await this.collectionRepo.removeLiterature(collectionId, lids);
+            await this.collectionRepo.removeLiterature(collectionId, paperIds);
 
             // 3. 后处理
-            await this.postRemoveLiterature(collectionId, lids);
+            await this.postRemoveLiterature(collectionId, paperIds);
 
         } catch (error) {
             throw handleError(error, { operation: 'removeLiteratureFromCollection', additionalInfo: { message: 'Failed to remove literature from collection' } });
@@ -265,16 +265,16 @@ export class CollectionService {
             const matchedItems = await this.executeSmartRule(collection.smartRule);
 
             // 计算变更
-            const currentItems = new Set(collection.lids);
+            const currentItems = new Set(collection.paperIds);
             const newItems = new Set(matchedItems);
 
             const addedItems = matchedItems.filter(id => !currentItems.has(id));
-            const removedItems = collection.lids.filter(id => !newItems.has(id));
+            const removedItems = collection.paperIds.filter(id => !newItems.has(id));
 
             // 更新集合
             if (addedItems.length > 0 || removedItems.length > 0) {
                 await this.collectionRepo.update(collectionId, {
-                    lids: matchedItems,
+                    paperIds: matchedItems,
                     updatedAt: new Date(),
                 });
             }
@@ -389,7 +389,7 @@ export class CollectionService {
 
     private async validateAddLiterature(
         collectionId: string,
-        lids: string[]
+        paperIds: string[]
     ): Promise<void> {
         const collection = await this.collectionRepo.findById(collectionId);
         if (!collection) {
@@ -400,7 +400,7 @@ export class CollectionService {
         }
 
         // 验证文献数量限制
-        const totalItems = collection.lids.length + lids.length;
+        const totalItems = collection.paperIds.length + paperIds.length;
         if (totalItems > BUSINESS_RULES.MAX_LITERATURE_PER_COLLECTION) {
             throw new CollectionBusinessError(
                 `Maximum literature limit exceeded (max ${BUSINESS_RULES.MAX_LITERATURE_PER_COLLECTION})`,
@@ -409,9 +409,9 @@ export class CollectionService {
         }
 
         // 验证文献是否存在
-        const existingLiterature = await this.literatureRepo.findByLids(lids);
+        const existingLiterature = await this.literatureRepo.findByPaperIds(paperIds);
         const existingIds = new Set(existingLiterature.map((item: LibraryItem) => item.paperId));
-        const missingIds = lids.filter(id => !existingIds.has(id));
+        const missingIds = paperIds.filter(id => !existingIds.has(id));
 
         if (missingIds.length > 0) {
             throw new CollectionBusinessError(
@@ -533,14 +533,14 @@ export class CollectionService {
 
     private async postAddLiterature(
         collectionId: string,
-        lids: string[]
+        paperIds: string[]
     ): Promise<void> {
         // 可以在这里添加后处理逻辑，比如发送通知等
     }
 
     private async postRemoveLiterature(
         collectionId: string,
-        lids: string[]
+        paperIds: string[]
     ): Promise<void> {
         // 可以在这里添加后处理逻辑
     }
