@@ -73,6 +73,12 @@ import type {
     UpdateLibraryItemInput,
     UpdateUserLiteratureMetaInput,
     EnhancedLibraryItem,
+    Collection,
+    CreateCollectionInput,
+    UpdateCollectionInput,
+    PaginatedResult,
+    CreateComposedLiteratureInput,
+    UpdateComposedLiteratureInput,
 } from './models';
 
 export interface LiteratureEntryPoint {
@@ -119,6 +125,12 @@ export interface LiteratureDataAccessAPI {
     // 文献入口点
     readonly entry: LiteratureEntryPoint;
 
+    // 集合子域入口
+    readonly collections: CollectionDataAccessAPI;
+
+    // 文献组合入口
+    readonly literatures: LiteraturesDataAccessAPI;
+
     // 系统管理
     initialize(): Promise<{ isHealthy: boolean; initializationTime: number }>;
     performHealthCheck(): Promise<{ overall: boolean; recommendations: string[] }>;
@@ -146,6 +158,44 @@ export interface LiteratureDataAccessAPI {
 }
 
 // =============================================================================
+// 📂 集合数据访问接口
+// =============================================================================
+
+export interface CollectionDataAccessAPI {
+    createCollection(input: CreateCollectionInput): Promise<Collection>;
+    updateCollection(id: string, input: UpdateCollectionInput): Promise<Collection>;
+    deleteCollection(id: string): Promise<void>;
+
+    addItemsToCollection(collectionId: string, paperIds: string[]): Promise<void>;
+    removeItemsFromCollection(collectionId: string, paperIds: string[]): Promise<void>;
+
+    getUserCollections(options?: { page?: number; pageSize?: number }): Promise<Collection[]>;
+    getCollection(id: string): Promise<Collection | null>;
+    searchCollections(params: {
+        searchTerm?: string;
+        type?: import('./models').CollectionType;
+        isPublic?: boolean;
+        hasItems?: boolean;
+        page?: number;
+        pageSize?: number;
+    }): Promise<{ items: Collection[]; total: number; page: number; totalPages: number; hasMore: boolean }>;
+}
+
+// =============================================================================
+// 📚 文献组合数据访问接口
+// =============================================================================
+
+export interface LiteraturesDataAccessAPI {
+    create(input: CreateComposedLiteratureInput): Promise<EnhancedLibraryItem>;
+    update(paperId: string, input: UpdateComposedLiteratureInput): Promise<EnhancedLibraryItem>;
+    delete(paperId: string, options?: { deleteGlobally?: boolean }): Promise<void>;
+    deleteBatch(requests: Array<{ paperId: string; deleteGlobally?: boolean }>): Promise<{ success: string[]; failed: Array<{ paperId: string; error: string }>; total: number }>;
+    getUserLiteratures(): Promise<EnhancedLibraryItem[]>;
+    getEnhanced(paperId: string): Promise<EnhancedLibraryItem | null>;
+    search(filter?: import('./models').LiteratureFilter, sort?: import('./models').LiteratureSort, page?: number, pageSize?: number): Promise<PaginatedResult<EnhancedLibraryItem>>;
+}
+
+// =============================================================================
 // 🚪 文献入口点实现
 // =============================================================================
 
@@ -153,7 +203,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
     constructor(
         private readonly services = require('./services').literatureDomainServices,
         // private readonly repositories = require('./repositories').literatureDomainRepositories,
-        private readonly composition = require('./services').compositionService,
+        private readonly composition = require('./services').literatureDomainServices.composition,
         private readonly authUtils = require('../../../stores/auth.store').authStoreUtils
     ) { }
 
@@ -384,6 +434,8 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
 
 export class LiteratureDataAccess implements LiteratureDataAccessAPI {
     public readonly entry: LiteratureEntryPoint;
+    public readonly collections: CollectionDataAccessAPI;
+    public readonly literatures: LiteraturesDataAccessAPI;
 
     constructor(
         private readonly repositories = require('./repositories').literatureDomainRepositories,
@@ -391,6 +443,8 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
         private readonly database = require('./database').literatureDB
     ) {
         this.entry = new LiteratureEntryPointImpl();
+        this.collections = new CollectionDataAccessImpl();
+        this.literatures = new LiteraturesDataAccessImpl();
     }
 
     // =============================================================================
@@ -624,6 +678,138 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
             console.error('[LiteratureDataAccess] Shutdown failed:', error);
             throw new Error('Failed to shutdown data access layer');
         }
+    }
+}
+
+// =============================================================================
+// 📂 集合数据访问实现
+// =============================================================================
+
+class CollectionDataAccessImpl implements CollectionDataAccessAPI {
+    constructor(
+        private readonly services = require('./services').literatureDomainServices,
+        private readonly repositories = require('./repositories').literatureDomainRepositories,
+        private readonly authUtils = require('../../../stores/auth.store').authStoreUtils
+    ) { }
+
+    private requireUserId(): string {
+        return this.authUtils.getStoreInstance().requireAuth();
+    }
+
+    async createCollection(input: CreateCollectionInput): Promise<Collection> {
+        const userId = this.requireUserId();
+        const payload: CreateCollectionInput = { ...input, ownerUid: input.ownerUid || userId } as CreateCollectionInput;
+        return await this.services.collection.createCollection(userId, payload);
+    }
+
+    async updateCollection(id: string, input: UpdateCollectionInput): Promise<Collection> {
+        const userId = this.requireUserId();
+        return await this.services.collection.updateCollection(id, userId, input);
+    }
+
+    async deleteCollection(id: string): Promise<void> {
+        const userId = this.requireUserId();
+        await this.services.collection.deleteCollection(id, userId);
+    }
+
+    async addItemsToCollection(collectionId: string, paperIds: string[]): Promise<void> {
+        const userId = this.requireUserId();
+        await this.services.collection.addLiteratureToCollection(collectionId, paperIds, userId);
+    }
+
+    async removeItemsFromCollection(collectionId: string, paperIds: string[]): Promise<void> {
+        const userId = this.requireUserId();
+        await this.services.collection.removeLiteratureFromCollection(collectionId, paperIds, userId);
+    }
+
+    async getUserCollections(options: { page?: number; pageSize?: number } = {}): Promise<Collection[]> {
+        const userId = this.requireUserId();
+        const page = options.page || 1;
+        const pageSize = options.pageSize || 100;
+        const result = await this.services.collection.queryCollections(
+            { ownerUid: userId },
+            { field: 'createdAt', order: 'desc' },
+            page,
+            pageSize
+        );
+        return result.items;
+    }
+
+    async getCollection(id: string): Promise<Collection | null> {
+        const c = await this.repositories.collection.findById(id);
+        return c || null;
+    }
+
+    async searchCollections(params: {
+        searchTerm?: string;
+        type?: import('./models').CollectionType;
+        isPublic?: boolean;
+        hasItems?: boolean;
+        page?: number;
+        pageSize?: number;
+    }): Promise<{ items: Collection[]; total: number; page: number; totalPages: number; hasMore: boolean }> {
+        const userId = this.requireUserId();
+        const page = params.page || 1;
+        const pageSize = params.pageSize || 20;
+
+        const result = await this.services.collection.queryCollections(
+            {
+                ownerUid: userId,
+                type: params.type,
+                isPublic: params.isPublic,
+                hasItems: params.hasItems,
+                searchTerm: params.searchTerm,
+            },
+            { field: 'createdAt', order: 'desc' },
+            page,
+            pageSize
+        );
+
+        const hasMore = result.page < result.totalPages;
+        return { ...result, hasMore };
+    }
+}
+
+// =============================================================================
+// 📚 文献组合数据访问实现
+// =============================================================================
+
+class LiteraturesDataAccessImpl implements LiteraturesDataAccessAPI {
+    constructor(
+        private readonly services = require('./services').compositionService
+    ) { }
+
+    async create(input: CreateComposedLiteratureInput): Promise<EnhancedLibraryItem> {
+        return await this.services.createComposedLiterature(input);
+    }
+
+    async update(paperId: string, input: UpdateComposedLiteratureInput): Promise<EnhancedLibraryItem> {
+        return await this.services.updateComposedLiterature(paperId, input);
+    }
+
+    async delete(paperId: string, options: { deleteGlobally?: boolean } = {}): Promise<void> {
+        await this.services.deleteComposedLiterature(paperId, options);
+    }
+
+    async deleteBatch(requests: Array<{ paperId: string; deleteGlobally?: boolean }>): Promise<{ success: string[]; failed: Array<{ paperId: string; error: string }>; total: number }> {
+        return await this.services.deleteComposedLiteratureBatch(requests);
+    }
+
+    async getUserLiteratures(): Promise<EnhancedLibraryItem[]> {
+        return await this.services.getUserComposedLiteratures();
+    }
+
+    async getEnhanced(paperId: string): Promise<EnhancedLibraryItem | null> {
+        return await this.services.getEnhancedLiterature(paperId);
+    }
+
+    async search(
+        filter: import('./models').LiteratureFilter = {},
+        sort: import('./models').LiteratureSort = { field: 'createdAt', order: 'desc' },
+        page: number = 1,
+        pageSize: number = 20
+    ): Promise<PaginatedResult<EnhancedLibraryItem>> {
+        return await this.services.searchEnhancedLiteratures(filter, sort, page, pageSize);
     }
 }
 

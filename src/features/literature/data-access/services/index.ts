@@ -9,94 +9,17 @@
  * 5. 类型安全：完整的TypeScript类型支持
  */
 
-// ==================== 核心业务服务 ====================
+// ==================== 仅对内：导入服务实例（不对外导出） ====================
 
-// 📚 文献核心服务 - 基础CRUD和用户元数据管理
-export {
-  literatureService,
-  LiteratureService,
-  type LiteratureCreateOptions,
-  type LiteratureServiceStats,
-} from './literature-service';
-
-// 🔍 搜索服务 - 高级搜索和过滤功能
-export {
-  searchService,
-  SearchService,
-  type EnhancedSearchResult,
-  type SearchFacets,
-  type SearchSuggestions,
-  type SearchOptions,
-  type SearchServiceStats,
-} from './search-service';
-
-// 🤖 推荐服务 - 智能推荐算法
-// export {
-//   recommendationService,
-//   RecommendationService,
-//   type RecommendationResult,
-//   type RecommendedLiterature,
-//   type SuggestedTag,
-//   type RelatedCollection,
-//   type TrendingTopic,
-//   type RecommendationOptions,
-// } from './recommendation-service';
-
-// 📊 分析服务 - 统计分析和报告
-export {
-  analyticsService,
-  AnalyticsService,
-  type UserStatistics,
-  type LiteratureAnalytics,
-  type CitationNetworkAnalytics,
-  type PerformanceAnalytics,
-  type AnalyticsReport,
-} from './analytics-service';
-
-// 🔗 引文服务 - 引文管理和网络分析
-export {
-  citationService,
-  CitationService,
-  type CitationNetworkResult,
-  type CitationDiscoveryResult,
-  type CitationStatistics,
-} from './citation-service';
-
-// 📂 集合服务 - 集合管理和智能集合
-export {
-  collectionService,
-  CollectionService,
-  // type CreateCollectionInput,
-  // type CollectionRules,
-  // type CollectionStatistics,
-  // type CollectionRecommendation,
-} from './collection-service';
-
-// 👤 用户元数据服务 - 用户个性化数据管理
-export {
-  userMetaService,
-  UserMetaService,
-  type UserMetaCreateOptions,
-  type UserMetaServiceStats,
-} from './user-meta-service';
-
-// ==================== 外部集成服务 ====================
-
-// 🌐 后端API服务 - 外部数据源集成
-export {
-  backendApiService,
-  BackendApiService,
-  type CitationNetworkResult as BackendCitationNetworkResult,
-} from './backend-api-service';
-
-// 🔄 组合服务 - 文献数据组合操作
-export {
-  compositionService,
-  CompositionService,
-  type CreateComposedLiteratureInput,
-  type UpdateComposedLiteratureInput,
-  type BatchOperationResult,
-} from './composition-service';
+import { literatureService } from './literature-service';
+import { searchService } from './search-service';
+// import { recommendationService } from './recommendation-service';
+import { analyticsService } from './analytics-service';
+import { citationService } from './citation-service';
+import { collectionService } from './collection-service';
+import { userMetaService } from './user-meta-service';
+import { backendApiService } from './backend-api-service';
+import { compositionService } from './composition-service';
 
 // 🤖 AI服务 - AI能力集成
 // export {
@@ -112,14 +35,7 @@ export {
  * 提供文献领域的所有服务实例，简化外部调用
  */
 // 导入服务实例
-import { literatureService } from './literature-service';
-import { searchService } from './search-service';
-// import { recommendationService } from './recommendation-service';
-import { analyticsService } from './analytics-service';
-import { citationService } from './citation-service';
-import { collectionService } from './collection-service';
-import { userMetaService } from './user-meta-service';
-import { backendApiService } from './backend-api-service';
+// 注意：以上服务实例仅在本模块内使用，不对外导出
 
 export const literatureDomainServices = {
   // 核心业务服务
@@ -130,6 +46,7 @@ export const literatureDomainServices = {
   citation: citationService,
   collection: collectionService,
   userMeta: userMetaService,
+  composition: compositionService,
 
   // 外部集成服务
   backend: backendApiService,

@@ -16,7 +16,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { useLiteratureStore } from '../data-access/stores';
-import { compositionService } from '../data-access/services';
+import { literatureDataAccess } from '../data-access';
 import type {
     EnhancedLibraryItem,
     LiteratureFilter,
@@ -26,7 +26,7 @@ import type {
 import type {
     CreateComposedLiteratureInput,
     UpdateComposedLiteratureInput,
-} from '../data-access/services/composition-service';
+} from '../data-access/models';
 
 // ==================== Hook State Interfaces ====================
 
@@ -189,7 +189,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
         try {
             // 🔐 Service层自动获取用户身份并处理业务逻辑
-            const enhanced = await compositionService.createComposedLiterature(input);
+            const enhanced = await literatureDataAccess.literatures.create(input);
 
             // Store层更新数据
             store.addLiterature(enhanced);
@@ -215,7 +215,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
         try {
             // 🔐 Service层自动获取用户身份并处理业务逻辑
-            const enhanced = await compositionService.updateComposedLiterature(paperId, input);
+            const enhanced = await literatureDataAccess.literatures.update(paperId, input);
 
             // Store层更新数据
             store.updateLiterature(paperId, enhanced);
@@ -260,7 +260,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
         try {
             // 🔐 Service层自动获取用户身份并处理业务逻辑
-            await compositionService.deleteComposedLiterature(paperId, options);
+            await literatureDataAccess.literatures.delete(paperId, options);
 
             // Store层更新数据
             store.removeLiterature(paperId);
@@ -298,7 +298,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
         try {
             // 🔐 Service层自动获取用户身份并处理业务逻辑
-            await compositionService.deleteComposedLiteratureBatch(
+            await literatureDataAccess.literatures.deleteBatch(
                 paperIds.map(paperId => ({ paperId, deleteGlobally: options.deleteGlobally }))
             );
 
@@ -338,7 +338,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
         try {
             // 🔐 Service层自动获取当前用户的数据
-            const result = await compositionService.getUserComposedLiteratures();
+            const result = await literatureDataAccess.literatures.getUserLiteratures();
 
             // Store层更新数据
             store.replaceLiteratures(result);
@@ -363,7 +363,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
         try {
             // 🔐 Service层自动获取当前用户的数据
-            const enhanced = await compositionService.getEnhancedLiterature(paperId);
+            const enhanced = await literatureDataAccess.literatures.getEnhanced(paperId);
 
             if (enhanced) {
                 // Store层更新数据
@@ -421,7 +421,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
         try {
             // 🔐 Service层自动获取当前用户并处理搜索
-            const result = await compositionService.searchEnhancedLiteratures(
+            const result = await literatureDataAccess.literatures.search(
                 { searchTerm: query, ...filter },
                 sort,
                 page,
@@ -465,7 +465,7 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
         try {
             // Service层处理分页搜索
-            const result = await compositionService.searchEnhancedLiteratures(
+            const result = await literatureDataAccess.literatures.search(
                 { searchTerm: searchState.query, ...searchState.filter },
                 searchState.sort,
                 nextPage,

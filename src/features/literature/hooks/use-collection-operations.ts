@@ -16,16 +16,13 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { useCollectionStore, useLiteratureStore } from '../data-access/stores';
-import { collectionService } from '../data-access/services';
+import { literatureDataAccess } from '../data-access';
 import type {
     Collection,
     CollectionType,
     EnhancedLibraryItem,
 } from '../data-access/models';
-import type {
-    CreateCollectionInput,
-    UpdateCollectionInput,
-} from '../data-access/services/collection-service';
+import type { CreateCollectionInput, UpdateCollectionInput } from '../data-access/models';
 
 // ==================== Hook State Interfaces ====================
 
@@ -219,8 +216,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 
         try {
-            // Service层处理业务逻辑（Service层自动获取用户身份）
-            const collection = await collectionService.createCollection(input);
+            // 经 Data Access 门面调用集合创建
+            const collection = await literatureDataAccess.collections.createCollection(input);
 
             // Store层更新数据
             collectionStore.addCollection(collection);
@@ -245,8 +242,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }));
 
         try {
-            // Service层处理业务逻辑（Service层自动获取用户身份）
-            const collection = await collectionService.updateCollection(id, input);
+            // 经 Data Access 门面调用集合更新
+            const collection = await literatureDataAccess.collections.updateCollection(id, input);
 
             // Store层更新数据
             collectionStore.updateCollection(id, collection);
@@ -280,8 +277,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }));
 
         try {
-            // Service层处理业务逻辑（Service层自动获取用户身份）
-            await collectionService.deleteCollection(id);
+            // 经 Data Access 门面调用集合删除
+            await literatureDataAccess.collections.deleteCollection(id);
 
             // Store层更新数据
             collectionStore.removeCollection(id);
@@ -318,8 +315,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
     // 📚 集合内容管理
     const addLiteratureToCollection = useCallback(async (collectionId: string, literatureId: string) => {
         try {
-            // Service层处理业务逻辑（Service层自动获取用户身份）
-            await collectionService.addItemsToCollection(collectionId, [literatureId]);
+            // 经 Data Access 门面调用集合内容添加
+            await literatureDataAccess.collections.addItemsToCollection(collectionId, [literatureId]);
 
             // Store层更新数据
             collectionStore.addLiteratureToCollection(collectionId, literatureId);
@@ -334,8 +331,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
 
     const removeLiteratureFromCollection = useCallback(async (collectionId: string, literatureId: string) => {
         try {
-            // Service层处理业务逻辑（Service层自动获取用户身份）
-            await collectionService.removeItemsFromCollection(collectionId, [literatureId]);
+            // 经 Data Access 门面调用集合内容移除
+            await literatureDataAccess.collections.removeItemsFromCollection(collectionId, [literatureId]);
 
             // Store层更新数据
             collectionStore.removeLiteratureFromCollection(collectionId, literatureId);
@@ -350,8 +347,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
 
     const addLiteraturesToCollection = useCallback(async (collectionId: string, paperIds: string[]) => {
         try {
-            // Service层处理业务逻辑（Service层自动获取用户身份）
-            await collectionService.addItemsToCollection(collectionId, paperIds);
+            // 经 Data Access 门面调用集合内容批量添加
+            await literatureDataAccess.collections.addItemsToCollection(collectionId, paperIds);
 
             // Store层更新数据
             collectionStore.addLiteraturesToCollection(collectionId, paperIds);
@@ -366,8 +363,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
 
     const removeLiteraturesFromCollection = useCallback(async (collectionId: string, paperIds: string[]) => {
         try {
-            // Service层处理业务逻辑（Service层自动获取用户身份）
-            await collectionService.removeItemsFromCollection(collectionId, paperIds);
+            // 经 Data Access 门面调用集合内容批量移除
+            await literatureDataAccess.collections.removeItemsFromCollection(collectionId, paperIds);
 
             // Store层更新数据
             collectionStore.removeLiteraturesFromCollection(collectionId, paperIds);
@@ -390,8 +387,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 
         try {
-            // Service层获取数据（Service层自动获取用户身份）
-            const result = await collectionService.getUserCollections();
+            // 经 Data Access 门面获取用户集合
+            const result = await literatureDataAccess.collections.getUserCollections();
 
             // Store层更新数据
             collectionStore.replaceCollections(result);
@@ -415,8 +412,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }));
 
         try {
-            // Service层获取数据（Service层自动获取用户身份）
-            const collection = await collectionService.getCollection(id);
+            // 经 Data Access 门面获取集合
+            const collection = await literatureDataAccess.collections.getCollection(id);
 
             if (collection) {
                 // Store层更新数据
@@ -470,8 +467,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         }));
 
         try {
-            // Service层处理搜索（Service层自动获取用户身份）
-            const result = await collectionService.searchCollections({
+            // 经 Data Access 门面搜索集合
+            const result = await literatureDataAccess.collections.searchCollections({
                 searchTerm: query,
                 ...filter,
             });
@@ -512,8 +509,8 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         setUIState(prev => ({ ...prev, isSearching: true }));
 
         try {
-            // Service层处理分页搜索（Service层自动获取用户身份）
-            const result = await collectionService.searchCollections({
+            // 经 Data Access 门面处理分页搜索
+            const result = await literatureDataAccess.collections.searchCollections({
                 searchTerm: searchState.query,
                 ...searchState.filter,
                 page: nextPage,

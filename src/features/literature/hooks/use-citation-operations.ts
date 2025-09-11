@@ -15,7 +15,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { citationService } from '../data-access/services';
+import { literatureDataAccess } from '../data-access';
 import type {
     Citation,
     CitationOverview,
@@ -182,18 +182,16 @@ export const useCitationOperations = (): UseCitationOperationsReturn => {
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 
         try {
-            // 刷新引文数据 - 重新获取所有引文
-            const allCitations = await citationService.getCitationNetwork([], 1);
-            if (allCitations.edges) {
-                const citations: Citation[] = allCitations.edges.map(edge => ({
-                    sourceItemId: edge.source,
-                    targetItemId: edge.target,
-                    context: `${edge.type} citation`,
-                    createdAt: new Date()
-                }));
-                setCitations(citations);
-                setLastUpdated(new Date());
-            }
+            // 使用内部引用边获取（空数组返回空边集）
+            const result = await literatureDataAccess.getInternalCitations([], { direction: 'both', includeStats: false });
+            const citations: Citation[] = (result.edges || []).map(({ source, target }: { source: string; target: string }) => ({
+                sourceItemId: source,
+                targetItemId: target,
+                context: 'internal citation',
+                createdAt: new Date(),
+            }));
+            setCitations(citations);
+            setLastUpdated(new Date());
         } catch (error) {
             setUIState(prev => ({
                 ...prev,

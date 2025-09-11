@@ -70,6 +70,25 @@ export type CompositionOptions = {
     includeFileInfo?: boolean;
 };
 
+// ==================== 组合服务输入类型（对外暴露） ====================
+
+/**
+ * 📝 创建组合文献输入（包含用户元数据）
+ * 🎯 重构后：移除userId参数，Service内部自动获取
+ */
+export interface CreateComposedLiteratureInput {
+    literature: import('./library-item.types').CreateLibraryItemInput;
+    userMeta?: Omit<import('./user-literature-meta.types').CreateUserLiteratureMetaInput, 'paperId' | 'userId'>;
+}
+
+/**
+ * 📝 更新组合文献输入（包含用户元数据）
+ */
+export interface UpdateComposedLiteratureInput {
+    literature?: import('./library-item.types').UpdateLibraryItemInput;
+    userMeta?: import('./user-literature-meta.types').UpdateUserLiteratureMetaInput;
+}
+
 // ==================== 批量操作类型 ====================
 
 /**

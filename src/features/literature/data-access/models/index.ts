@@ -94,6 +94,8 @@ export type {
     EnhancedLibraryItem,
     EnhancedLibraryItemWithStats,
     CompositionOptions,
+    CreateComposedLiteratureInput,
+    UpdateComposedLiteratureInput,
     BatchCompositionResult,
     BatchByIdsOptions,
     CompositionByIdMap,

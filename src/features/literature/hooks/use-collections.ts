@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { shallow } from 'zustand/shallow';
 import { useCollectionStore } from '../data-access/stores';
-import { collectionService } from '../data-access/services';
+import { literatureDataAccess } from '../data-access';
 import type {
     Collection,
     CollectionType,
@@ -36,7 +36,7 @@ export function useCollections() {
     // 获取集合列表
     const fetchCollections = useCallback(async () => {
         try {
-            const result = await collectionService.getUserCollections();
+            const result = await literatureDataAccess.collections.getUserCollections();
             store.replaceCollections(result);
             return result;
         } catch (error) {
@@ -66,7 +66,7 @@ export function useCollection(collectionId: string | null) {
             if (!collectionId) return null;
 
             try {
-                const updatedCollection = await collectionService.updateCollection(collectionId, updates);
+                const updatedCollection = await literatureDataAccess.collections.updateCollection(collectionId, updates);
                 store.updateCollection(collectionId, updatedCollection);
                 return updatedCollection;
             } catch (error) {
@@ -95,7 +95,7 @@ export function useCollectionOperations() {
     const createCollection = useCallback(
         async (input: CreateCollectionInput) => {
             try {
-                const collection = await collectionService.createCollection(input);
+                const collection = await literatureDataAccess.collections.createCollection(input);
                 store.addCollection(collection);
                 return collection;
             } catch (error) {
@@ -110,7 +110,7 @@ export function useCollectionOperations() {
     const deleteCollection = useCallback(
         async (collectionId: string) => {
             try {
-                await collectionService.deleteCollection(collectionId);
+                await literatureDataAccess.collections.deleteCollection(collectionId);
                 store.removeCollection(collectionId);
             } catch (error) {
                 console.error('Failed to delete collection:', error);
@@ -137,7 +137,7 @@ export function useCollectionLiterature(collectionId: string) {
     const addLiterature = useCallback(
         async (paperIds: string[]) => {
             try {
-                await collectionService.addItemsToCollection(collectionId, paperIds);
+                await literatureDataAccess.collections.addItemsToCollection(collectionId, paperIds);
                 // 更新本地状态
                 store.addLiteraturesToCollection(collectionId, paperIds);
             } catch (error) {
@@ -152,7 +152,7 @@ export function useCollectionLiterature(collectionId: string) {
     const removeLiterature = useCallback(
         async (paperIds: string[]) => {
             try {
-                await collectionService.removeItemsFromCollection(collectionId, paperIds);
+                await literatureDataAccess.collections.removeItemsFromCollection(collectionId, paperIds);
                 // 更新本地状态
                 store.removeLiteraturesFromCollection(collectionId, paperIds);
             } catch (error) {
