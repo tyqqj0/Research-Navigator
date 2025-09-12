@@ -1,73 +1,72 @@
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { MainLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     BookOpen,
-    Plus,
-    Upload,
-    Download,
     BarChart3,
     Network,
-    List,
-    Grid,
-    Search,
-    Filter,
-    Settings,
-    Sparkles,
-    Database,
     Activity,
-    TrendingUp
+    RefreshCw,
+    Calendar,
+    Users
 } from "lucide-react";
 
-// 导入我们的演示组件
-import { LiteratureStatsPanel } from '@/features/literature/management/components/LiteratureStatsPanel';
-import { CitationGraphPanel } from '@/features/literature/management/components/CitationGraphPanel';
+// 列表组件
 import { LiteratureListPanel } from '@/features/literature/management/components/LiteratureListPanel';
-import { LiteratureActions } from '@/features/literature/management/components/LiteratureActions';
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
+import RequireAuth from '@/components/auth/RequireAuth';
+import useAuthStore from '@/stores/auth.store';
 
 export default function LibraryPage() {
-    // 状态管理
-    const [activeTab, setActiveTab] = useState<'overview' | 'list' | 'graph'>('overview');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
-    const [showStats, setShowStats] = useState(true);
-    const [showGraph, setShowGraph] = useState(true);
-
     // 使用自定义hooks获取数据和操作
     const {
         literatures,
         uiState,
-        stats,
         loadLiteratures
     } = useLiteratureOperations();
 
+    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+    // 首次加载数据
+    useEffect(() => {
+        if (isAuthenticated) {
+            loadLiteratures({ force: false }).catch(() => { });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated]);
+
     const isLoading = uiState.isLoading;
     const error = uiState.error;
-    const totalCount = stats.total;
 
-    // 处理视图切换
-    const handleViewModeChange = useCallback((mode: 'grid' | 'list') => {
-        setViewMode(mode);
-    }, []);
+    // 计算紧凑统计信息（基于当前文献列表）
+    const miniStats = useMemo(() => {
+        const items = Array.isArray(literatures) ? literatures : [];
+        const total = items.length;
+        const years: number[] = [];
+        const authorSet = new Set<string>();
+        for (const item of items) {
+            const y = (item as any)?.literature?.year;
+            if (typeof y === 'number' && !Number.isNaN(y)) years.push(y);
+            const authors = (item as any)?.literature?.authors || [];
+            for (const a of authors) authorSet.add(String(a));
+        }
+        const minYear = years.length ? Math.min(...years) : undefined;
+        const maxYear = years.length ? Math.max(...years) : undefined;
+        const avgYear = years.length
+            ? Math.round(years.reduce((s, y) => s + y, 0) / years.length)
+            : undefined;
+        return {
+            total,
+            authorCount: authorSet.size,
+            yearSpanText: minYear !== undefined && maxYear !== undefined ? `${minYear} - ${maxYear}` : '—',
+            avgYearText: avgYear !== undefined ? String(avgYear) : '—'
+        };
+    }, [literatures]);
 
-    // 处理布局切换
-    const toggleStatsPanel = useCallback(() => {
-        setShowStats(prev => !prev);
-    }, []);
-
-    const toggleGraphPanel = useCallback(() => {
-        setShowGraph(prev => !prev);
-    }, []);
-
-    const user = {
-        name: 'Research User',
-        avatar: undefined
-    };
+    // Header 用户信息现由全局 auth store 提供，无需在页面层传入
 
     const headerActions = (
         <div className="flex items-center space-x-2">
@@ -77,143 +76,100 @@ export default function LibraryPage() {
                 onClick={() => loadLiteratures({ force: true })}
                 disabled={isLoading}
             >
-                <Activity className="w-4 h-4 mr-2" />
+                <RefreshCw className="w-4 h-4 mr-2" />
                 刷新数据
-            </Button>
-            <Button variant="outline" size="sm">
-                <Upload className="w-4 h-4 mr-2" />
-                导入文献
-            </Button>
-            <Button variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                导出
-            </Button>
-            <Button size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                新建收藏夹
             </Button>
         </div>
     );
 
     return (
-        <MainLayout
-            headerTitle="我的文库"
-            headerActions={headerActions}
-            user={user}
-            showSidebar={true}
-        >
-            <div className="literature-page space-y-6 p-6">
-                {/* 顶部工具栏 */}
-                <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                    <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-blue-600" />
-                        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-                            文献管理
-                        </h1>
-                        <Badge variant="secondary" className="ml-2">
-                            {totalCount} 篇文献
-                        </Badge>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={toggleStatsPanel}
-                            className="flex items-center gap-2"
-                        >
-                            <BarChart3 className="w-4 h-4" />
-                            {showStats ? '隐藏' : '显示'}统计
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={toggleGraphPanel}
-                            className="flex items-center gap-2"
-                        >
-                            <Network className="w-4 h-4" />
-                            {showGraph ? '隐藏' : '显示'}关系图
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-                            className="flex items-center gap-2"
-                        >
-                            {viewMode === 'list' ? <Grid className="w-4 h-4" /> : <List className="w-4 h-4" />}
-                            {viewMode === 'list' ? '网格视图' : '列表视图'}
-                        </Button>
-                    </div>
-                </div>
-
-                {/* 错误提示 */}
-                {error && (
-                    <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20">
-                        <CardContent className="pt-6">
-                            <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                                <Activity className="w-4 h-4" />
-                                <span className="font-medium">加载错误:</span>
-                                <span>{error}</span>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* 主要内容区域 */}
-                
-
-
-                <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
-                    <TabsContent value="graph" className="mt-6">
-                        <CitationGraphPanel />
-                    </TabsContent>
-                    <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="overview" className="flex items-center gap-2">
-                            <BarChart3 className="w-4 h-4" />
-                            概览
-                        </TabsTrigger>
-                        <TabsTrigger value="list" className="flex items-center gap-2">
-                            <List className="w-4 h-4" />
-                            文献列表
-                        </TabsTrigger>
-                        <TabsTrigger value="graph" className="flex items-center gap-2">
-                            <Network className="w-4 h-4" />
-                            引用关系图
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="overview" className="space-y-6 mt-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            {/* 统计面板 */}
-                            {showStats && (
-                                <div className="lg:col-span-2">
-                                    <LiteratureStatsPanel />
+        <RequireAuth>
+            <MainLayout
+                headerTitle="我的文库"
+                headerActions={headerActions}
+                showSidebar={true}
+            >
+                <div className="literature-page space-y-6 p-6">
+                    {/* 顶部区域：左侧紧凑总览 + 右侧图谱占位 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* 紧凑总览 */}
+                        <Card className="lg:col-span-1">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                    <BarChart3 className="w-4 h-4" />
+                                    总览
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div className="flex items-center gap-2 p-2 rounded-md border">
+                                        <BookOpen className="w-4 h-4 text-blue-600" />
+                                        <div className="truncate">
+                                            <div className="text-xs text-muted-foreground">总文献数</div>
+                                            <div className="font-semibold">{miniStats.total}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 p-2 rounded-md border">
+                                        <Users className="w-4 h-4 text-emerald-600" />
+                                        <div className="truncate">
+                                            <div className="text-xs text-muted-foreground">作者数</div>
+                                            <div className="font-semibold">{miniStats.authorCount}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 p-2 rounded-md border">
+                                        <Calendar className="w-4 h-4 text-orange-600" />
+                                        <div className="truncate">
+                                            <div className="text-xs text-muted-foreground">年份范围</div>
+                                            <div className="font-semibold">{miniStats.yearSpanText}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 p-2 rounded-md border">
+                                        <Calendar className="w-4 h-4 text-purple-600" />
+                                        <div className="truncate">
+                                            <div className="text-xs text-muted-foreground">平均年份</div>
+                                            <div className="font-semibold">{miniStats.avgYearText}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
+                            </CardContent>
+                        </Card>
 
-                            {/* 操作面板 */}
-                            <div className={showStats ? "lg:col-span-1" : "lg:col-span-3"}>
-                                <LiteratureActions />
-                            </div>
-                        </div>
+                        {/* 右侧图谱占位 */}
+                        <Card className="lg:col-span-2">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                    <Network className="w-4 h-4" />
+                                    引用关系图（预留）
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <div className="h-64 md:h-72 w-full rounded-md border bg-gray-50 dark:bg-gray-900/20 flex items-center justify-center text-sm text-muted-foreground">
+                                    图谱可视化将在这里展示
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
 
-                        {/* 引用关系图 */}
-                        {showGraph && (
-                            <div className="mt-6">
-                                <CitationGraphPanel />
-                            </div>
-                        )}
-                    </TabsContent>
+                    {/* 错误提示 */}
+                    {error && (
+                        <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20">
+                            <CardContent className="pt-6">
+                                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                                    <Activity className="w-4 h-4" />
+                                    <span className="font-medium">加载错误:</span>
+                                    <span>{error}</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
-                    <TabsContent value="list" className="mt-6">
+                    {/* 底部文献列表 */}
+                    <div className="mt-2">
                         <LiteratureListPanel />
-                    </TabsContent>
+                    </div>
 
-
-                </Tabs>
-
-                {/* 底部信息 */}
-                {/* <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+                    {/* 底部信息 */}
+                    {/* <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
                     <CardContent className="pt-6">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -236,7 +192,8 @@ export default function LibraryPage() {
                         </div>
                     </CardContent>
                 </Card> */}
-            </div>
-        </MainLayout>
+                </div>
+            </MainLayout>
+        </RequireAuth>
     );
 }

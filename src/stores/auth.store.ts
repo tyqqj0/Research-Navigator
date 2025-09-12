@@ -12,6 +12,8 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import '@/lib/immer-config';
 
 /**
  * 👤 用户基本信息
@@ -58,6 +60,8 @@ export interface AuthStoreState {
     setLoading: (loading: boolean) => void;
     setError: (error: string | null) => void;
     clearAuth: () => void;
+    login: (params: { user: UserProfile; token?: string | null }) => void;
+    logout: () => void;
 
     // 🔍 查询方法
     isUserLoggedIn: () => boolean;
@@ -68,91 +72,130 @@ export interface AuthStoreState {
 /**
  * 🏪 Auth Store实现
  */
+// SSR安全的存储后备（在无window环境下为no-op）
+const noopStorage = {
+    getItem: (_key: string) => null,
+    setItem: (_key: string, _value: string) => { },
+    removeItem: (_key: string) => { },
+};
+
 export const useAuthStore = create<AuthStoreState>()(
-    immer((set, get) => ({
-        // 📊 初始状态
-        currentUser: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: null,
+    persist(
+        immer((set, get) => ({
+            // 📊 初始状态
+            currentUser: null,
+            token: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: null,
 
-        // 🔧 核心方法 - Service层专用
-        getCurrentUserId: () => {
-            const state = get();
-            return state.currentUser?.id || '';
-        },
+            // 🔧 核心方法 - Service层专用
+            getCurrentUserId: () => {
+                const state = get();
+                return state.currentUser?.id || '';
+            },
 
-        requireAuth: () => {
-            const state = get();
-            const userId = state.currentUser?.id;
+            requireAuth: () => {
+                const state = get();
+                const userId = state.currentUser?.id;
 
-            if (!userId) {
-                throw new AuthenticationError('Please login to continue');
-            }
-
-            return userId;
-        },
-
-        // 🎯 状态管理方法
-        setCurrentUser: (user) => {
-            set((state) => {
-                state.currentUser = user;
-                state.isAuthenticated = !!user;
-                state.error = null;
-
-                // 用户登录时清除加载状态
-                if (user) {
-                    state.isLoading = false;
+                if (!userId) {
+                    throw new AuthenticationError('Please login to continue');
                 }
-            });
-        },
 
-        setToken: (token) => {
-            set((state) => {
-                state.token = token;
-            });
-        },
+                return userId;
+            },
 
-        setLoading: (loading) => {
-            set((state) => {
-                state.isLoading = loading;
-                if (loading) {
+            // 🎯 状态管理方法
+            setCurrentUser: (user) => {
+                set((state) => {
+                    state.currentUser = user;
+                    state.isAuthenticated = !!user;
                     state.error = null;
-                }
-            });
-        },
 
-        setError: (error) => {
-            set((state) => {
-                state.error = error;
-                state.isLoading = false;
-            });
-        },
+                    // 用户登录时清除加载状态
+                    if (user) {
+                        state.isLoading = false;
+                    }
+                });
+            },
 
-        clearAuth: () => {
-            set((state) => {
-                state.currentUser = null;
-                state.token = null;
-                state.isAuthenticated = false;
-                state.isLoading = false;
-                state.error = null;
-            });
-        },
+            setToken: (token) => {
+                set((state) => {
+                    state.token = token;
+                });
+            },
 
-        // 🔍 便捷查询方法
-        isUserLoggedIn: () => {
-            return !!get().currentUser;
-        },
+            setLoading: (loading) => {
+                set((state) => {
+                    state.isLoading = loading;
+                    if (loading) {
+                        state.error = null;
+                    }
+                });
+            },
 
-        getUserId: () => {
-            return get().currentUser?.id || null;
-        },
+            setError: (error) => {
+                set((state) => {
+                    state.error = error;
+                    state.isLoading = false;
+                });
+            },
 
-        getUserEmail: () => {
-            return get().currentUser?.email || null;
-        },
-    }))
+            clearAuth: () => {
+                set((state) => {
+                    state.currentUser = null;
+                    state.token = null;
+                    state.isAuthenticated = false;
+                    state.isLoading = false;
+                    state.error = null;
+                });
+            },
+
+            login: ({ user, token = null }) => {
+                set((state) => {
+                    state.currentUser = user;
+                    state.token = token;
+                    state.isAuthenticated = true;
+                    state.isLoading = false;
+                    state.error = null;
+                });
+            },
+
+            logout: () => {
+                set((state) => {
+                    state.currentUser = null;
+                    state.token = null;
+                    state.isAuthenticated = false;
+                    state.isLoading = false;
+                    state.error = null;
+                });
+            },
+
+            // 🔍 便捷查询方法
+            isUserLoggedIn: () => {
+                return !!get().currentUser;
+            },
+
+            getUserId: () => {
+                return get().currentUser?.id || null;
+            },
+
+            getUserEmail: () => {
+                return get().currentUser?.email || null;
+            },
+        })),
+        {
+            name: 'auth-store',
+            version: 1,
+            partialize: (state) => ({
+                currentUser: state.currentUser,
+                token: state.token,
+                isAuthenticated: state.isAuthenticated,
+            }),
+            storage: createJSONStorage(() => (typeof window !== 'undefined' ? localStorage : (noopStorage as any))),
+        }
+    )
 );
 
 /**
@@ -193,11 +236,11 @@ export const authStoreUtils = {
 };
 
 // 🎭 开发模式自动设置测试用户
-if (process.env.NODE_ENV === 'development') {
-    // 延迟设置，避免初始化竞态条件
+if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === 'true') {
+    // 尽量提前，避免初始化竞态条件
     setTimeout(() => {
         authStoreUtils.setDevelopmentUser();
-    }, 100);
+    }, 0);
 }
 
 export default useAuthStore;

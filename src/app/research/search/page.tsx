@@ -2,10 +2,6 @@ import { MainLayout } from '@/components/layout';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/components/ui';
 
 export default function SearchPage() {
-    const user = {
-        name: 'Research User',
-        avatar: undefined
-    };
 
     const headerActions = (
         <div className="flex items-center space-x-2">
@@ -22,7 +18,6 @@ export default function SearchPage() {
         <MainLayout
             headerTitle="文献搜索"
             headerActions={headerActions}
-            user={user}
             showSidebar={true}
         >
             <div className="p-6">

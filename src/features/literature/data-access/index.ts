@@ -776,7 +776,7 @@ class CollectionDataAccessImpl implements CollectionDataAccessAPI {
 
 class LiteraturesDataAccessImpl implements LiteraturesDataAccessAPI {
     constructor(
-        private readonly services = require('./services').compositionService
+        private readonly services = require('./services').literatureDomainServices.composition
     ) { }
 
     async create(input: CreateComposedLiteratureInput): Promise<EnhancedLibraryItem> {

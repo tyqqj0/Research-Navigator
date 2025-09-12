@@ -14,11 +14,6 @@ import {
 import { Search, Book, BarChart3, MessageCircle, Plus, Check } from 'lucide-react';
 
 export default function Home() {
-  const user = {
-    name: 'Research User',
-    avatar: undefined
-  };
-
   const headerActions = (
     <div className="flex items-center space-x-2">
       <Button variant="outline">
@@ -35,7 +30,6 @@ export default function Home() {
     <MainLayout
       headerTitle="Research Navigator"
       headerActions={headerActions}
-      user={user}
       showSidebar={true}
     >
       <div className="p-6 ">

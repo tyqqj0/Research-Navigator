@@ -21,6 +21,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector, devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import '@/lib/immer-config';
 import type { EnhancedLibraryItem } from '../models';
 
 // ==================== Store State Interface ====================

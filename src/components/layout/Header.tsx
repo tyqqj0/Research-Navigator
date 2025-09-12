@@ -14,6 +14,8 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
+import useAuthStore from '@/stores/auth.store';
+import { authApi } from '@/lib/auth/auth-api';
 
 export const Header: React.FC<HeaderProps> = ({
     title = 'Research Navigator',
@@ -23,6 +25,22 @@ export const Header: React.FC<HeaderProps> = ({
     className
 }) => {
     const router = useRouter();
+    const authUser = useAuthStore((s) => s.currentUser);
+    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const logoutStore = useAuthStore((s) => s.logout);
+
+    const displayUser = isAuthenticated && authUser ? {
+        name: authUser.name,
+        avatar: authUser.avatar,
+    } : user; // 未登录时回退到传入的user（兼容旧实现）
+
+    const handleLogout = async () => {
+        try {
+            await authApi.logout();
+        } catch { }
+        logoutStore();
+        router.push('/login');
+    };
     return (
         <header
             className={cn(
@@ -56,15 +74,15 @@ export const Header: React.FC<HeaderProps> = ({
 
 
 
-                    {user && (
+                    {displayUser && (
                         <div className="flex items-center space-x-3">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" className="flex items-center space-x-2 h-auto p-2">
-                                        {user.avatar ? (
+                                        {displayUser.avatar ? (
                                             <Image
-                                                src={user.avatar}
-                                                alt={user.name}
+                                                src={displayUser.avatar}
+                                                alt={displayUser.name}
                                                 width={32}
                                                 height={32}
                                                 className="h-8 w-8 rounded-full object-cover"
@@ -74,14 +92,14 @@ export const Header: React.FC<HeaderProps> = ({
                                                 'h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-medium',
                                                 'theme-icon-blue'
                                             )}>
-                                                {user.name.charAt(0).toUpperCase()}
+                                                {displayUser.name.charAt(0).toUpperCase()}
                                             </div>
                                         )}
                                         <span className={cn(
                                             'text-sm font-medium',
                                             // 'theme-primary-background'
                                         )}>
-                                            {user.name}
+                                            {displayUser.name}
                                         </span>
                                         <ChevronDown className="h-4 w-4" />
                                     </Button>
@@ -102,7 +120,7 @@ export const Header: React.FC<HeaderProps> = ({
                                         设置
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-red-600">
+                                    <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
                                         退出登录
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>

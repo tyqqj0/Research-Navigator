@@ -2,10 +2,6 @@ import { MainLayout } from '@/components/layout';
 import { Button, Card, CardContent, Input } from '@/components/ui';
 
 export default function ChatPage() {
-    const user = {
-        name: 'Research User',
-        avatar: undefined
-    };
 
     const headerActions = (
         <div className="flex items-center space-x-2">
@@ -22,7 +18,6 @@ export default function ChatPage() {
         <MainLayout
             headerTitle="AI 研究助手"
             headerActions={headerActions}
-            user={user}
             showSidebar={true}
         >
             <div className="h-full flex flex-col">

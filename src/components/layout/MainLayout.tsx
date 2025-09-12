@@ -46,7 +46,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             key: 'dashboard',
             label: '仪表板',
             icon: (
-                 <Home className="w-5 h-5" />
+                <Home className="w-5 h-5" />
             ),
             path: '/'
         },

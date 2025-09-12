@@ -11,6 +11,7 @@ export { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 export { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './dropdown-menu';
 export { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage, useFormField } from './form';
 export { Input } from './input';
+export { SearchInput } from './search-input';
 export { Label } from './label';
 export { Popover, PopoverContent, PopoverTrigger } from './popover';
 export { Progress } from './progress';

@@ -3,18 +3,16 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-    Search,
-    Filter,
+
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
-    List,
-    Grid,
+
     MoreHorizontal,
     Edit,
     Trash2,
@@ -158,10 +156,10 @@ export function LiteratureListPanel({
                     aValue = new Date(a.literature.createdAt).getTime();
                     bValue = new Date(b.literature.createdAt).getTime();
                     break;
-                case 'updatedAt':
-                    aValue = new Date(a.literature.updatedAt).getTime();
-                    bValue = new Date(b.literature.updatedAt).getTime();
-                    break;
+                // case 'updatedAt':
+                //     aValue = new Date(a.literature.updatedAt).getTime();
+                //     bValue = new Date(b.literature.updatedAt).getTime();
+                //     break;
                 default:
                     aValue = a.literature.title.toLowerCase();
                     bValue = b.literature.title.toLowerCase();
@@ -231,7 +229,7 @@ export function LiteratureListPanel({
         return new Date(date).toLocaleDateString('zh-CN');
     };
 
-    if (uiState.isLoading && !literatures.length) {
+    if (isLoading && !literatures.length) {
         return (
             <Card className={className}>
                 <CardContent className="p-6">
@@ -255,15 +253,14 @@ export function LiteratureListPanel({
                         {/* 搜索和筛选 */}
                         <div className="flex flex-col sm:flex-row gap-4">
                             {/* 搜索框 */}
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="搜索文献标题、作者、摘要..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10"
-                                />
-                            </div>
+                            <SearchInput
+                                className="flex-1"
+                                placeholder="搜索文献标题、作者、摘要..."
+                                value={searchQuery}
+                                onChange={(v: string) => setSearchQuery(v)}
+                                onClear={() => setSearchQuery("")}
+                                isLoading={isLoading}
+                            />
 
                             {/* 筛选器 */}
                             <div className="flex gap-2">
