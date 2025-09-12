@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,11 +37,15 @@ export default function RegisterPage() {
         }
     };
 
-    if (isAuthenticated) {
-        const returnTo = searchParams?.get('returnTo') || '/';
-        router.replace(returnTo);
-        return null;
-    }
+    useEffect(() => {
+        if (isAuthenticated) {
+            const returnTo = searchParams?.get('returnTo') || '/';
+            router.replace(returnTo);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated]);
+
+    if (isAuthenticated) return null;
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4">
@@ -82,6 +86,7 @@ export default function RegisterPage() {
                                 placeholder="至少 6 位"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
+                                required
                             />
                         </div>
                         {error && (

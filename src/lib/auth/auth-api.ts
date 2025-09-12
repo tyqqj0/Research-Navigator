@@ -27,43 +27,58 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const authApi = {
     async login(params: LoginParams): Promise<AuthResult> {
-        await delay(400);
-        const now = new Date();
-        const mockUser: UserProfile = {
-            id: `user_${Math.random().toString(36).slice(2, 10)}`,
-            email: params.email,
-            name: params.name || params.email.split('@')[0] || 'User',
-            avatar: undefined,
-            createdAt: now,
-            lastLoginAt: now,
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: params.email, password: params.password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '登录失败');
+        return {
+            user: {
+                ...data.user,
+                createdAt: new Date(data.user.createdAt),
+                lastLoginAt: new Date(data.user.lastLoginAt),
+            },
+            token: data.token ?? null,
         };
-        // 注意：纯前端demo不返回真实token
-        const token = null;
-        return { user: mockUser, token };
     },
 
     async register(params: RegisterParams): Promise<AuthResult> {
-        await delay(600);
-        const now = new Date();
-        const mockUser: UserProfile = {
-            id: `user_${Math.random().toString(36).slice(2, 10)}`,
-            email: params.email,
-            name: params.name,
-            avatar: undefined,
-            createdAt: now,
-            lastLoginAt: now,
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '注册失败');
+        return {
+            user: {
+                ...data.user,
+                createdAt: new Date(data.user.createdAt),
+                lastLoginAt: new Date(data.user.lastLoginAt),
+            },
+            token: data.token ?? null,
         };
-        return { user: mockUser, token: null };
     },
 
     async getMe(): Promise<AuthResult | null> {
-        // 真实项目中应从后端读取会话（cookie）并返回用户
-        await delay(200);
-        return null;
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || !data.user) return null;
+        return {
+            user: {
+                ...data.user,
+                createdAt: new Date(data.user.createdAt),
+                lastLoginAt: new Date(data.user.lastLoginAt),
+            },
+            token: data.token ?? null,
+        };
     },
 
     async logout(): Promise<void> {
-        await delay(100);
+        await fetch('/api/auth/logout', { method: 'POST' });
     },
 };
 

@@ -3,23 +3,18 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/compo
 
 export default function SearchPage() {
 
-    const headerActions = (
-        <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm">
-                高级搜索
-            </Button>
-            <Button size="sm">
-                保存搜索
-            </Button>
+    const pageHeader = (
+        <div className="px-6 py-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">文献搜索</h2>
+            <div className="flex items-center space-x-2">
+                <Button variant="outline" size="sm">高级搜索</Button>
+                <Button size="sm">保存搜索</Button>
+            </div>
         </div>
     );
 
     return (
-        <MainLayout
-            headerTitle="文献搜索"
-            headerActions={headerActions}
-            showSidebar={true}
-        >
+        <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
             <div className="p-6">
                 <div className="max-w-7xl mx-auto space-y-6">
                     {/* 搜索区域 */}

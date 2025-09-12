@@ -122,6 +122,13 @@ body {
   --radius: 0.375rem;
 }
 
+/* Themed dropdown surface (used by DropdownMenuContent/SubContent) */
+.theme-dropdown-surface {
+  background-color: var(--color-background-primary);
+  color: var(--color-foreground-primary);
+  border: 1px solid var(--color-border-primary);
+}
+
 /* ========== 动画和过渡 ========== */
 * {
   transition-property: color, background-color, border-color, box-shadow;
@@ -179,15 +186,14 @@ body {
 }
 
 .theme-primary-ghost {
-  background-color: transparent 10%;
-  /* opacity: 0.1; */
+  background-color: transparent;
   color: var(--color-primary);
 }
 
 .theme-primary-ghost:hover {
-  background-color: var(--color-primary);
-  color: var(--color-background);
-  opacity: 0.1;
+  /* Use a subtle, accessible hover background with sufficient contrast */
+  background-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-background-primary) 88%);
+  color: var(--color-primary);
 }
 
 /* 状态色类 */
@@ -578,6 +584,33 @@ body {
   box-shadow: var(--shadow-xl);
 }
 
+
+/* ========== 交互反馈：通用按压/悬停阴影 ========== */
+.theme-pressable {
+  transition: box-shadow 0.2s ease, transform 0.06s ease, border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+.theme-pressable:hover { box-shadow: var(--shadow-md); }
+.theme-pressable:active { transform: translateY(1px); box-shadow: var(--shadow-sm); }
+
+/* 强化版：默认态 md，hover xl，按下微下压 */
+.theme-pressable-strong {
+  transition: box-shadow 0.2s ease, transform 0.06s ease, border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+.theme-pressable-strong:hover { box-shadow: var(--shadow-lg); }
+.theme-pressable-strong:active { transform: translateY(1px); box-shadow: var(--shadow-sm); }
+
+/* 扁平版：无阴影，仅保留轻微按下手感 */
+.theme-pressable-flat { transition: transform 0.06s ease, border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease; box-shadow: none !important; }
+.theme-pressable-flat:hover { box-shadow: none !important; }
+.theme-pressable-flat:active { transform: translateY(1px); box-shadow: none !important; }
+
+/* 让 Select 打开状态也具备提升感 */
+.select-trigger[data-state="open"] {
+  box-shadow: var(--shadow-xl);
+  border-color: var(--color-border-focus);
+}
 
 /* ========== Icon 类 ========== */
 /* 

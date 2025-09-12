@@ -102,6 +102,9 @@ export interface SidebarProps extends VariantProps<typeof sidebarVariants> {
     children?: React.ReactNode;
     showCollapseButton?: boolean;
     collapseButtonPosition?: 'start' | 'end';
+    // Custom slots rendered above and below the navigation list
+    topSlot?: React.ReactNode;
+    bottomSlot?: React.ReactNode;
 }
 
 // ========== 主组件 ==========
@@ -118,6 +121,8 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
         size,
         showCollapseButton = true,
         collapseButtonPosition = 'end',
+        topSlot,
+        bottomSlot,
         ...props
     }, ref) => {
         const pathname = usePathname();
@@ -134,9 +139,10 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
         };
 
         const isActive = (item: SidebarItem): boolean => {
-            if (item.path) {
-                return pathname === item.path;
-            }
+            if (!item.path) return false;
+            if (pathname === item.path) return true;
+            // Treat nested routes as active for their parent path, except root
+            if (item.path !== '/' && pathname.startsWith(item.path + '/')) return true;
             return false;
         };
 
@@ -163,6 +169,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
                                 variant="ghost"
                                 disabled={item.disabled}
                                 className={cn(
+                                    'theme-pressable-flat',
                                     sidebarItemVariants({
                                         variant: "default",
                                         state: active ? "active" : item.disabled ? "disabled" : "default",
@@ -223,6 +230,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
                     asChild
                     disabled={item.disabled}
                     className={cn(
+                        'theme-pressable-flat',
                         sidebarItemVariants({
                             variant: "default",
                             state: active ? "active" : item.disabled ? "disabled" : "default",
@@ -233,22 +241,24 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
                         paddingLeft: collapsed ? '12px' : `${12 + level * 16}px`
                     }}
                 >
-                    <Link href={item.path || '#'} className="flex items-center flex-1 min-w-0">
-                        {item.icon && (
-                            <span className="flex-shrink-0 w-5 h-5 mr-3 text-muted-foreground">
-                                {item.icon}
-                            </span>
-                        )}
-                        {!collapsed && (
-                            <div className="flex items-center justify-between flex-1 min-w-0">
-                                <span className="truncate">{item.label}</span>
-                                {item.badge && (
-                                    <Badge variant="secondary" className="ml-2 text-xs">
-                                        {item.badge}
-                                    </Badge>
+                    <Link href={item.path || '#'} className="w-full">
+                        <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center flex-1 min-w-0">
+                                {item.icon && (
+                                    <span className="flex-shrink-0 w-5 h-5 mr-3 text-muted-foreground">
+                                        {item.icon}
+                                    </span>
+                                )}
+                                {!collapsed && (
+                                    <span className="truncate">{item.label}</span>
                                 )}
                             </div>
-                        )}
+                            {!collapsed && item.badge && (
+                                <Badge variant="secondary" className="ml-2 text-xs">
+                                    {item.badge}
+                                </Badge>
+                            )}
+                        </div>
                     </Link>
                 </Button>
             );
@@ -267,7 +277,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
                         variant="ghost"
                         size="icon"
                         onClick={() => onCollapse(!collapsed)}
-                        className={collapseButtonVariants({ position: collapseButtonPosition })}
+                        className={cn('theme-pressable-flat', collapseButtonVariants({ position: collapseButtonPosition }))}
                     >
                         {collapsed ? (
                             <ChevronRight className="h-4 w-4" />
@@ -286,11 +296,15 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
                 style={{ width: collapsed ? collapsedWidth : width }}
                 {...props}
             >
-                {/* 折叠按钮 */}
-                {renderCollapseButton()}
+                {/* 顶部区域（不随内容滚动） */}
+                {(topSlot || showCollapseButton) && (
+                    <div className="px-2 pt-2">
+                        {topSlot || renderCollapseButton()}
+                    </div>
+                )}
 
-                {/* 导航项或自定义内容 */}
-                <ScrollArea className="flex-1 px-2 py-4">
+                {/* 导航项（可滚动） */}
+                <ScrollArea className="flex-1 px-2 py-3">
                     {children ? (
                         children
                     ) : (
@@ -299,6 +313,13 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
                         </nav>
                     )}
                 </ScrollArea>
+
+                {/* 底部区域固定在最底部 */}
+                {bottomSlot && (
+                    <div className="px-2 pb-2 border-t">
+                        {bottomSlot}
+                    </div>
+                )}
             </aside>
         );
     }

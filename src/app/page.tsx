@@ -14,24 +14,20 @@ import {
 import { Search, Book, BarChart3, MessageCircle, Plus, Check } from 'lucide-react';
 
 export default function Home() {
-  const headerActions = (
-    <div className="flex items-center space-x-2">
-      <Button variant="outline">
-        导入文献
-      </Button>
-      <Button variant="outline">
-        <Plus className="mr-2 h-4 w-4" />
-        新建项目
-      </Button>
+  const pageHeader = (
+    <div className="px-6 py-3 flex items-center justify-between">
+      <h2 className="text-lg font-semibold">Research Navigator</h2>
+      <div className="flex items-center space-x-2">
+        <Button variant="outline">导入文献</Button>
+        <Button variant="outline">
+          <Plus className="mr-2 h-4 w-4" /> 新建项目
+        </Button>
+      </div>
     </div>
   );
 
   return (
-    <MainLayout
-      headerTitle="Research Navigator"
-      headerActions={headerActions}
-      showSidebar={true}
-    >
+    <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
       <div className="p-6 ">
         <div className="max-w-7xl mx-auto">
           {/* 欢迎区域 */}

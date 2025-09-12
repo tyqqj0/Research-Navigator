@@ -27,12 +27,12 @@ const SelectTrigger = React.forwardRef<
       "theme-background-primary theme-text-primary theme-border-primary",
       // 内边距
       "px-3 py-2 text-sm",
-      // 阴影效果
-      "theme-shadow-sm",
-      // 焦点状态
-      "focus:outline-none focus:ring-2 focus:ring-theme-primary/20 focus:border-theme-primary",
+      // 阴影效果与统一交互反馈（更强提升感）
+      "theme-pressable-strong",
+      // 焦点状态（仅键盘）
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-primary/20 focus-visible:border-theme-primary",
       // hover 状态
-      "hover:border-theme-primary/60 hover:theme-shadow-md",
+      "hover:border-theme-primary/60",
       // placeholder 样式
       "data-[placeholder]:theme-text-secondary",
       // 禁用状态
