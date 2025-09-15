@@ -470,7 +470,7 @@ export function LiteratureListPanel({
                                             />
                                         )}
 
-                                        <div className="flex-1 min-w-0 space-y-2">
+                                        <div className="flex-1 min-w-0 space-y-1">
                                             {/* 标题 */}
                                             <h3 className="font-semibold text-base leading-tight line-clamp-2 hover:text-blue-600">
                                                 {item.literature.title}
@@ -537,12 +537,12 @@ export function LiteratureListPanel({
                                             {/* 摘要隐藏于列表预览 */}
 
                                             {/* 底部信息 */}
-                                            <div className="flex items-center justify-between pt-2">
-                                                <div />
+                                            {/* <div className="flex items-center justify-between pt-2">
+                                                <div /> */}
 
                                                 {/* 操作菜单 */}
 
-                                            </div>
+                                            {/* </div> */}
                                         </div>
                                     </div>
                                 </div>
