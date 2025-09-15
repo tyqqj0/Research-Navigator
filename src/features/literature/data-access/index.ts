@@ -252,12 +252,15 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
             const { normalized, encoded } = this.normalizeIdentifier(identifier);
 
             // 1) 直接使用详细信息接口（兼容更多后端实现）
-            const searchRes = await this.services.backend.getPaper(encoded);
+            // 对于带斜杠的标识（DOI/URL），需要编码；S2/CorpusId 等可以直接使用原始形式
+            const idForPath = /^(DOI:|URL:)/i.test(normalized) ? encoded : normalized;
+            const searchRes = await this.services.backend.getPaper(idForPath);
             const paper = searchRes;
             if (!paper) throw new Error('No paper found for identifier');
 
             // 2) 构造创建输入并创建（含可选的完整用户元数据）
             const refs = paper?.parsedContent?.extractedReferences;
+            const pc = paper?.parsedContent as any;
             console.log('[LiteratureEntry] addByIdentifier refs from backend:', Array.isArray(refs) ? refs.length : 0);
             const created = await this.composition.createComposedLiterature({
                 literature: {
@@ -271,7 +274,8 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                     url: paper.url || undefined,
                     pdfPath: paper.pdfPath || undefined,
                     source: 'search',
-                    parsedContent: refs && Array.isArray(refs) ? { extractedReferences: refs as any } : undefined,
+                    // 传递后端的 parsedContent（如果存在），避免只保留 refs
+                    parsedContent: pc && typeof pc === 'object' ? pc : (refs && Array.isArray(refs) ? { extractedReferences: refs as any } : undefined),
                 },
                 userMeta: options.userMeta
                     ? { ...options.userMeta, tags: options.userMeta.tags || options.tags || [] }

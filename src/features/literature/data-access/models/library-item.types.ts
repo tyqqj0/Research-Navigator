@@ -8,6 +8,21 @@
 import { z } from 'zod';
 import { LiteratureSource, LITERATURE_SOURCES } from './literature-source.types';
 
+// 🔎 引用作者与详情类型
+export const ReferenceAuthorSchema = z.object({
+    authorId: z.string().optional(),
+    name: z.string()
+});
+
+export const ReferenceDetailSchema = z.object({
+    paperId: z.string().min(1),
+    title: z.string().nullable().optional(),
+    venue: z.string().nullable().optional(),
+    year: z.number().int().optional(),
+    citationCount: z.number().int().optional(),
+    authors: z.array(ReferenceAuthorSchema).optional()
+});
+
 // 🎯 核心文献实体 - 与后端严格对齐
 export const LibraryItemSchema = z.object({
     // 🔑 主键 - 与后端LID保持一致
@@ -43,6 +58,8 @@ export const LibraryItemSchema = z.object({
     parsedContent: z.object({
         extractedText: z.string().nullable().optional(),
         extractedReferences: z.array(z.any()).optional(),
+        // 引用详情：默认存在（空数组），用于更丰富的展示
+        referenceDetails: z.array(ReferenceDetailSchema).default([]),
     }).optional(),
 
     // ⏰ 时间戳

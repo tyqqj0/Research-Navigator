@@ -11,6 +11,8 @@ import { useLiteratureOperations } from '../../hooks/use-literature-operations';
 import { useLiteratureCommands } from '../../hooks/use-literature-commands';
 import type { EnhancedLibraryItem, UpdateUserLiteratureMetaInput } from '../../data-access/models';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Info, ListTree, Plus, Loader2 } from 'lucide-react';
 
 interface LiteratureDetailPanelProps {
     open: boolean;
@@ -31,7 +33,7 @@ const READING_STATUS_OPTIONS: Array<{ value: UpdateUserLiteratureMetaInput['read
 
 export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpdated, variant = 'modal' }: LiteratureDetailPanelProps) {
     const { getLiterature } = useLiteratureOperations();
-    const { updateUserMeta } = useLiteratureCommands();
+    const { updateUserMeta, addByIdentifier } = useLiteratureCommands();
 
     const currentItem = useMemo(() => {
         if (item) return item;
@@ -45,6 +47,7 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
     const [personalNotes, setPersonalNotes] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
 
     // 初始化/同步表单数据
     useEffect(() => {
@@ -89,10 +92,32 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
     }, [currentItem, tagsInput, readingStatus, rating, personalNotes, updateUserMeta, onUpdated, onOpenChange]);
 
     const references = useMemo(() => {
-        const arr = (currentItem?.literature.parsedContent as any)?.extractedReferences as any[] | undefined;
-        if (!Array.isArray(arr)) return [] as string[];
-        // 仅保留字符串ID
-        return arr.filter((r: any) => typeof r === 'string');
+        const pc = (currentItem?.literature.parsedContent as any) || {};
+        const details = pc.referenceDetails as any[] | undefined;
+        if (Array.isArray(details) && details.length > 0) {
+            return details
+                .map((d: any) => ({
+                    paperId: d.paperId,
+                    title: d.title ?? null,
+                    venue: d.venue ?? null,
+                    year: d.year,
+                    citationCount: d.citationCount,
+                    authors: Array.isArray(d.authors) ? d.authors : undefined
+                }))
+                .filter((d: any) => typeof d.paperId === 'string') as Array<{
+                    paperId: string;
+                    title?: string | null;
+                    venue?: string | null;
+                    year?: number;
+                    citationCount?: number;
+                    authors?: Array<{ authorId?: string; name: string }>;
+                }>;
+        }
+        const arr = pc.extractedReferences as any[] | undefined;
+        if (!Array.isArray(arr)) return [] as any[];
+        return arr
+            .filter((r: any) => typeof r === 'string')
+            .map((rid: string) => ({ paperId: rid })) as any[];
     }, [currentItem?.literature.parsedContent]);
 
     const resolveTitle = useCallback((refId: string): string => {
@@ -100,121 +125,205 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
         return item?.literature.title || refId;
     }, [getLiterature]);
 
+    const makeIdentifier = useCallback((pid: string): string => {
+        const v = (pid || '').trim();
+        if (!v) return v;
+        if (v.includes(':')) return v; // already prefixed
+        const isDigits = /^\d+$/.test(v);
+        if (isDigits) return `CorpusId:${v}`;
+        const isHex40 = /^[a-fA-F0-9]{40}$/.test(v);
+        if (isHex40) return v;
+        return v; // fallback raw
+    }, []);
+
+    const handleAddReference = useCallback(async (pid: string) => {
+        if (!pid) return;
+        setAddingIds(prev => new Set(prev).add(pid));
+        try {
+            await addByIdentifier(makeIdentifier(pid), { autoExtractCitations: false });
+        } catch (e) {
+            // noop; keep silent per request
+        } finally {
+            setAddingIds(prev => {
+                const next = new Set(prev);
+                next.delete(pid);
+                return next;
+            });
+        }
+    }, [addByIdentifier, makeIdentifier]);
+
     const Body = (
-        <div className="space-y-6 h-full overflow-auto p-4">
-            {/* 只读核心信息 */}
-            <div className="space-y-2">
-                <div className="text-lg font-semibold leading-snug">{currentItem?.literature.title}</div>
-                {currentItem && (
-                    <>
-                        <div className="text-sm text-muted-foreground">
-                            {(currentItem.literature.authors || []).join(', ')}
-                        </div>
-                        <div className="text-xs text-muted-foreground flex gap-3">
-                            {currentItem.literature.year && (<span>年份: {currentItem.literature.year}</span>)}
-                            {currentItem.literature.publication && (<span>期刊: {currentItem.literature.publication}</span>)}
-                            {currentItem.literature.doi && (<span>DOI: {currentItem.literature.doi}</span>)}
-                        </div>
-                        {currentItem.literature.abstract && (
-                            <div className="mt-2 text-sm whitespace-pre-wrap">{currentItem.literature.abstract}</div>
-                        )}
-                    </>
-                )}
-            </div>
+        <div className="h-full overflow-hidden">
+            <Tabs defaultValue="meta" orientation="vertical" className="h-full">
+                <div className="h-full flex">
+                    <div className="flex-1 min-h-0">
+                        <TabsContent value="meta" className="h-full !mt-0">
+                            <ScrollArea className="h-full">
+                                <div className="space-y-6 p-4">
+                                    {/* 只读核心信息 */}
+                                    <div className="space-y-2">
+                                        <div className="text-lg font-semibold leading-snug">{currentItem?.literature.title}</div>
+                                        {currentItem && (
+                                            <>
+                                                <div className="text-sm text-muted-foreground">
+                                                    {(currentItem.literature.authors || []).join(', ')}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground flex gap-3">
+                                                    <span className="font-mono">ID: {currentItem.literature.paperId}</span>
+                                                    {currentItem.literature.year && (<span>年份: {currentItem.literature.year}</span>)}
+                                                    {currentItem.literature.publication && (<span>期刊: {currentItem.literature.publication}</span>)}
+                                                    {currentItem.literature.doi && (<span>DOI: {currentItem.literature.doi}</span>)}
+                                                </div>
+                                                {currentItem.literature.abstract && (
+                                                    <div className="mt-2 text-sm whitespace-pre-wrap">{currentItem.literature.abstract}</div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
 
-            {/* 可编辑用户元数据 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <div className="text-sm font-semibold">标签（用逗号分隔）</div>
-                    <Input
-                        placeholder="e.g. survey, transformer, optimization"
-                        value={tagsInput}
-                        onChange={(e) => setTagsInput(e.target.value)}
-                    />
-                    <div className="flex flex-wrap gap-2">
-                        {tagsInput.split(',').map(t => t.trim()).filter(Boolean).slice(0, 10).map((t, i) => (
-                            <Badge key={`${t}-${i}`} variant="secondary">{t}</Badge>
-                        ))}
-                    </div>
-                </div>
+                                    {/* 可编辑用户元数据 */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <div className="text-sm font-semibold">标签（用逗号分隔）</div>
+                                            <Input
+                                                placeholder="e.g. survey, transformer, optimization"
+                                                value={tagsInput}
+                                                onChange={(e) => setTagsInput(e.target.value)}
+                                            />
+                                            <div className="flex flex-wrap gap-2">
+                                                {tagsInput.split(',').map(t => t.trim()).filter(Boolean).slice(0, 10).map((t, i) => (
+                                                    <Badge key={`${t}-${i}`} variant="secondary">{t}</Badge>
+                                                ))}
+                                            </div>
+                                        </div>
 
-                <div className="space-y-2">
-                    <div className="text-sm font-semibold">阅读状态</div>
-                    <Select value={readingStatus} onValueChange={(v) => setReadingStatus(v as any)}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="选择阅读状态" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {READING_STATUS_OPTIONS.map(opt => (
-                                <SelectItem key={opt.value} value={opt.value!}>{opt.label}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
+                                        <div className="space-y-2">
+                                            <div className="text-sm font-semibold">阅读状态</div>
+                                            <Select value={readingStatus} onValueChange={(v) => setReadingStatus(v as any)}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="选择阅读状态" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {READING_STATUS_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value!}>{opt.label}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                <div className="space-y-2">
-                    <div className="text-sm font-semibold">评分（1-5，可选）</div>
-                    <Input
-                        type="number"
-                        min={1}
-                        max={5}
-                        step={1}
-                        placeholder="未评分"
-                        value={typeof rating === 'number' ? String(rating) : ''}
-                        onChange={(e) => {
-                            const v = e.target.value;
-                            const num = v === '' ? undefined : Number(v);
-                            if (num === undefined || (!Number.isNaN(num) && num >= 1 && num <= 5)) {
-                                setRating(num as any);
-                            }
-                        }}
-                    />
-                </div>
+                                        <div className="space-y-2">
+                                            <div className="text-sm font-semibold">评分（1-5，可选）</div>
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                max={5}
+                                                step={1}
+                                                placeholder="未评分"
+                                                value={typeof rating === 'number' ? String(rating) : ''}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    const num = v === '' ? undefined : Number(v);
+                                                    if (num === undefined || (!Number.isNaN(num) && num >= 1 && num <= 5)) {
+                                                        setRating(num as any);
+                                                    }
+                                                }}
+                                            />
+                                        </div>
 
-                <div className="space-y-2 md:col-span-2">
-                    <div className="text-sm font-semibold">个人笔记</div>
-                    <Textarea
-                        rows={5}
-                        placeholder="写下你的想法、要点或待办..."
-                        value={personalNotes}
-                        onChange={(e) => setPersonalNotes(e.target.value)}
-                    />
-                </div>
-            </div>
+                                        <div className="space-y-2 md:col-span-2">
+                                            <div className="text-sm font-semibold">个人笔记</div>
+                                            <Textarea
+                                                rows={5}
+                                                placeholder="写下你的想法、要点或待办..."
+                                                value={personalNotes}
+                                                onChange={(e) => setPersonalNotes(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
 
-            {/* 引用文献（基于元数据直接展示） */}
-            <div className="space-y-2">
-                <div className="text-sm font-semibold">参考文献（元数据）</div>
-                {references.length === 0 ? (
-                    <div className="text-xs text-muted-foreground">无解析到的引用。</div>
-                ) : (
-                    <ScrollArea className="max-h-48 border rounded-md">
-                        <div className="p-2 space-y-2">
-                            {references.map((rid) => (
-                                <div key={rid} className="text-sm">
-                                    {resolveTitle(rid)}
-                                    {getLiterature(rid) ? null : (
-                                        <span className="ml-2 text-xs text-muted-foreground">（未收录）</span>
+                                    {error && (
+                                        <div className="text-sm text-red-600">{error}</div>
+                                    )}
+
+                                    <div className="flex items-center justify-end gap-2">
+                                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+                                            取消
+                                        </Button>
+                                        <Button onClick={handleSave} disabled={isSaving}>
+                                            {isSaving ? '保存中...' : '保存'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </ScrollArea>
+                        </TabsContent>
+
+                        <TabsContent value="references" className="h-full !mt-0">
+                            <ScrollArea className="h-full">
+                                <div className="p-4 space-y-3">
+                                    {references.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground">无参考文献信息。</div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {references.map((r: any) => {
+                                                const exists = !!getLiterature(r.paperId);
+                                                const isAdding = addingIds.has(r.paperId);
+                                                return (
+                                                    <div key={r.paperId} className="rounded-md border border-border/60 p-3 hover:bg-muted/40 transition-colors">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="text-sm font-medium leading-snug line-clamp-2">
+                                                                {r.title || resolveTitle(r.paperId)}
+                                                            </div>
+                                                            {!exists && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    aria-label="添加到文库"
+                                                                    onClick={() => handleAddReference(r.paperId)}
+                                                                    disabled={isAdding}
+                                                                >
+                                                                    {isAdding ? (
+                                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                                    ) : (
+                                                                        <Plus className="w-4 h-4" />
+                                                                    )}
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                        <div className="mt-1 text-xs text-muted-foreground">
+                                                            {r.authors && Array.isArray(r.authors) && r.authors.length > 0 && (
+                                                                <span>{r.authors.map((a: any) => a?.name || a).filter(Boolean).join(', ')} · </span>
+                                                            )}
+                                                            {r.venue && <span>{r.venue} · </span>}
+                                                            {typeof r.year === 'number' && <span>{r.year}</span>}
+                                                            {typeof r.citationCount === 'number' && (
+                                                                <span> · 被引 {r.citationCount}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="mt-1 text-[11px] text-muted-foreground/80 font-mono">ID: {r.paperId}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     )}
                                 </div>
-                            ))}
-                        </div>
-                    </ScrollArea>
-                )}
-            </div>
+                            </ScrollArea>
+                        </TabsContent>
+                    </div>
 
-            {error && (
-                <div className="text-sm text-red-600">{error}</div>
-            )}
-
-            <div className="flex items-center justify-end gap-2">
-                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
-                    取消
-                </Button>
-                <Button onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? '保存中...' : '保存'}
-                </Button>
-            </div>
+                    <div className="shrink-0 w-10 border-l border-border p-2">
+                        <TabsList className="!flex !flex-col !w-full h-auto gap-2 bg-transparent p-0 !items-center !justify-start rounded-none shadow-none">
+                            <TabsTrigger value="meta" className="!justify-center !w-full !px-0 !py-2 h-9" aria-label="元数据">
+                                <Info className="w-5 h-5" />
+                                <span className="sr-only">元数据</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="references" className="!justify-center !w-full !px-0 !py-2 h-9" aria-label="参考文献">
+                                <ListTree className="w-5 h-5" />
+                                <span className="sr-only">参考文献</span>
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
+                </div>
+            </Tabs>
         </div>
     );
 

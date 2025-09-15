@@ -375,15 +375,57 @@ export class BackendApiService {
         const createdAt = backendData.created_at || backendData.createdAt || Date.now();
         const updatedAt = backendData.updated_at || backendData.updatedAt || createdAt;
 
-        // Normalize references into parsedContent.extractedReferences if provided by backend
-        const refsRaw = backendData.references || backendData.reference_list || undefined;
+        // Normalize references into parsedContent.extractedReferences and referenceDetails if provided by backend
+        const refsRaw = backendData.references || backendData.reference_list || backendData.refs || undefined;
         let normalizedExtractedReferences: string[] | undefined;
+        let referenceDetails: Array<{
+            paperId: string;
+            title?: string | null;
+            venue?: string | null;
+            year?: number;
+            citationCount?: number;
+            authors?: Array<{ authorId?: string; name: string }>;
+        }> | undefined;
         if (Array.isArray(refsRaw)) {
+            referenceDetails = [];
             normalizedExtractedReferences = refsRaw
                 .map((r: any) => {
-                    if (typeof r === 'string') return r;
+                    if (typeof r === 'string') {
+                        // also push minimal detail
+                        referenceDetails!.push({ paperId: r });
+                        return r;
+                    }
                     if (r && typeof r === 'object') {
-                        return r.paperId || r.paper_id || r.id || r.targetPaperId || r.target_paper_id || r.targetId || r.target_id;
+                        const id = r.paperId || r.paper_id || r.id || r.targetPaperId || r.target_paper_id || r.targetId || r.target_id;
+                        if (!id) return undefined;
+                        // extract authors array robustly
+                        const authorsRaw = r.authors || r.author_list || r.authorNames || r.author_names;
+                        let authors: Array<{ authorId?: string; name: string }> | undefined;
+                        if (Array.isArray(authorsRaw)) {
+                            authors = authorsRaw
+                                .map((a: any) => {
+                                    if (!a) return undefined;
+                                    if (typeof a === 'string') return { name: a };
+                                    const name = a.name || a.fullName || a.display_name || a.displayName || a.author_name;
+                                    const authorId = a.authorId || a.author_id || a.id;
+                                    if (!name) return undefined;
+                                    return authorId ? { authorId: String(authorId), name } : { name };
+                                })
+                                .filter(Boolean) as Array<{ authorId?: string; name: string }>;
+                        }
+                        const title = r.title || r.paperTitle || r.displayTitle || null;
+                        const venue = r.venue || r.journal || r.publication || r.publicationVenue?.name || null;
+                        const year = r.year || r.publicationYear || r.pub_year;
+                        const citationCount = r.citationCount || r.citation_count || r.numCitations || r.citations;
+                        referenceDetails!.push({
+                            paperId: id,
+                            title: title ?? null,
+                            venue: venue ?? null,
+                            year: typeof year === 'number' ? year : undefined,
+                            citationCount: typeof citationCount === 'number' ? citationCount : undefined,
+                            authors
+                        });
+                        return id;
                     }
                     return undefined;
                 })
@@ -392,14 +434,17 @@ export class BackendApiService {
 
         // Merge with backend provided parsed_content if any
         const parsedContent = (() => {
-            const original = backendData.parsed_content || undefined;
+            const original = backendData.parsed_content || backendData.parsedContent || undefined;
+            const merged = {
+                ...(original || {}),
+            } as any;
             if (normalizedExtractedReferences && normalizedExtractedReferences.length > 0) {
-                return {
-                    ...(original || {}),
-                    extractedReferences: normalizedExtractedReferences,
-                };
+                merged.extractedReferences = normalizedExtractedReferences;
             }
-            return original || undefined;
+            if (referenceDetails && referenceDetails.length > 0) {
+                merged.referenceDetails = referenceDetails;
+            }
+            return Object.keys(merged).length > 0 ? merged : undefined;
         })();
 
         return {
