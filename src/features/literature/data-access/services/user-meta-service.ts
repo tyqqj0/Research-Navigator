@@ -174,7 +174,7 @@ export class UserMetaService {
                 }
             }
 
-            await this.userMetaRepo.update(paperId, updateData);
+            await this.userMetaRepo.updateByUserAndLiterature(userId, paperId, updateData);
             const updatedMeta = await this.userMetaRepo.findByUserAndLiterature(userId, paperId);
 
             this.updateStats(startTime, true);
@@ -195,7 +195,7 @@ export class UserMetaService {
         try {
             this.stats.totalOperations++;
 
-            await this.userMetaRepo.delete(paperId);
+            await this.userMetaRepo.deleteByUserAndLiterature(userId, paperId);
 
             this.updateStats(startTime, true);
             return true;
@@ -203,6 +203,45 @@ export class UserMetaService {
             this.updateStats(startTime, false);
             console.error('[UserMetaService] deleteUserMeta failed:', error);
             return false;
+        }
+    }
+
+    /**
+     * 🧮 统计使用该文献的用户数量（按元数据记录数估算）
+     */
+    async countUsersByLiterature(paperId: string): Promise<number> {
+        try {
+            return await this.userMetaRepo.countByLiteratureId(paperId);
+        } catch (error) {
+            console.error('[UserMetaService] countUsersByLiterature failed:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * 📋 获取某文献的全部用户元数据
+     */
+    async getMetasByLiterature(paperId: string): Promise<UserLiteratureMeta[]> {
+        try {
+            return await this.userMetaRepo.findByLiteratureId(paperId);
+        } catch (error) {
+            console.error('[UserMetaService] getMetasByLiterature failed:', error);
+            return [];
+        }
+    }
+
+    /**
+     * 🗑️ 删除某文献的所有用户元数据
+     */
+    async deleteAllUserMetaForLiterature(paperId: string): Promise<number> {
+        try {
+            const metas = await this.userMetaRepo.findByLiteratureId(paperId);
+            if (!metas.length) return 0;
+            await this.userMetaRepo.bulkDelete(metas.map(m => m.id));
+            return metas.length;
+        } catch (error) {
+            console.error('[UserMetaService] deleteAllUserMetaForLiterature failed:', error);
+            return 0;
         }
     }
 

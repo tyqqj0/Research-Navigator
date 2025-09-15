@@ -19,6 +19,8 @@ import { LiteratureListPanel } from '@/features/literature/management/components
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
 import { useLiteratureCommands } from '@/features/literature/hooks/use-literature-commands';
 import LiteratureDetailPanel from '@/features/literature/management/components/LiteratureDetailPanel';
+import { CollectionTreePanel } from '@/features/literature/management/components/CollectionTreePanel';
+import { useCollectionOperations } from '@/features/literature/hooks';
 import RequireAuth from '@/components/auth/RequireAuth';
 import useAuthStore from '@/stores/auth.store';
 
@@ -36,17 +38,54 @@ export default function LibraryPage() {
     const [detailOpen, setDetailOpen] = useState(false);
     const [activePaperId, setActivePaperId] = useState<string | undefined>(undefined);
     const [addError, setAddError] = useState<string | null>(null);
+    const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+    const [virtualFilter, setVirtualFilter] = useState<null | 'all' | 'unfiled'>(null);
+
+    // 集合操作（用于加载、过滤与上下文删除）
+    const {
+        collections,
+        loadCollections,
+        removeLiteratureFromCollection,
+        getCollection,
+    } = useCollectionOperations();
 
     // 首次加载数据
     useEffect(() => {
         if (isAuthenticated) {
             loadLiteratures({ force: false }).catch(() => { });
+            loadCollections({ force: false }).catch(() => { });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAuthenticated]);
 
     const isLoading = uiState.isLoading;
     const error = uiState.error;
+    // 基于选中集合进行过滤
+    const filteredLiteratures = useMemo(() => {
+        // 虚拟过滤：全部
+        if (virtualFilter === 'all') return literatures;
+
+        // 虚拟过滤：未归档（未被任何集合包含）
+        if (virtualFilter === 'unfiled') {
+            const assigned = new Set<string>();
+            for (const c of collections || []) {
+                for (const pid of c.paperIds) assigned.add(pid);
+            }
+            return literatures.filter(item => !assigned.has(item.literature.paperId));
+        }
+
+        // 具体集合过滤
+        if (selectedCollectionId) {
+            const c = getCollection(selectedCollectionId);
+            if (!c) return literatures;
+            const idSet = new Set(c.paperIds);
+            return literatures.filter(item => idSet.has(item.literature.paperId));
+        }
+
+        // 默认全部
+        return literatures;
+    }, [virtualFilter, selectedCollectionId, literatures, getCollection, collections]);
+
 
     // 计算紧凑统计信息（基于当前文献列表）
     const miniStats = useMemo(() => {
@@ -99,7 +138,12 @@ export default function LibraryPage() {
         if (!pid) return;
         try {
             console.log('[LibraryPage] Deleting literature', pid);
-            await deleteLiterature(pid, { deleteGlobally: false });
+            if (selectedCollectionId) {
+                await removeLiteratureFromCollection(selectedCollectionId, pid);
+            } else {
+                // 默认走自动策略（服务层按是否仅当前用户使用决定）
+                await deleteLiterature(pid, {});
+            }
             if (activePaperId === pid) {
                 setDetailOpen(false);
                 setActivePaperId(undefined);
@@ -107,7 +151,7 @@ export default function LibraryPage() {
         } catch (e) {
             console.warn('[LibraryPage] Delete failed', e);
         }
-    }, [deleteLiterature, activePaperId]);
+    }, [deleteLiterature, activePaperId, selectedCollectionId, removeLiteratureFromCollection]);
 
     const pageHeader = (
         <div className="px-6 py-3 flex items-center justify-between">
@@ -129,8 +173,26 @@ export default function LibraryPage() {
         <RequireAuth>
             <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
                 <div className="p-0 h-full relative">
-                    <div className={`grid grid-cols-1 xl:grid-cols-5 gap-0 h-full transition-all duration-300 ${detailOpen ? 'pr-[38rem]' : ''}`}>
-                        {/* 左侧：图谱全高固定区 */}
+                    <div className={`grid grid-cols-1 xl:grid-cols-6 gap-0 h-full transition-all duration-300 ${detailOpen ? 'pr-[38rem]' : ''}`}>
+                        {/* 左侧：集合树 */}
+                        <div className="hidden xl:block xl:col-span-1 border-r border-border h-full">
+                            <div className="p-6 h-full overflow-y-auto">
+                                <CollectionTreePanel onSelectCollection={(id) => {
+                                    if (id === '__UNFILED__') {
+                                        setVirtualFilter('unfiled');
+                                        setSelectedCollectionId(null);
+                                    } else if (id == null) {
+                                        setVirtualFilter('all');
+                                        setSelectedCollectionId(null);
+                                    } else {
+                                        setVirtualFilter(null);
+                                        setSelectedCollectionId(id);
+                                    }
+                                }} />
+                            </div>
+                        </div>
+
+                        {/* 中间：图谱全高固定区 */}
                         <div className="xl:col-span-3 border-r border-border h-full flex flex-col min-h-0">
                             <div className="p-6 flex-1 min-h-0">
                                 <Card className="h-full flex flex-col">
@@ -244,6 +306,8 @@ export default function LibraryPage() {
                                         onItemClick={(item) => handleOpenDetail(item.literature.paperId)}
                                         onItemDelete={handleItemDelete}
                                         onAddNew={(paperId) => handleOpenDetail(paperId)}
+                                        literatures={filteredLiteratures}
+                                        isLoading={isLoading}
                                     />
                                 </div>
                             </div>

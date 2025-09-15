@@ -338,7 +338,7 @@ export function LiteratureListPanel({
                             {/* 筛选器 */}
                             <div className="flex gap-2">
                                 <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                                    <SelectTrigger className="w-32">
+                                    <SelectTrigger className="w-25">
                                         <SelectValue placeholder="来源" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -351,7 +351,7 @@ export function LiteratureListPanel({
                                 </Select>
 
                                 <Select value={yearFilter} onValueChange={setYearFilter}>
-                                    <SelectTrigger className="w-32">
+                                    <SelectTrigger className="w-25">
                                         <SelectValue placeholder="年份" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -381,14 +381,14 @@ export function LiteratureListPanel({
 
                                 {/* 批量操作 */}
                                 {selectedItems.size > 0 && (
-                                    <div className="flex items-center gap-2">
-                                        <Button variant="outline" size="sm">
+                                    <div className="flex items-center gap-2 w-32">
+                                        {/* <Button variant="outline" size="sm">
                                             <Edit className="h-4 w-4 mr-1" />
                                             批量编辑
-                                        </Button>
-                                        <Button variant="outline" size="sm" className="text-red-600">
+                                        </Button> */}
+                                        <Button variant="destructive" size="sm" className="text-red-600">
                                             <Trash2 className="h-4 w-4 mr-1" />
-                                            批量删除
+                                            删除
                                         </Button>
                                     </div>
                                 )}
@@ -399,8 +399,8 @@ export function LiteratureListPanel({
                                 {/* 添加入口在列表工具栏右上角 */}
                                 <div className="hidden md:flex items-center gap-2 mr-2">
                                     <Input
-                                        placeholder="输入 DOI / URL / S2 添加"
-                                        className="w-64"
+                                        placeholder="输入DOI/URL/S2Id添加"
+                                        className="w-49"
                                         value={addInput}
                                         onChange={(e) => setAddInput(e.target.value)}
                                         onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
@@ -411,7 +411,7 @@ export function LiteratureListPanel({
                                     </Button>
                                 </div>
                                 <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
-                                    <SelectTrigger className="w-32">
+                                    <SelectTrigger className="w-25">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -540,7 +540,7 @@ export function LiteratureListPanel({
                                             {/* <div className="flex items-center justify-between pt-2">
                                                 <div /> */}
 
-                                                {/* 操作菜单 */}
+                                            {/* 操作菜单 */}
 
                                             {/* </div> */}
                                         </div>

@@ -30,6 +30,7 @@ import type {
 import { LiteratureService, literatureService } from './literature-service';
 import { citationService } from './citation-service';
 import { UserMetaService, userMetaService } from './user-meta-service';
+import { collectionService } from './collection-service';
 import { handleError } from '../../../../lib/errors';
 import { authStoreUtils, type AuthStoreState } from '../../../../stores/auth.store';
 
@@ -316,28 +317,46 @@ export class CompositionService {
      * 🎯 重构后：默认删除当前用户的数据，可选择删除全局数据
      */
     async deleteComposedLiterature(paperId: string, options: {
-        deleteGlobally?: boolean
+        deleteGlobally?: boolean,
+        policy?: 'auto' | 'user' | 'global'
     } = {}): Promise<void> {
         const userId = this.getCurrentUserId(); // 🔐 内部自动获取用户ID
 
         try {
-            // 1. 删除当前用户的元数据
-            try {
+            // 0) 确定策略
+            const policy = options.policy || (options.deleteGlobally ? 'global' : 'auto');
+
+            if (policy === 'user') {
+                // 删除当前用户元数据 + 从该用户所有集合移除
                 await this.userMetaService.deleteUserMeta(userId, paperId);
-            } catch (error) {
-                // 用户元数据可能不存在，忽略错误
+                try { await collectionService.removeLiteratureFromAllUserCollections(userId, paperId); } catch { }
+                return;
             }
 
-            // 2. 如果指定全局删除，则删除文献核心数据（并级联清理其出边关系）
-            if (options.deleteGlobally) {
+            if (policy === 'global') {
+                // 全局删除：删除文献本体 + 级联清理出边；删除所有用户元数据；从所有集合移除
                 await this.literatureService.deleteLiterature(paperId, { cascadeDelete: true });
-                // TODO: 实现删除所有用户元数据的方法
-                // await this.userMetaService.deleteAllUserMetaForLiterature(paperId);
+                try { await this.userMetaService.deleteAllUserMetaForLiterature(paperId); } catch { }
+                try { await collectionService.removeLiteratureFromAllCollections(paperId); } catch { }
+                return;
+            }
+
+            // auto 策略：根据是否被其他用户使用决定
+            const metaCount = await this.userMetaService.countUsersByLiterature(paperId);
+            if (metaCount <= 1) {
+                // 仅当前用户使用或孤儿 -> 全局删除
+                await this.literatureService.deleteLiterature(paperId, { cascadeDelete: true });
+                try { await this.userMetaService.deleteAllUserMetaForLiterature(paperId); } catch { }
+                try { await collectionService.removeLiteratureFromAllCollections(paperId); } catch { }
+            } else {
+                // 其他用户也在使用 -> 仅删除当前用户数据
+                await this.userMetaService.deleteUserMeta(userId, paperId);
+                try { await collectionService.removeLiteratureFromAllUserCollections(userId, paperId); } catch { }
             }
         } catch (error) {
             ErrorHandler.handle(error, {
                 operation: 'CompositionService.deleteComposedLiterature',
-                additionalInfo: { message: `Deleting literature ${paperId} for user: ${userId}, global: ${options.deleteGlobally}` }
+                additionalInfo: { message: `Deleting literature ${paperId} for user: ${userId}, policy: ${options.policy || 'auto'}` }
             });
             throw error;
         }

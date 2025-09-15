@@ -50,6 +50,50 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
     }
 
     /**
+     * 🧮 统计某文献对应的用户元数据数量
+     */
+    async countByLiteratureId(paperId: string): Promise<number> {
+        try {
+            return await this.table.where('paperId').equals(paperId).count();
+        } catch (error) {
+            console.error('[UserMetaRepository] countByLiteratureId failed:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * 📝 基于复合键更新（userId+paperId）
+     */
+    async updateByUserAndLiterature(
+        userId: string,
+        paperId: string,
+        updates: Partial<UserLiteratureMeta>
+    ): Promise<void> {
+        try {
+            const existing = await this.findByUserAndLiterature(userId, paperId);
+            if (!existing) return;
+            await this.update(existing.id, updates);
+        } catch (error) {
+            console.error('[UserMetaRepository] updateByUserAndLiterature failed:', error);
+            throw new Error('Failed to update user meta by composite key');
+        }
+    }
+
+    /**
+     * 🗑️ 基于复合键删除（userId+paperId）
+     */
+    async deleteByUserAndLiterature(userId: string, paperId: string): Promise<void> {
+        try {
+            const existing = await this.findByUserAndLiterature(userId, paperId);
+            if (!existing) return;
+            await this.delete(existing.id);
+        } catch (error) {
+            console.error('[UserMetaRepository] deleteByUserAndLiterature failed:', error);
+            throw new Error('Failed to delete user meta by composite key');
+        }
+    }
+
+    /**
      * 📋 获取用户的所有文献元数据
      */
     async findByUserId(userId: string): Promise<UserLiteratureMeta[]> {
@@ -148,8 +192,8 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
             const existing = await this.findByUserAndLiterature(userId, paperId);
 
             if (existing) {
-                // 更新现有元数据
-                await this.update(existing.id, {
+                // 更新现有元数据（按复合主键）
+                await this.table.update([userId, paperId] as any, {
                     ...input,
                     updatedAt: DatabaseUtils.now()
                 });
@@ -171,7 +215,7 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
 
                 // 验证数据
                 const validatedMeta = UserLiteratureMetaSchema.parse(newMeta);
-                await this.table.add(validatedMeta);
+                await this.table.add(validatedMeta as any);
 
                 return newMeta.id;
             }
@@ -191,7 +235,7 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
             if (meta) {
                 if (!meta.tags.includes(tag)) {
                     const updatedTags = [...meta.tags, tag];
-                    await this.update(meta.id, { tags: updatedTags });
+                    await this.table.update([userId, paperId] as any, { tags: updatedTags } as any);
                 }
             } else {
                 // 创建新元数据
@@ -216,7 +260,7 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
 
             if (meta && meta.tags.includes(tag)) {
                 const updatedTags = meta.tags.filter(t => t !== tag);
-                await this.update(meta.id, { tags: updatedTags });
+                await this.table.update([userId, paperId] as any, { tags: updatedTags } as any);
             }
         } catch (error) {
             console.error('[UserMetaRepository] removeTag failed:', error);
@@ -246,8 +290,7 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                     high: 0,
                     urgent: 0
                 },
-                tagStats: [],
-                categoryStats: []
+                tagStats: []
             };
 
             // 计算阅读状态统计
@@ -291,16 +334,16 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
             const validIdsSet = new Set(validLiteratureIds);
             const allMetas = await this.table.toArray();
 
-            const orphanedMetas = allMetas.filter(meta =>
-                !validIdsSet.has(meta.paperId)
-            );
+            // 直接通过过滤删除，避免主键错位
+            const deletedCount = await this.table
+                .filter(meta => !validIdsSet.has((meta as any).paperId))
+                .delete();
 
-            if (orphanedMetas.length > 0) {
-                await this.bulkDelete(orphanedMetas.map(meta => meta.id));
-                console.log(`[UserMetaRepository] Cleaned up ${orphanedMetas.length} orphaned metadata`);
+            if (deletedCount > 0) {
+                console.log(`[UserMetaRepository] Cleaned up ${deletedCount} orphaned metadata`);
             }
 
-            return orphanedMetas.length;
+            return deletedCount;
         } catch (error) {
             console.error('[UserMetaRepository] cleanupOrphanedMetas failed:', error);
             throw new Error('Failed to cleanup orphaned metadata');

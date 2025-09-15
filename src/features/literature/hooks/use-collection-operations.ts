@@ -94,7 +94,7 @@ export interface UseCollectionOperationsReturn {
     removeLiteraturesFromCollection: (collectionId: string, paperIds: string[]) => Promise<void>;
 
     // 🔄 数据同步
-    loadCollections: (userId: string, options?: { force?: boolean }) => Promise<void>;
+    loadCollections: (options?: { force?: boolean }) => Promise<void>;
     loadCollection: (id: string) => Promise<Collection | null>;
     refreshCollection: (id: string) => Promise<void>;
 

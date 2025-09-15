@@ -281,6 +281,48 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
     }
 
     /**
+     * 🧹 从指定用户的所有集合中移除文献
+     */
+    async removeLiteratureFromAllUserCollections(ownerUid: string, paperId: string): Promise<number> {
+        try {
+            const collections = await this.findByOwnerId(ownerUid);
+            let affected = 0;
+            for (const c of collections) {
+                if (c.paperIds.includes(paperId)) {
+                    const updated = c.paperIds.filter(id => id !== paperId);
+                    await this.update(c.id, { paperIds: updated, itemCount: updated.length });
+                    affected++;
+                }
+            }
+            return affected;
+        } catch (error) {
+            console.error('[CollectionRepository] removeLiteratureFromAllUserCollections failed:', error);
+            throw new Error('Failed to remove literature from user collections');
+        }
+    }
+
+    /**
+     * 🧹 从所有集合中移除某个文献（全局）
+     */
+    async removeLiteratureFromAllCollections(paperId: string): Promise<number> {
+        try {
+            const all = await this.table.toArray();
+            let affected = 0;
+            for (const c of all) {
+                if (c.paperIds.includes(paperId)) {
+                    const updated = c.paperIds.filter(id => id !== paperId);
+                    await this.update(c.id, { paperIds: updated, itemCount: updated.length });
+                    affected++;
+                }
+            }
+            return affected;
+        } catch (error) {
+            console.error('[CollectionRepository] removeLiteratureFromAllCollections failed:', error);
+            throw new Error('Failed to remove literature from all collections');
+        }
+    }
+
+    /**
      * 🔄 执行集合操作
      */
     async executeOperation(operation: CollectionOperation): Promise<void> {

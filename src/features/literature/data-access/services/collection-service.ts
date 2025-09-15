@@ -237,6 +237,29 @@ export class CollectionService {
         }
     }
 
+    /**
+     * 🧹 从用户的所有集合中移除一篇文献
+     */
+    async removeLiteratureFromAllUserCollections(userId: string, paperId: string): Promise<number> {
+        try {
+            // 只需要写权限校验在仓储层逐个集合时进行；这里快速执行
+            return await this.collectionRepo.removeLiteratureFromAllUserCollections(userId, paperId);
+        } catch (error) {
+            throw handleError(error, { operation: 'removeLiteratureFromAllUserCollections', additionalInfo: { message: 'Failed to remove from user collections' } });
+        }
+    }
+
+    /**
+     * 🧹 从所有集合中移除一篇文献（全局）
+     */
+    async removeLiteratureFromAllCollections(paperId: string): Promise<number> {
+        try {
+            return await this.collectionRepo.removeLiteratureFromAllCollections(paperId);
+        } catch (error) {
+            throw handleError(error, { operation: 'removeLiteratureFromAllCollections', additionalInfo: { message: 'Failed to remove from all collections' } });
+        }
+    }
+
     // ==================== 智能集合操作 ====================
 
     /**
