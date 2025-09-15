@@ -147,6 +147,7 @@ export const useCollectionStore = create<CollectionStoreState & CollectionStoreA
                         const collection = state.collections[collectionId];
                         if (collection && !collection.paperIds.includes(literatureId)) {
                             collection.paperIds.push(literatureId);
+                            collection.itemCount = collection.paperIds.length;
                             collection.updatedAt = new Date();
                         }
                     });
@@ -159,6 +160,7 @@ export const useCollectionStore = create<CollectionStoreState & CollectionStoreA
                             const index = collection.paperIds.indexOf(literatureId);
                             if (index !== -1) {
                                 collection.paperIds.splice(index, 1);
+                                collection.itemCount = collection.paperIds.length;
                                 collection.updatedAt = new Date();
                             }
                         }
@@ -174,6 +176,7 @@ export const useCollectionStore = create<CollectionStoreState & CollectionStoreA
                                     collection.paperIds.push(literatureId);
                                 }
                             });
+                            collection.itemCount = collection.paperIds.length;
                             collection.updatedAt = new Date();
                         }
                     });
@@ -186,6 +189,7 @@ export const useCollectionStore = create<CollectionStoreState & CollectionStoreA
                             collection.paperIds = collection.paperIds.filter(
                                 (paperId: string) => !paperIds.includes(paperId)
                             );
+                            collection.itemCount = collection.paperIds.length;
                             collection.updatedAt = new Date();
                         }
                     });

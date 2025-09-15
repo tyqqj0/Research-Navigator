@@ -298,8 +298,9 @@ export class CollectionService {
             if (addedItems.length > 0 || removedItems.length > 0) {
                 await this.collectionRepo.update(collectionId, {
                     paperIds: matchedItems,
+                    itemCount: matchedItems.length,
                     updatedAt: new Date(),
-                });
+                } as any);
             }
 
             return {

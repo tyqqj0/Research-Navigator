@@ -460,6 +460,17 @@ export function LiteratureListPanel({
                                     key={item.literature.paperId}
                                     className={`${viewMode === 'list' ? 'p-4 hover:bg-gray-50' : 'border rounded-lg p-4 hover:shadow-md'} transition-all cursor-pointer`}
                                     onClick={() => onItemClick?.(item)}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        const ids = [item.literature.paperId];
+                                        // 如果有多选且包含当前项，则打包所有已选 ID
+                                        if (selectedItems.size > 0 && selectedItems.has(item.literature.paperId)) {
+                                            e.dataTransfer.setData('application/x-paper-ids', JSON.stringify(Array.from(selectedItems)));
+                                        } else {
+                                            e.dataTransfer.setData('application/x-paper-ids', JSON.stringify(ids));
+                                        }
+                                        e.dataTransfer.effectAllowed = 'copy';
+                                    }}
                                 >
                                     <div className="flex items-start gap-3">
                                         {showControls && (
