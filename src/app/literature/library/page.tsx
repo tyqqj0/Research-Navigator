@@ -88,19 +88,19 @@ export default function LibraryPage() {
         <RequireAuth>
             <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
                 <div className="p-0 h-full">
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-0 h-full">
+                    <div className="grid grid-cols-1 xl:grid-cols-5 gap-0 h-full">
                         {/* 左侧：图谱全高固定区 */}
-                        <div className="xl:col-span-1 border-r h-full">
-                            <div className="p-6">
-                                <Card className="h-full">
+                        <div className="xl:col-span-3 border-r border-border h-full flex flex-col min-h-0">
+                            <div className="p-6 flex-1 min-h-0">
+                                <Card className="h-full flex flex-col">
                                     <CardHeader className="pb-3">
                                         <CardTitle className="text-sm font-medium flex items-center gap-2">
                                             <Network className="w-4 h-4" />
                                             引用关系图（预留）
                                         </CardTitle>
                                     </CardHeader>
-                                    <CardContent className="pt-0 h-[calc(100%-56px)]">
-                                        <div className="h-full w-full rounded-md border bg-gray-50 dark:bg-gray-900/20 flex items-center justify-center text-sm text-muted-foreground">
+                                    <CardContent className="pt-0 flex-1 min-h-0">
+                                        <div className="h-full w-full rounded-md border border-border bg-gray-50 dark:bg-gray-900/20 flex items-center justify-center text-sm text-muted-foreground">
                                             图谱可视化将在这里展示
                                         </div>
                                     </CardContent>
@@ -120,28 +120,28 @@ export default function LibraryPage() {
                                     </CardHeader>
                                     <CardContent className="pt-0">
                                         <div className="grid grid-cols-2 gap-3 text-sm">
-                                            <div className="flex items-center gap-2 p-2 rounded-md border">
+                                            <div className="flex items-center gap-2 p-2 rounded-md border border-border">
                                                 <BookOpen className="w-4 h-4 text-blue-600" />
                                                 <div className="truncate">
                                                     <div className="text-xs text-muted-foreground">总文献数</div>
                                                     <div className="font-semibold">{miniStats.total}</div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2 p-2 rounded-md border">
+                                            <div className="flex items-center gap-2 p-2 rounded-md border border-border">
                                                 <Users className="w-4 h-4 text-emerald-600" />
                                                 <div className="truncate">
                                                     <div className="text-xs text-muted-foreground">作者数</div>
                                                     <div className="font-semibold">{miniStats.authorCount}</div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2 p-2 rounded-md border">
+                                            <div className="flex items-center gap-2 p-2 rounded-md border border-border">
                                                 <Calendar className="w-4 h-4 text-orange-600" />
                                                 <div className="truncate">
                                                     <div className="text-xs text-muted-foreground">年份范围</div>
                                                     <div className="font-semibold">{miniStats.yearSpanText}</div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2 p-2 rounded-md border">
+                                            <div className="flex items-center gap-2 p-2 rounded-md border border-border">
                                                 <Calendar className="w-4 h-4 text-purple-600" />
                                                 <div className="truncate">
                                                     <div className="text-xs text-muted-foreground">平均年份</div>
@@ -157,10 +157,30 @@ export default function LibraryPage() {
                                 <div className="px-6">
                                     <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20">
                                         <CardContent className="pt-6">
-                                            <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                                                <Activity className="w-4 h-4" />
-                                                <span className="font-medium">加载错误:</span>
-                                                <span>{error}</span>
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                                                    <Activity className="w-4 h-4" />
+                                                    <span className="font-medium">加载错误:</span>
+                                                    <span className="truncate">{error}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() => loadLiteratures({ force: true })}
+                                                        disabled={isLoading}
+                                                    >
+                                                        重新加载
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => loadLiteratures({ force: true })}
+                                                        disabled={isLoading}
+                                                    >
+                                                        重试
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </CardContent>
                                     </Card>

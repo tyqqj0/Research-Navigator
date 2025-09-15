@@ -564,9 +564,7 @@ body {
 }
 
 /* 实用工具类 */
-.theme-divider {
-  border-top: 1px solid var(--color-border);
-}
+.theme-divider { border-top: 1px solid var(--color-border-primary); }
 
 .theme-shadow-sm {
   box-shadow: var(--shadow-sm);

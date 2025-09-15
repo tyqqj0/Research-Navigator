@@ -175,14 +175,17 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 )}
 
                 {/* 主要内容 */}
-                <main className="flex-1 overflow-auto">
+                <main className="flex-1 min-h-0 flex flex-col">
                     {pageHeader && (
-                        <div className="border-b bg-background">
+                        <div className="shrink-0 border-b border-border bg-background">
                             {pageHeader}
                         </div>
                     )}
-                    <div className="h-full">
-                        {children}
+                    {/* 仅内容区域滚动，避免顶部边条引起整页1px滚动 */}
+                    <div className="min-h-0 flex-1 overflow-auto">
+                        <div className="h-full">
+                            {children}
+                        </div>
                     </div>
                 </main>
             </div>

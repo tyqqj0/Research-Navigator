@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { SearchInput } from "@/components/ui";
+import { SearchInput, Skeleton } from "@/components/ui";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -232,12 +232,62 @@ export function LiteratureListPanel({
     if (isLoading && !literatures.length) {
         return (
             <Card className={className}>
-                <CardContent className="p-6">
-                    <div className="flex items-center justify-center h-48">
-                        <div className="text-center">
-                            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-blue-500" />
-                            <p className="text-muted-foreground">正在加载文献列表...</p>
+                {/* 控制栏骨架 */}
+                {showControls && (
+                    <CardHeader>
+                        <div className="flex flex-col space-y-4">
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <Skeleton className="h-9 w-full sm:flex-1" />
+                                <div className="flex gap-2">
+                                    <Skeleton className="h-9 w-32" />
+                                    <Skeleton className="h-9 w-32" />
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <Skeleton className="h-5 w-48" />
+                                <div className="flex items-center gap-2">
+                                    <Skeleton className="h-9 w-32" />
+                                    <Skeleton className="h-9 w-10" />
+                                </div>
+                            </div>
                         </div>
+                    </CardHeader>
+                )}
+
+                {/* 列表骨架 */}
+                <CardContent className="p-0">
+                    {/* 全选条骨架 */}
+                    {showControls && (
+                        <div className="flex items-center gap-2 p-4 border-b">
+                            <Skeleton className="h-4 w-4 rounded-sm" />
+                            <Skeleton className="h-4 w-10" />
+                        </div>
+                    )}
+
+                    {/* 行骨架 */}
+                    <div className="divide-y">
+                        {Array.from({ length: limit || 6 }).map((_, idx) => (
+                            <div key={idx} className="p-4">
+                                <div className="flex items-start gap-3">
+                                    {showControls && <Skeleton className="h-4 w-4 rounded-sm" />}
+                                    <div className="flex-1 min-w-0 space-y-2">
+                                        <Skeleton className="h-5 w-3/4" />
+                                        <div className="flex items-center gap-4">
+                                            <Skeleton className="h-4 w-40" />
+                                            <Skeleton className="h-4 w-16" />
+                                        </div>
+                                        <Skeleton className="h-4 w-full" />
+                                        <div className="flex items-center justify-between pt-2">
+                                            <div className="flex items-center gap-2">
+                                                <Skeleton className="h-5 w-12" />
+                                                <Skeleton className="h-4 w-24" />
+                                            </div>
+                                            <Skeleton className="h-8 w-8 rounded-md" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </CardContent>
             </Card>
