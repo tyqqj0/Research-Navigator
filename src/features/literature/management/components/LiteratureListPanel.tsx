@@ -4,6 +4,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchInput, Skeleton } from "@/components/ui";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +33,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useLiteratureOperations } from '../../hooks/use-literature-operations';
+import { useLiteratureCommands } from '../../hooks/use-literature-commands';
 import { LibraryItem, EnhancedLibraryItem } from '../../data-access/models';
 
 // 添加缺失的类型定义
@@ -49,6 +51,7 @@ interface LiteratureListPanelProps {
     onItemClick?: (item: EnhancedLibraryItem) => void;
     onItemEdit?: (item: EnhancedLibraryItem) => void;
     onItemDelete?: (item: EnhancedLibraryItem) => void;
+    onAddNew?: (paperId: string) => void;
 }
 
 export function LiteratureListPanel({
@@ -61,7 +64,8 @@ export function LiteratureListPanel({
     isLoading: externalIsLoading,
     onItemClick,
     onItemEdit,
-    onItemDelete
+    onItemDelete,
+    onAddNew
 }: LiteratureListPanelProps) {
     // 状态管理
     const [searchQuery, setSearchQuery] = useState('');
@@ -75,6 +79,10 @@ export function LiteratureListPanel({
 
     // 数据hooks - 只在没有外部数据时使用
     const hookResult = useLiteratureOperations();
+    const { addByIdentifier } = useLiteratureCommands();
+    const [addInput, setAddInput] = useState('');
+    const [adding, setAdding] = useState(false);
+    const [addError, setAddError] = useState<string | null>(null);
 
     // 使用外部数据或hook数据
     const literatures = externalLiteratures || hookResult.literatures;
@@ -218,16 +226,31 @@ export function LiteratureListPanel({
         }
     }, [selectedItems.size, paginatedItems]);
 
-    const formatAuthors = (authors: string[], maxCount = 3) => {
-        if (authors.length <= maxCount) {
-            return authors.join(', ');
-        }
-        return authors.slice(0, maxCount).join(', ') + ` 等 ${authors.length} 人`;
+    const formatAuthors = (authors: string[]) => {
+        if (!authors || authors.length === 0) return '';
+        if (authors.length === 1) return authors[0];
+        return `${authors[0]} 等`;
     };
 
     const formatDate = (date: Date) => {
         return new Date(date).toLocaleDateString('zh-CN');
     };
+
+    const handleAdd = useCallback(async () => {
+        const v = addInput.trim();
+        if (!v) return;
+        setAdding(true);
+        setAddError(null);
+        try {
+            const created = await addByIdentifier(v, { autoExtractCitations: false });
+            onAddNew?.(created.paperId);
+            setAddInput('');
+        } catch (e: any) {
+            setAddError(e?.message || '添加失败');
+        } finally {
+            setAdding(false);
+        }
+    }, [addInput, addByIdentifier, onAddNew]);
 
     if (isLoading && !literatures.length) {
         return (
@@ -371,8 +394,22 @@ export function LiteratureListPanel({
                                 )}
                             </div>
 
-                            {/* 排序控制 */}
+                            {/* 右侧：新增与排序 */}
                             <div className="flex items-center gap-2">
+                                {/* 添加入口在列表工具栏右上角 */}
+                                <div className="hidden md:flex items-center gap-2 mr-2">
+                                    <Input
+                                        placeholder="输入 DOI / URL / S2 添加"
+                                        className="w-64"
+                                        value={addInput}
+                                        onChange={(e) => setAddInput(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+                                        disabled={adding}
+                                    />
+                                    <Button size="sm" onClick={handleAdd} disabled={adding || !addInput.trim()}>
+                                        新建
+                                    </Button>
+                                </div>
                                 <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
                                     <SelectTrigger className="w-32">
                                         <SelectValue />
@@ -395,6 +432,9 @@ export function LiteratureListPanel({
                                 </Button>
                             </div>
                         </div>
+                        {addError && (
+                            <div className="text-xs text-red-600">添加错误：{addError}</div>
+                        )}
                     </div>
                 </CardHeader>
             )}
@@ -436,43 +476,26 @@ export function LiteratureListPanel({
                                                 {item.literature.title}
                                             </h3>
 
-                                            {/* 作者和年份 */}
+                                            {/* 作者、年份与来源 */}
                                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                                <div className="flex items-center gap-1">
+                                                <div className="flex items-center gap-1 min-w-0">
                                                     <User className="h-3 w-3" />
-                                                    <span className="truncate">{formatAuthors(item.literature.authors, viewMode === 'grid' ? 2 : 3)}</span>
+                                                    <span className="truncate">{formatAuthors(item.literature.authors)}</span>
                                                 </div>
-                                                <div className="flex items-center gap-1">
-                                                    <Calendar className="h-3 w-3" />
-                                                    <span>{item.literature.year}</span>
-                                                </div>
-                                            </div>
-
-                                            {/* 摘要 */}
-                                            {item.literature.abstract && viewMode === 'list' && (
-                                                <p className="text-sm text-muted-foreground line-clamp-2">
-                                                    {item.literature.abstract}
-                                                </p>
-                                            )}
-
-                                            {/* 底部信息 */}
-                                            <div className="flex items-center justify-between pt-2">
                                                 <div className="flex items-center gap-2">
-                                                    {/* 来源标签 */}
-                                                    <Badge variant="outline" className="text-xs">
+                                                    <div className="flex items-center gap-1">
+                                                        <Calendar className="h-3 w-3" />
+                                                        <span>{item.literature.year}</span>
+                                                    </div>
+                                                    <Badge variant="outline" className="text-[10px] px-2 py-0.5">
                                                         {item.literature.source === 'manual' && '手动'}
                                                         {item.literature.source === 'zotero' && 'Zotero'}
                                                         {item.literature.source === 'import' && '导入'}
                                                         {item.literature.source === 'search' && '搜索'}
                                                     </Badge>
-
-                                                    {/* 时间信息 */}
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {formatDate(item.literature.createdAt)}
-                                                    </span>
                                                 </div>
 
-                                                {/* 操作菜单 */}
+                                                { /* 操作菜单靠右显示 */}
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -507,6 +530,18 @@ export function LiteratureListPanel({
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
+                                            </div>
+
+
+
+                                            {/* 摘要隐藏于列表预览 */}
+
+                                            {/* 底部信息 */}
+                                            <div className="flex items-center justify-between pt-2">
+                                                <div />
+
+                                                {/* 操作菜单 */}
+
                                             </div>
                                         </div>
                                     </div>

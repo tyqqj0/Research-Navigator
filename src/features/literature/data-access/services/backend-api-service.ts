@@ -329,6 +329,8 @@ export class BackendApiService {
     ): Promise<any> {
         const url = `${this.baseUrl}${endpoint}`;
 
+        console.log('[BackendAPI] API Request:', url, method, data);
+
         const config: RequestInit = {
             method,
             headers: {

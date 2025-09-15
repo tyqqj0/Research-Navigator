@@ -119,19 +119,19 @@ export class CompositionService {
                 throw new Error('Failed to retrieve created literature');
             }
 
-            // 2. 创建用户元数据（如果提供）
+            // 2. 创建用户元数据（始终为当前用户创建，确保刷新后可见）
             let userMeta: UserLiteratureMeta | null = null;
-            if (input.userMeta) {
+            {
                 const metaInput: CreateUserLiteratureMetaInput = {
-                    ...input.userMeta,
+                    ...(input.userMeta || {} as any),
                     paperId: literature.paperId,
-                    userId, // 🎯 使用内部获取的userId
-                    tags: input.userMeta.tags || [],
-                    readingStatus: input.userMeta.readingStatus || 'unread',
-                    customFields: input.userMeta.customFields || {},
-                };
+                    userId,
+                    tags: (input.userMeta?.tags) || [],
+                    readingStatus: (input.userMeta?.readingStatus) || 'unread',
+                    customFields: (input.userMeta?.customFields) || {},
+                } as CreateUserLiteratureMetaInput;
                 userMeta = await this.userMetaService.createUserMeta(
-                    userId, // 🎯 使用内部获取的userId
+                    userId,
                     literature.paperId,
                     metaInput,
                     { autoSetDefaultTags: true }
@@ -144,8 +144,10 @@ export class CompositionService {
                 const refIds: string[] | undefined = Array.isArray(refs)
                     ? refs.filter((r: any) => typeof r === 'string')
                     : undefined;
+                console.log('[CompositionService] extractedReferences count =', refIds?.length || 0, 'paperId=', literature.paperId);
                 if (refIds && refIds.length > 0) {
-                    await citationService.parseAndStoreReferences(literature.paperId, refIds);
+                    const result = await citationService.parseAndStoreReferences(literature.paperId, refIds);
+                    console.log('[CompositionService] parseAndStoreReferences result', result);
                 }
             } catch (e) {
                 console.warn('[CompositionService] parseAndStoreReferences failed:', e);
@@ -326,9 +328,9 @@ export class CompositionService {
                 // 用户元数据可能不存在，忽略错误
             }
 
-            // 2. 如果指定全局删除，则删除文献核心数据
+            // 2. 如果指定全局删除，则删除文献核心数据（并级联清理其出边关系）
             if (options.deleteGlobally) {
-                await this.literatureService.deleteLiterature(paperId);
+                await this.literatureService.deleteLiterature(paperId, { cascadeDelete: true });
                 // TODO: 实现删除所有用户元数据的方法
                 // await this.userMetaService.deleteAllUserMetaForLiterature(paperId);
             }

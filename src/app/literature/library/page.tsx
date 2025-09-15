@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { MainLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,8 @@ import {
 // 列表组件
 import { LiteratureListPanel } from '@/features/literature/management/components/LiteratureListPanel';
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
+import { useLiteratureCommands } from '@/features/literature/hooks/use-literature-commands';
+import LiteratureDetailPanel from '@/features/literature/management/components/LiteratureDetailPanel';
 import RequireAuth from '@/components/auth/RequireAuth';
 import useAuthStore from '@/stores/auth.store';
 
@@ -25,10 +27,15 @@ export default function LibraryPage() {
     const {
         literatures,
         uiState,
-        loadLiteratures
+        loadLiteratures,
+        deleteLiterature
     } = useLiteratureOperations();
 
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const { addByIdentifier } = useLiteratureCommands();
+    const [detailOpen, setDetailOpen] = useState(false);
+    const [activePaperId, setActivePaperId] = useState<string | undefined>(undefined);
+    const [addError, setAddError] = useState<string | null>(null);
 
     // 首次加载数据
     useEffect(() => {
@@ -68,6 +75,40 @@ export default function LibraryPage() {
 
     // Header 用户信息现由全局 auth store 提供，无需在页面层传入
 
+    const handleAdd = useCallback(async (identifier: string) => {
+        const v = (identifier || '').trim();
+        if (!v) return;
+        setAddError(null);
+        try {
+            const created = await addByIdentifier(v, { autoExtractCitations: false });
+            const pid = created.paperId;
+            setActivePaperId(pid);
+            setDetailOpen(true);
+        } catch (e: any) {
+            setAddError(e?.message || '添加失败');
+        }
+    }, [addByIdentifier]);
+
+    const handleOpenDetail = useCallback((paperId: string) => {
+        setActivePaperId(paperId);
+        setDetailOpen(true);
+    }, []);
+
+    const handleItemDelete = useCallback(async (item: { literature: { paperId: string } }) => {
+        const pid = item?.literature?.paperId;
+        if (!pid) return;
+        try {
+            console.log('[LibraryPage] Deleting literature', pid);
+            await deleteLiterature(pid, { deleteGlobally: false });
+            if (activePaperId === pid) {
+                setDetailOpen(false);
+                setActivePaperId(undefined);
+            }
+        } catch (e) {
+            console.warn('[LibraryPage] Delete failed', e);
+        }
+    }, [deleteLiterature, activePaperId]);
+
     const pageHeader = (
         <div className="px-6 py-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold">我的文库</h2>
@@ -87,8 +128,8 @@ export default function LibraryPage() {
     return (
         <RequireAuth>
             <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
-                <div className="p-0 h-full">
-                    <div className="grid grid-cols-1 xl:grid-cols-5 gap-0 h-full">
+                <div className="p-0 h-full relative">
+                    <div className={`grid grid-cols-1 xl:grid-cols-5 gap-0 h-full transition-all duration-300 ${detailOpen ? 'pr-[38rem]' : ''}`}>
                         {/* 左侧：图谱全高固定区 */}
                         <div className="xl:col-span-3 border-r border-border h-full flex flex-col min-h-0">
                             <div className="p-6 flex-1 min-h-0">
@@ -186,12 +227,40 @@ export default function LibraryPage() {
                                     </Card>
                                 </div>
                             )}
+                            {addError && (
+                                <div className="px-6">
+                                    <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20">
+                                        <CardContent className="pt-4 pb-4 text-sm text-red-600 dark:text-red-400">
+                                            添加错误: {addError}
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            )}
 
                             {/* 文献列表：仅此处滚动 */}
                             <div className="flex-1 min-h-0">
                                 <div className="h-full overflow-y-auto px-6 pb-6">
-                                    <LiteratureListPanel />
+                                    <LiteratureListPanel
+                                        onItemClick={(item) => handleOpenDetail(item.literature.paperId)}
+                                        onItemDelete={handleItemDelete}
+                                        onAddNew={(paperId) => handleOpenDetail(paperId)}
+                                    />
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    {/* 侧边详情面板：限制在内容区域内，不覆盖顶端页头 */}
+                    <div className="absolute inset-y-0 right-0 z-30 pointer-events-none">
+                        <div className="h-full">
+                            <div className="w-[38rem] max-w-[90vw] h-full transform transition-transform duration-300 shadow-xl pointer-events-auto"
+                                style={{ transform: detailOpen ? 'translateX(0)' : 'translateX(100%)' }}>
+                                <LiteratureDetailPanel
+                                    open={detailOpen}
+                                    onOpenChange={setDetailOpen}
+                                    paperId={activePaperId}
+                                    onUpdated={() => { }}
+                                    variant="side"
+                                />
                             </div>
                         </div>
                     </div>

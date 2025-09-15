@@ -218,7 +218,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                 normalized = `DOI:${v}`;
             } else {
                 // 默认走 S2 标识
-                normalized = `S2:${v}`;
+                normalized = v
             }
         }
         return { normalized, encoded: encodeURIComponent(normalized) };
@@ -251,13 +251,14 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
         try {
             const { normalized, encoded } = this.normalizeIdentifier(identifier);
 
-            // 1) 优先使用搜索接口（兼容更多后端实现）
-            const searchRes = await this.services.backend.searchPapers({ query: normalized, limit: 1, offset: 0 });
-            const found = (searchRes.results || [])[0];
-            const paper = found || await this.services.backend.getPaper(encoded);
+            // 1) 直接使用详细信息接口（兼容更多后端实现）
+            const searchRes = await this.services.backend.getPaper(encoded);
+            const paper = searchRes;
             if (!paper) throw new Error('No paper found for identifier');
 
             // 2) 构造创建输入并创建（含可选的完整用户元数据）
+            const refs = paper?.parsedContent?.extractedReferences;
+            console.log('[LiteratureEntry] addByIdentifier refs from backend:', Array.isArray(refs) ? refs.length : 0);
             const created = await this.composition.createComposedLiterature({
                 literature: {
                     title: paper.title,
@@ -269,6 +270,8 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                     doi: paper.doi || undefined,
                     url: paper.url || undefined,
                     pdfPath: paper.pdfPath || undefined,
+                    source: 'search',
+                    parsedContent: refs && Array.isArray(refs) ? { extractedReferences: refs as any } : undefined,
                 },
                 userMeta: options.userMeta
                     ? { ...options.userMeta, tags: options.userMeta.tags || options.tags || [] }
