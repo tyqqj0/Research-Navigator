@@ -52,6 +52,7 @@ interface LiteratureListPanelProps {
     onItemEdit?: (item: EnhancedLibraryItem) => void;
     onItemDelete?: (item: EnhancedLibraryItem) => void;
     onAddNew?: (paperId: string) => void;
+    onVisibleIdsChange?: (ids: string[]) => void; // 新增：通知“未分页可见全集”变化
 }
 
 export function LiteratureListPanel({
@@ -65,7 +66,8 @@ export function LiteratureListPanel({
     onItemClick,
     onItemEdit,
     onItemDelete,
-    onAddNew
+    onAddNew,
+    onVisibleIdsChange
 }: LiteratureListPanelProps) {
     // 状态管理
     const [searchQuery, setSearchQuery] = useState('');
@@ -73,7 +75,7 @@ export function LiteratureListPanel({
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(limit || 10);
+    const [pageSize, setPageSize] = useState(limit || 6);
     const [sourceFilter, setSourceFilter] = useState<string>('all');
     const [yearFilter, setYearFilter] = useState<string>('all');
     const [pageInput, setPageInput] = useState<string>('1');
@@ -183,6 +185,13 @@ export function LiteratureListPanel({
 
         return filtered;
     }, [literatures, searchQuery, sourceFilter, yearFilter, sortField, sortOrder]);
+
+    // 当“未分页的可见全集”变化时，通知外部（图谱使用）
+    useEffect(() => {
+        if (onVisibleIdsChange) {
+            onVisibleIdsChange(filteredAndSortedItems.map(i => i.literature.paperId));
+        }
+    }, [filteredAndSortedItems, onVisibleIdsChange]);
 
     // 分页逻辑
     const paginatedItems = useMemo(() => {

@@ -205,7 +205,7 @@ export type PaginatedResult<T> = {
 export class LibraryItemFactory {
     static createLibraryItem(input: CreateLibraryItemInput): LibraryItem {
         return {
-            paperId: crypto.randomUUID(),
+            paperId: input.paperId,
             title: input.title,
             authors: input.authors || [],
             year: input.year,
@@ -229,6 +229,16 @@ export class LibraryItemFactory {
 // 🔍 模型验证器
 export class ModelValidators {
     static createInput(input: CreateLibraryItemInput): void {
+        // paperId 仅做最小长度检查（例如S2：40字符；CorpusId：短数字；DOI更短，但非空即可）
+        // 如果有前缀，则提取
+        if (input.paperId && input.paperId.trim().startsWith('S2: ')) {
+            input.paperId = input.paperId.trim().substring(4);
+        } else if (input.paperId && input.paperId.trim().startsWith('S2:')) {
+            input.paperId = input.paperId.trim().substring(3);
+        }
+        if (!input.paperId || input.paperId.trim().length !== 40) {
+            throw new Error('paperId is required and should be 40 characters');
+        }
         if (!input.title || input.title.trim() === '') {
             throw new Error('Title is required');
         }

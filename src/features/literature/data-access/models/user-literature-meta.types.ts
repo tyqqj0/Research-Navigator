@@ -14,7 +14,7 @@ export const UserLiteratureMetaSchema = z.object({
 
     // 👤 关联信息
     userId: z.string(), // 这个元数据属于哪个用户
-    paperId: z.string().uuid(), // 关联的文献ID (对应LibraryItem.id)
+    paperId: z.string().min(1), // 关联的文献ID (对应LibraryItem.paperId，允许非UUID如S2哈希)
 
     // 🏷️ 用户标签
     tags: z.array(z.string()).default([]),

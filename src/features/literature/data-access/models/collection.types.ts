@@ -95,7 +95,7 @@ export const CollectionSchema = z.object({
     isPublic: z.boolean().default(false),
 
     // 📚 文献关联 - 核心关系数据
-    paperIds: z.array(z.string()).default([]),
+    paperIds: z.array(z.string().min(1)).default([]),
     itemCount: z.number().default(0),
     lastItemAddedAt: z.date().optional(),
 
@@ -103,7 +103,7 @@ export const CollectionSchema = z.object({
     smartRule: SmartCollectionRuleSchema.optional(),
 
     // 🏗️ 层次结构 - 核心结构数据
-    parentId: z.string().uuid().nullable().optional(),
+    parentId: z.string().nullable().optional(),
     childIds: z.array(z.string()).default([]),
 
     // ⏰ 时间戳

@@ -19,6 +19,8 @@ import { LiteratureListPanel } from '@/features/literature/management/components
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
 import { useLiteratureCommands } from '@/features/literature/hooks/use-literature-commands';
 import LiteratureDetailPanel from '@/features/literature/management/components/LiteratureDetailPanel';
+import CitationGraphPanel from '@/features/literature/visualization/citation-graph/CitationGraphPanel';
+import { useLiteratureViewStore } from '@/features/literature/stores/view-store';
 import { CollectionTreePanel } from '@/features/literature/management/components/CollectionTreePanel';
 import { useCollectionOperations } from '@/features/literature/hooks';
 import RequireAuth from '@/components/auth/RequireAuth';
@@ -37,6 +39,7 @@ export default function LibraryPage() {
     const { addByIdentifier } = useLiteratureCommands();
     const [detailOpen, setDetailOpen] = useState(false);
     const [activePaperId, setActivePaperId] = useState<string | undefined>(undefined);
+    const [visiblePaperIds, setVisiblePaperIds] = useState<string[]>([]);
     const [addError, setAddError] = useState<string | null>(null);
     const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
     const [virtualFilter, setVirtualFilter] = useState<null | 'all' | 'unfiled'>(null);
@@ -133,6 +136,22 @@ export default function LibraryPage() {
         setDetailOpen(true);
     }, []);
 
+    // 稳定的可见ID变更处理，避免父组件每次渲染导致子组件effect重复触发
+    const handleVisibleIdsChange = useCallback((ids: string[]) => {
+        setVisiblePaperIds(prev => {
+            if (prev.length === ids.length && prev.every((v, i) => v === ids[i])) return prev;
+            return ids;
+        });
+        try { useLiteratureViewStore.getState().setVisiblePaperIds(ids); } catch { }
+    }, []);
+
+    // 稳定的节点点击处理，避免传入图谱组件的回调每次变更导致其内部副作用重复执行
+    const handleNodeClick = useCallback((pid: string) => {
+        setActivePaperId(pid);
+        setDetailOpen(true);
+        try { useLiteratureViewStore.getState().setActivePaperId(pid); } catch { }
+    }, []);
+
     const handleItemDelete = useCallback(async (item: { literature: { paperId: string } }) => {
         const pid = item?.literature?.paperId;
         if (!pid) return;
@@ -192,22 +211,16 @@ export default function LibraryPage() {
                             </div>
                         </div>
 
-                        {/* 中间：图谱全高固定区 */}
+                        {/* 中间：图谱区 */}
                         <div className="xl:col-span-3 border-r border-border h-full flex flex-col min-h-0">
                             <div className="p-6 flex-1 min-h-0">
-                                <Card className="h-full flex flex-col">
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                            <Network className="w-4 h-4" />
-                                            引用关系图（预留）
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="pt-0 flex-1 min-h-0">
-                                        <div className="h-full w-full rounded-md border border-border bg-gray-50 dark:bg-gray-900/20 flex items-center justify-center text-sm text-muted-foreground">
-                                            图谱可视化将在这里展示
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                <CitationGraphPanel
+                                    className="h-full"
+                                    visiblePaperIds={visiblePaperIds}
+                                    isLoading={isLoading}
+                                    onNodeClick={handleNodeClick}
+                                    refreshKey={`${selectedCollectionId ?? virtualFilter ?? 'all'}:${miniStats.total}`}
+                                />
                             </div>
                         </div>
 
@@ -308,6 +321,7 @@ export default function LibraryPage() {
                                     literatures={filteredLiteratures}
                                     isLoading={isLoading}
                                     className="h-full flex flex-col"
+                                    onVisibleIdsChange={handleVisibleIdsChange}
                                 />
                             </div>
                         </div>

@@ -264,6 +264,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
             console.log('[LiteratureEntry] addByIdentifier refs from backend:', Array.isArray(refs) ? refs.length : 0);
             const created = await this.composition.createComposedLiterature({
                 literature: {
+                    paperId: paper.paperId, // 使用后端返回的原生ID（S2/CorpusId/DOI/URL）
                     title: paper.title,
                     authors: paper.authors || [],
                     year: paper.year,

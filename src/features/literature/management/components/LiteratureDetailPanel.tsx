@@ -168,11 +168,15 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
                                                 <div className="text-sm text-muted-foreground">
                                                     {(currentItem.literature.authors || []).join(', ')}
                                                 </div>
-                                                <div className="text-xs text-muted-foreground flex gap-3">
-                                                    <span className="font-mono">ID: {currentItem.literature.paperId}</span>
-                                                    {currentItem.literature.year && (<span>年份: {currentItem.literature.year}</span>)}
-                                                    {currentItem.literature.publication && (<span>期刊: {currentItem.literature.publication}</span>)}
-                                                    {currentItem.literature.doi && (<span>DOI: {currentItem.literature.doi}</span>)}
+                                                <div className="text-xs text-muted-foreground flex flex-col gap-1">
+                                                    <div className="flex gap-3">
+                                                        <span className="font-mono">ID: {currentItem.literature.paperId}</span>
+                                                        {currentItem.literature.year && (<span>年份: {currentItem.literature.year}</span>)}
+                                                    </div>
+                                                    <div className="flex gap-3">
+                                                        {currentItem.literature.publication && (<span>期刊: {currentItem.literature.publication}</span>)}
+                                                        {currentItem.literature.doi && (<span>DOI: {currentItem.literature.doi}</span>)}
+                                                    </div>
                                                 </div>
                                                 {currentItem.literature.abstract && (
                                                     <div className="mt-2 text-sm whitespace-pre-wrap">{currentItem.literature.abstract}</div>

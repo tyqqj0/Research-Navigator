@@ -10,9 +10,8 @@ import { z } from 'zod';
 // 🔗 基础引文关系 - 极简设计
 export const CitationSchema = z.object({
     // 📚 核心关系定义
-    sourceItemId: z.string().uuid('Invalid source UUID format'), // 引用方LID
-    // 允许目标为非UUID（外部/悬挂引用），仅要求非空字符串
-    targetItemId: z.string().min(1, 'targetItemId is required'), // 被引用方LID（可为外部ID）
+    sourceItemId: z.string().min(1, 'sourceItemId is required'), // 引用方ID（允许S2）
+    targetItemId: z.string().min(1, 'targetItemId is required'), // 被引用方ID（允许S2）
 
     // 📄 可选上下文信息
     context: z.string().optional(), // 引用上下文（如页码、章节等）
@@ -23,7 +22,7 @@ export const CitationSchema = z.object({
 
 // 📊 引文度数统计 - 按需计算的轻量级统计
 export const CitationDegreeSchema = z.object({
-    paperId: z.string().uuid(), // 文献LID
+    paperId: z.string().min(1), // 文献ID（允许S2）
     inDegree: z.number().int().min(0), // 入度：被引用次数
     outDegree: z.number().int().min(0), // 出度：引用他人次数
     totalDegree: z.number().int().min(0), // 总度数

@@ -448,6 +448,7 @@ export class BackendApiService {
         })();
 
         return {
+            // 优先使用后端的原生文献ID（S2哈希/CorpusId/DOI/URL前缀等），确保跨端一致
             paperId: backendData.paperId || backendData.paper_id || backendData.id,
             title: backendData.title,
             authors: authorsArr,

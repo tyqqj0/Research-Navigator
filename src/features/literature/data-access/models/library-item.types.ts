@@ -26,7 +26,7 @@ export const ReferenceDetailSchema = z.object({
 // 🎯 核心文献实体 - 与后端严格对齐
 export const LibraryItemSchema = z.object({
     // 🔑 主键 - 与后端LID保持一致
-    paperId: z.string().uuid('Invalid UUID format'),
+    paperId: z.string().min(1, 'paperId is required'),
 
     // 📝 基础元数据
     title: z.string().min(1, 'Title is required'),
@@ -123,7 +123,7 @@ export type LiteratureStatus = z.infer<typeof LiteratureStatusSchema>;
 export type ComponentStatus = z.infer<typeof ComponentStatusSchema>;
 
 // 🎯 创建文献条目的输入类型
-export type CreateLibraryItemInput = Omit<LibraryItem, 'paperId' | 'createdAt' | 'updatedAt'>;
+export type CreateLibraryItemInput = Omit<LibraryItem, 'createdAt' | 'updatedAt'>;
 export type UpdateLibraryItemInput = Partial<Omit<LibraryItem, 'paperId' | 'createdAt'>>;
 
 // 🔍 搜索和筛选类型
