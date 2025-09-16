@@ -170,7 +170,7 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
                                                 </div>
                                                 <div className="text-xs text-muted-foreground flex flex-col gap-1">
                                                     <div className="flex gap-3">
-                                                        <span className="font-mono">ID: {currentItem.literature.paperId}</span>
+                                                        <span className="font-mono">S2 ID: {currentItem.literature.paperId}</span>
                                                         {currentItem.literature.year && (<span>年份: {currentItem.literature.year}</span>)}
                                                     </div>
                                                     <div className="flex gap-3">

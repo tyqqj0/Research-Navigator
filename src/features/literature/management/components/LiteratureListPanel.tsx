@@ -51,6 +51,7 @@ interface LiteratureListPanelProps {
     onItemClick?: (item: EnhancedLibraryItem) => void;
     onItemEdit?: (item: EnhancedLibraryItem) => void;
     onItemDelete?: (item: EnhancedLibraryItem) => void;
+    onBulkDelete?: (paperIds: string[]) => void | Promise<void>;
     onAddNew?: (paperId: string) => void;
     onVisibleIdsChange?: (ids: string[]) => void; // 新增：通知“未分页可见全集”变化
 }
@@ -66,6 +67,7 @@ export function LiteratureListPanel({
     onItemClick,
     onItemEdit,
     onItemDelete,
+    onBulkDelete,
     onAddNew,
     onVisibleIdsChange
 }: LiteratureListPanelProps) {
@@ -83,6 +85,7 @@ export function LiteratureListPanel({
     // 数据hooks - 只在没有外部数据时使用
     const hookResult = useLiteratureOperations();
     const { addByIdentifier } = useLiteratureCommands();
+    const { deleteLiterature, batchDeleteLiteratures } = hookResult;
     const [addInput, setAddInput] = useState('');
     const [adding, setAdding] = useState(false);
     const [addError, setAddError] = useState<string | null>(null);
@@ -508,7 +511,26 @@ export function LiteratureListPanel({
                                             <Edit className="h-4 w-4 mr-1" />
                                             批量编辑
                                         </Button> */}
-                                        <Button variant="destructive" size="sm" className="text-red-600">
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            className="text-red-600"
+                                            onClick={async () => {
+                                                const ids = Array.from(selectedItems);
+                                                if (ids.length === 0) return;
+                                                try {
+                                                    if (onBulkDelete) {
+                                                        // 交给上层根据上下文处理（可能弹出确认对话框或仅移出集合）
+                                                        void onBulkDelete(ids);
+                                                    } else {
+                                                        await batchDeleteLiteratures(ids);
+                                                        setSelectedItems(new Set());
+                                                    }
+                                                } catch (e) {
+                                                    console.warn('[LiteratureListPanel] Batch delete failed', e);
+                                                }
+                                            }}
+                                        >
                                             <Trash2 className="h-4 w-4 mr-1" />
                                             删除
                                         </Button>
@@ -652,7 +674,14 @@ export function LiteratureListPanel({
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                onItemDelete?.(item);
+                                                                if (onItemDelete) {
+                                                                    onItemDelete(item);
+                                                                } else {
+                                                                    // 内置删除回退：直接删除本条
+                                                                    deleteLiterature(item.literature.paperId).catch(err => {
+                                                                        console.warn('[LiteratureListPanel] Inline delete failed', err);
+                                                                    });
+                                                                }
                                                             }}
                                                             className="text-red-600"
                                                         >

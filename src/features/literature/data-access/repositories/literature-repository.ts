@@ -168,7 +168,20 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
             // 1. 数据验证
             ModelValidators.createInput(input);
 
-            // 2. 智能查重检测
+            // 2. 先检查主键是否存在，避免 Dexie ConstraintError
+            try {
+                const exists = await this.table.get(input.paperId);
+                if (exists) {
+                    return {
+                        paperId: exists.paperId,
+                        isNew: false,
+                        operation: 'updated',
+                        message: 'Existing literature found; skipped creating duplicate',
+                    };
+                }
+            } catch { }
+
+            // 3. 智能查重检测
             const duplicateResults = await this.findSimilar(input);
             const highSimilarity = duplicateResults.find(r => r.score >= this.SIMILARITY_THRESHOLDS.HIGH);
 
@@ -195,7 +208,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
                 };
             }
 
-            // 3. 创建新文献
+            // 4. 创建新文献
             const newItem = LibraryItemFactory.createLibraryItem(input);
             await this.table.add(newItem);
 

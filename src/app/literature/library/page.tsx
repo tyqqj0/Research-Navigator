@@ -13,6 +13,17 @@ import {
     Calendar,
     Users
 } from "lucide-react";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle
+} from '@/components/ui';
+import { toast } from "sonner";
 
 // 列表组件
 import { LiteratureListPanel } from '@/features/literature/management/components/LiteratureListPanel';
@@ -152,25 +163,75 @@ export default function LibraryPage() {
         try { useLiteratureViewStore.getState().setActivePaperId(pid); } catch { }
     }, []);
 
+    // 统一删除状态与流程（单条/批量复用）
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [pendingIds, setPendingIds] = useState<string[] | null>(null);
+    const [pendingMode, setPendingMode] = useState<'global' | 'collection'>('global');
+
+    const runCollectionRemoval = useCallback(async (ids: string[], cid: string) => {
+        try {
+            for (const id of ids) {
+                await removeLiteratureFromCollection(cid, id);
+            }
+            toast.success(`已从集合移除 ${ids.length} 项`);
+        } catch (e) {
+            console.warn('[LibraryPage] Remove from collection failed', e);
+            toast.error('从集合移除失败');
+        }
+    }, [removeLiteratureFromCollection]);
+
+    const runGlobalDeletion = useCallback(async (ids: string[]) => {
+        try {
+            for (const id of ids) {
+                await deleteLiterature(id, {});
+            }
+            toast.success(`已删除 ${ids.length} 项`);
+        } catch (e) {
+            console.warn('[LibraryPage] Global delete failed', e);
+            toast.error('删除失败');
+        }
+    }, [deleteLiterature]);
+
+    const requestDelete = useCallback((ids: string[]) => {
+        if (!ids?.length) return;
+        if (selectedCollectionId) {
+            // 集合上下文：直接移出集合
+            void runCollectionRemoval(ids, selectedCollectionId);
+        } else {
+            // 全库上下文：弹确认
+            setPendingIds(ids);
+            setPendingMode('global');
+            setConfirmOpen(true);
+        }
+    }, [selectedCollectionId, runCollectionRemoval]);
+
+    const confirmDelete = useCallback(async () => {
+        const ids = pendingIds || [];
+        setConfirmOpen(false);
+        setPendingIds(null);
+        if (!ids.length) return;
+        if (pendingMode === 'collection' && selectedCollectionId) {
+            await runCollectionRemoval(ids, selectedCollectionId);
+        } else {
+            await runGlobalDeletion(ids);
+        }
+        // 如果当前详情属于删除集，则关闭
+        if (ids.includes(activePaperId || '')) {
+            setDetailOpen(false);
+            setActivePaperId(undefined);
+        }
+    }, [pendingIds, pendingMode, selectedCollectionId, runCollectionRemoval, runGlobalDeletion, activePaperId]);
+
     const handleItemDelete = useCallback(async (item: { literature: { paperId: string } }) => {
         const pid = item?.literature?.paperId;
         if (!pid) return;
-        try {
-            console.log('[LibraryPage] Deleting literature', pid);
-            if (selectedCollectionId) {
-                await removeLiteratureFromCollection(selectedCollectionId, pid);
-            } else {
-                // 默认走自动策略（服务层按是否仅当前用户使用决定）
-                await deleteLiterature(pid, {});
-            }
-            if (activePaperId === pid) {
-                setDetailOpen(false);
-                setActivePaperId(undefined);
-            }
-        } catch (e) {
-            console.warn('[LibraryPage] Delete failed', e);
-        }
-    }, [deleteLiterature, activePaperId, selectedCollectionId, removeLiteratureFromCollection]);
+        requestDelete([pid]);
+    }, [requestDelete]);
+
+    // 批量删除请求复用同一流程
+    const requestBulkDelete = useCallback((ids: string[]) => {
+        requestDelete(ids);
+    }, [requestDelete]);
 
     const pageHeader = (
         <div className="px-6 py-3 flex items-center justify-between">
@@ -317,6 +378,7 @@ export default function LibraryPage() {
                                 <LiteratureListPanel
                                     onItemClick={(item) => handleOpenDetail(item.literature.paperId)}
                                     onItemDelete={handleItemDelete}
+                                    onBulkDelete={requestBulkDelete}
                                     onAddNew={(paperId) => handleOpenDetail(paperId)}
                                     literatures={filteredLiteratures}
                                     isLoading={isLoading}
@@ -343,6 +405,21 @@ export default function LibraryPage() {
                     </div>
                 </div>
             </MainLayout>
+            {/* 删除确认框（全库上下文） */}
+            <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>删除确认</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            你正在从“全部文献”中删除所选文献。这将从你的文库中彻底删除它们，且不可恢复。是否继续？
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>取消</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete}>删除</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </RequireAuth>
     );
 }

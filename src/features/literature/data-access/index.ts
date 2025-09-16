@@ -258,7 +258,23 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
             const paper = searchRes;
             if (!paper) throw new Error('No paper found for identifier');
 
-            // 2) 构造创建输入并创建（含可选的完整用户元数据）
+            // 2) 如果已存在则直接返回已存在项，避免重复报错
+            try {
+                const existing = await this.services.literature.getLiterature(paper.paperId);
+                if (existing) {
+                    // 同步到 Store（确保出现于列表）
+                    try {
+                        const enhanced = await this.composition.getEnhancedLiterature(paper.paperId);
+                        if (enhanced) {
+                            const literatureStore = require('./stores').useLiteratureStore;
+                            (literatureStore as any).getState().addLiterature(enhanced as EnhancedLibraryItem);
+                        }
+                    } catch { }
+                    return existing;
+                }
+            } catch { }
+
+            // 3) 构造创建输入并创建（含可选的完整用户元数据）
             const refs = paper?.parsedContent?.extractedReferences;
             const pc = paper?.parsedContent as any;
             console.log('[LiteratureEntry] addByIdentifier refs from backend:', Array.isArray(refs) ? refs.length : 0);
@@ -283,7 +299,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                     : (options.tags && options.tags.length ? { tags: options.tags } : undefined),
             });
 
-            // 3) 可选：加入一个或多个集合
+            // 4) 可选：加入一个或多个集合
             const collectionIds = [
                 ...(options.addToCollections || []),
                 ...(options.addToCollection ? [options.addToCollection] : [])
@@ -306,7 +322,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                 }
             }
 
-            // 4) 同步到本地 Store（文献）
+            // 5) 同步到本地 Store（文献）
             try {
                 const literatureStore = require('./stores').useLiteratureStore;
                 (literatureStore as any).getState().addLiterature(created as EnhancedLibraryItem);
@@ -319,7 +335,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
             return created.literature as LibraryItem;
         } catch (error) {
             console.error('[LiteratureEntry] Failed to add by identifier:', error);
-            throw new Error(`Failed to add literature by identifier: ${identifier}`);
+            throw new Error(`添加失败：${identifier}。${error instanceof Error ? error.message : ''}`);
         }
     }
 
