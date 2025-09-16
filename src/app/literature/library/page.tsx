@@ -299,17 +299,16 @@ export default function LibraryPage() {
                                 </div>
                             )}
 
-                            {/* 文献列表：仅此处滚动 */}
-                            <div className="flex-1 min-h-0">
-                                <div className="h-full overflow-y-auto px-6 pb-6">
-                                    <LiteratureListPanel
-                                        onItemClick={(item) => handleOpenDetail(item.literature.paperId)}
-                                        onItemDelete={handleItemDelete}
-                                        onAddNew={(paperId) => handleOpenDetail(paperId)}
-                                        literatures={filteredLiteratures}
-                                        isLoading={isLoading}
-                                    />
-                                </div>
+                            {/* 文献列表：内部滚动 */}
+                            <div className="flex-1 min-h-0 px-6 pb-6">
+                                <LiteratureListPanel
+                                    onItemClick={(item) => handleOpenDetail(item.literature.paperId)}
+                                    onItemDelete={handleItemDelete}
+                                    onAddNew={(paperId) => handleOpenDetail(paperId)}
+                                    literatures={filteredLiteratures}
+                                    isLoading={isLoading}
+                                    className="h-full flex flex-col"
+                                />
                             </div>
                         </div>
                     </div>

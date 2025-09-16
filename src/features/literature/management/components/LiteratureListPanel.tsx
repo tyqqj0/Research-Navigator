@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchInput, Skeleton } from "@/components/ui";
@@ -76,6 +76,7 @@ export function LiteratureListPanel({
     const [pageSize, setPageSize] = useState(limit || 10);
     const [sourceFilter, setSourceFilter] = useState<string>('all');
     const [yearFilter, setYearFilter] = useState<string>('all');
+    const [pageInput, setPageInput] = useState<string>('1');
 
     // 数据hooks - 只在没有外部数据时使用
     const hookResult = useLiteratureOperations();
@@ -194,7 +195,26 @@ export function LiteratureListPanel({
         return filteredAndSortedItems.slice(startIndex, endIndex);
     }, [filteredAndSortedItems, currentPage, pageSize, showPagination, limit]);
 
-    const totalPages = Math.ceil(filteredAndSortedItems.length / pageSize);
+    const totalItems = filteredAndSortedItems.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+    // 当过滤/排序/每页数量变更时，重置到第1页
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, sourceFilter, yearFilter, sortField, sortOrder, pageSize]);
+
+    // 当总页数变化时，修正当前页在合法范围内
+    useEffect(() => {
+        setCurrentPage(prev => {
+            const next = Math.min(Math.max(1, prev), totalPages);
+            return next;
+        });
+    }, [totalPages]);
+
+    // 页面跳转输入框与当前页同步
+    useEffect(() => {
+        setPageInput(String(currentPage));
+    }, [currentPage]);
 
     // 事件处理
     const handleSort = useCallback((field: SortField) => {
@@ -218,13 +238,86 @@ export function LiteratureListPanel({
         });
     }, []);
 
-    const handleSelectAll = useCallback(() => {
-        if (selectedItems.size === paginatedItems.length) {
-            setSelectedItems(new Set());
-        } else {
-            setSelectedItems(new Set(paginatedItems.map(item => item.literature.paperId)));
+    // 仅切换“当前页全选”
+    const currentPageIds = useMemo(() => paginatedItems.map(item => item.literature.paperId), [paginatedItems]);
+    const numSelectedOnPage = useMemo(() => currentPageIds.filter(id => selectedItems.has(id)).length, [currentPageIds, selectedItems]);
+    const isAllOnPageSelected = numSelectedOnPage === currentPageIds.length && currentPageIds.length > 0;
+    const isAnyOnPageSelected = numSelectedOnPage > 0;
+
+    const handleToggleSelectPage = useCallback(() => {
+        setSelectedItems(prev => {
+            const next = new Set(prev);
+            if (isAllOnPageSelected) {
+                for (const id of currentPageIds) next.delete(id);
+            } else {
+                for (const id of currentPageIds) next.add(id);
+            }
+            return next;
+        });
+    }, [currentPageIds, isAllOnPageSelected]);
+
+    // 跨页“选择全部结果/取消全部选择”
+    const isAllAcrossSelected = selectedItems.size > 0 && selectedItems.size === totalItems && totalItems > 0;
+    const handleSelectAllAcrossResults = useCallback(() => {
+        const allIds = filteredAndSortedItems.map(item => item.literature.paperId);
+        setSelectedItems(new Set(allIds));
+    }, [filteredAndSortedItems]);
+    const handleClearAllSelection = useCallback(() => {
+        setSelectedItems(new Set());
+    }, []);
+
+    // 过滤变化时清理无效的选中项（仅保留当前过滤后的ID）
+    useEffect(() => {
+        const valid = new Set(filteredAndSortedItems.map(i => i.literature.paperId));
+        setSelectedItems(prev => {
+            let changed = false;
+            const next = new Set<string>();
+            for (const id of prev) {
+                if (valid.has(id)) next.add(id); else changed = true;
+            }
+            return changed ? next : prev;
+        });
+    }, [filteredAndSortedItems]);
+
+    // 页码数据（含省略号）
+    const paginationItems = useMemo(() => {
+        const items: Array<number | 'ellipsis'> = [];
+        const total = totalPages;
+        const current = currentPage;
+        if (total <= 7) {
+            for (let i = 1; i <= total; i++) items.push(i);
+            return items;
         }
-    }, [selectedItems.size, paginatedItems]);
+        items.push(1);
+        const showLeftDots = current > 3;
+        const showRightDots = current < total - 2;
+        const start = Math.max(2, current - 1);
+        const end = Math.min(total - 1, current + 1);
+        if (showLeftDots) items.push('ellipsis');
+        for (let i = start; i <= end; i++) items.push(i);
+        if (showRightDots) items.push('ellipsis');
+        items.push(total);
+        return items;
+    }, [currentPage, totalPages]);
+
+    const handlePageClick = useCallback((page: number) => {
+        setCurrentPage(page);
+    }, []);
+
+    const handlePageJump = useCallback(() => {
+        const n = Number(pageInput);
+        if (!Number.isFinite(n)) return;
+        const target = Math.min(Math.max(1, Math.trunc(n)), totalPages);
+        setCurrentPage(target);
+        setPageInput(String(target));
+    }, [pageInput, totalPages]);
+
+    const handlePageSizeChange = useCallback((value: string) => {
+        const n = Number(value);
+        if (Number.isFinite(n) && n > 0) {
+            setPageSize(n);
+        }
+    }, []);
 
     const formatAuthors = (authors: string[]) => {
         if (!authors || authors.length === 0) return '';
@@ -278,7 +371,7 @@ export function LiteratureListPanel({
                 )}
 
                 {/* 列表骨架 */}
-                <CardContent className="p-0">
+                <CardContent className="p-0 flex-1 min-h-0 overflow-y-auto">
                     {/* 全选条骨架 */}
                     {showControls && (
                         <div className="flex items-center gap-2 p-4 border-b">
@@ -338,24 +431,24 @@ export function LiteratureListPanel({
                             {/* 筛选器 */}
                             <div className="flex gap-2">
                                 <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                                    <SelectTrigger className="w-25">
+                                    <SelectTrigger className="w-18">
                                         <SelectValue placeholder="来源" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">所有来源</SelectItem>
-                                        <SelectItem value="manual">手动添加</SelectItem>
+                                        <SelectItem value="all">来源</SelectItem>
+                                        <SelectItem value="manual">手动</SelectItem>
                                         <SelectItem value="zotero">Zotero</SelectItem>
-                                        <SelectItem value="import">批量导入</SelectItem>
-                                        <SelectItem value="search">搜索添加</SelectItem>
+                                        <SelectItem value="import">导入</SelectItem>
+                                        <SelectItem value="search">搜索</SelectItem>
                                     </SelectContent>
                                 </Select>
 
                                 <Select value={yearFilter} onValueChange={setYearFilter}>
-                                    <SelectTrigger className="w-25">
+                                    <SelectTrigger className="w-18">
                                         <SelectValue placeholder="年份" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">所有年份</SelectItem>
+                                        <SelectItem value="all">年份</SelectItem>
                                         <SelectItem value="recent">近5年</SelectItem>
                                         <SelectItem value="2020-2024">2020-2024</SelectItem>
                                         <SelectItem value="2015-2019">2015-2019</SelectItem>
@@ -363,6 +456,26 @@ export function LiteratureListPanel({
                                         <SelectItem value="old">2010年前</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
+                                    <SelectTrigger className="w-25">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="title">标题</SelectItem>
+                                        <SelectItem value="authors">作者</SelectItem>
+                                        <SelectItem value="year">年份</SelectItem>
+                                        <SelectItem value="createdAt">添加时间</SelectItem>
+                                        <SelectItem value="updatedAt">更新时间</SelectItem>
+                                    </SelectContent>
+                                </Select>
+
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                >
+                                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                                </Button>
                             </div>
                         </div>
 
@@ -410,26 +523,7 @@ export function LiteratureListPanel({
                                         新建
                                     </Button>
                                 </div>
-                                <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
-                                    <SelectTrigger className="w-25">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="title">标题</SelectItem>
-                                        <SelectItem value="authors">作者</SelectItem>
-                                        <SelectItem value="year">年份</SelectItem>
-                                        <SelectItem value="createdAt">添加时间</SelectItem>
-                                        <SelectItem value="updatedAt">更新时间</SelectItem>
-                                    </SelectContent>
-                                </Select>
 
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                                >
-                                    {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-                                </Button>
                             </div>
                         </div>
                         {addError && (
@@ -439,17 +533,34 @@ export function LiteratureListPanel({
                 </CardHeader>
             )}
 
-            <CardContent className="p-0">
+            <CardContent className="p-0 flex-1 min-h-0 overflow-y-auto">
                 {paginatedItems.length > 0 ? (
                     <>
                         {/* 全选控制 */}
                         {showControls && (
-                            <div className="flex items-center gap-2 p-4 border-b">
-                                <Checkbox
-                                    checked={selectedItems.size === paginatedItems.length && paginatedItems.length > 0}
-                                    onCheckedChange={handleSelectAll}
-                                />
-                                <span className="text-sm text-muted-foreground">全选</span>
+                            <div className="flex items-center justify-between p-4 border-b">
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        checked={isAllOnPageSelected}
+                                        onCheckedChange={handleToggleSelectPage}
+                                    />
+                                    <span className="text-sm text-muted-foreground">
+                                        全选本页
+                                        {currentPageIds.length > 0 && `（${numSelectedOnPage}/${currentPageIds.length}）`}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {!isAllAcrossSelected && isAllOnPageSelected && totalItems > currentPageIds.length && (
+                                        <Button variant="link" size="sm" onClick={handleSelectAllAcrossResults}>
+                                            选择全部 {totalItems} 条
+                                        </Button>
+                                    )}
+                                    {selectedItems.size > 0 && (
+                                        <Button variant="link" size="sm" onClick={handleClearAllSelection}>
+                                            清除选择
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -561,31 +672,73 @@ export function LiteratureListPanel({
                         </div>
 
                         {/* 分页控制 */}
-                        {showPagination && totalPages > 1 && (
-                            <div className="flex items-center justify-between p-4 border-t">
-                                <div className="text-sm text-muted-foreground">
-                                    第 {currentPage} 页，共 {totalPages} 页
+                        {showPagination && (
+                            <div className="flex flex-col gap-3 p-4 border-t">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-sm text-muted-foreground">
+                                        第 {currentPage} / {totalPages} 页，合计 {totalItems} 条
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">每页</span>
+                                        <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+                                            <SelectTrigger className="w-18">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="6">6</SelectItem>
+                                                <SelectItem value="8">8</SelectItem>
+                                                <SelectItem value="14">14</SelectItem>
+                                                <SelectItem value="18">18</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                        disabled={currentPage === 1}
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                        上一页
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                        disabled={currentPage === totalPages}
-                                    >
-                                        下一页
-                                        <ChevronRight className="h-4 w-4" />
-                                    </Button>
-                                </div>
+                                {totalPages > 1 && (
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                                disabled={currentPage === 1}
+                                            >
+                                                <ChevronLeft className="h-4 w-4" />
+                                            </Button>
+                                            {paginationItems.map((p, idx) => (
+                                                p === 'ellipsis' ? (
+                                                    <Button key={`e-${idx}`} variant="ghost" size="sm" disabled>…</Button>
+                                                ) : (
+                                                    <Button
+                                                        key={p}
+                                                        variant={p === currentPage ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => handlePageClick(p)}
+                                                    >
+                                                        {p}
+                                                    </Button>
+                                                )
+                                            ))}
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                                disabled={currentPage === totalPages}
+                                            >
+                                                <ChevronRight className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm text-muted-foreground">跳转</span>
+                                            <Input
+                                                className="w-16 h-8"
+                                                value={pageInput}
+                                                onChange={(e) => setPageInput(e.target.value.replace(/\D+/g, ''))}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') handlePageJump(); }}
+                                            />
+                                            <Button size="sm" variant="outline" onClick={handlePageJump}>确定</Button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </>
