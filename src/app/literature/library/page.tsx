@@ -388,19 +388,21 @@ export default function LibraryPage() {
                             </div>
                         </div>
                     </div>
-                    {/* 侧边详情面板：限制在内容区域内，不覆盖顶端页头 */}
+                    {/* 侧边详情面板：限制在内容区域内，不覆盖顶端页头（关闭后卸载，保留进/退场动画） */}
                     <div className="absolute inset-y-0 right-0 z-30 pointer-events-none">
                         <div className="h-full">
-                            <div className="w-[38rem] max-w-[90vw] h-full transform transition-transform duration-300 shadow-xl pointer-events-auto"
-                                style={{ transform: detailOpen ? 'translateX(0)' : 'translateX(100%)' }}>
-                                <LiteratureDetailPanel
-                                    open={detailOpen}
-                                    onOpenChange={setDetailOpen}
-                                    paperId={activePaperId}
-                                    onUpdated={() => { }}
-                                    variant="side"
-                                />
-                            </div>
+                            {detailOpen && (
+                                <div className="w-[38rem] max-w-[90vw] h-full transform transition-transform duration-300 shadow-xl pointer-events-auto"
+                                    style={{ transform: detailOpen ? 'translateX(0)' : 'translateX(100%)' }}>
+                                    <LiteratureDetailPanel
+                                        open={detailOpen}
+                                        onOpenChange={setDetailOpen}
+                                        paperId={activePaperId}
+                                        onUpdated={() => { }}
+                                        variant="side"
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

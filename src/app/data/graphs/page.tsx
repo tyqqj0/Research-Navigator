@@ -14,13 +14,16 @@ import LiteratureDetailPanel from '@/features/literature/management/components/L
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
 import { useCollectionOperations } from '@/features/literature/hooks/use-collection-operations';
 import { usePaperCatalog } from '@/features/graph/editor/paper-catalog';
+import { useGraphStore } from '@/features/graph/data-access';
 
 export default function GraphPage() {
+    const store = useGraphStore();
     const { loadLiteratures } = useLiteratureOperations();
     const { loadCollections } = useCollectionOperations();
     const { getPaperSummary } = usePaperCatalog();
 
     const [graphId, setGraphId] = useState<string | null>(null);
+    const [graphLoading, setGraphLoading] = useState(false);
     const [visibleIds, setVisibleIds] = useState<string[]>([]);
     const [detailOpen, setDetailOpen] = useState(false);
     const [activePaperId, setActivePaperId] = useState<string | undefined>(undefined);
@@ -31,6 +34,26 @@ export default function GraphPage() {
         // We only need to load once on mount
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // load selected graph explicitly to avoid No target graph after refresh
+    useEffect(() => {
+        let cancelled = false;
+        const run = async () => {
+            if (!graphId) return;
+            // already loaded?
+            if (store.getGraphById(graphId)) return;
+            setGraphLoading(true);
+            try {
+                await store.loadGraph(graphId);
+            } catch {
+                // noop
+            } finally {
+                if (!cancelled) setGraphLoading(false);
+            }
+        };
+        void run();
+        return () => { cancelled = true; };
+    }, [graphId, store.getGraphById, store.loadGraph]);
 
     const handleSelectCollection = useCallback((collectionId: string | null) => {
         // LiteratureListPanel manages its own filtering
@@ -52,17 +75,23 @@ export default function GraphPage() {
                                     <CardTitle className="text-sm">Canvas</CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-0">
-                                    <div className="p-2 border-b">
+                                    <div className="p-2">
                                         <GraphToolbar graphId={graphId || undefined} />
                                     </div>
                                     <div className="h-[70vh]">
                                         {graphId ? (
-                                            <GraphCanvas
-                                                graphId={graphId}
-                                                getPaperSummary={getPaperSummary}
-                                                onNodeOpenDetail={(pid) => { setActivePaperId(pid); setDetailOpen(true); }}
-                                                layoutMode="timeline"
-                                            />
+                                            store.getGraphById(graphId) && !graphLoading ? (
+                                                <GraphCanvas
+                                                    graphId={graphId}
+                                                    getPaperSummary={getPaperSummary}
+                                                    onNodeOpenDetail={(pid) => { setActivePaperId(pid); setDetailOpen(true); }}
+                                                    layoutMode="timeline"
+                                                />
+                                            ) : (
+                                                <div className="h-full grid place-items-center text-muted-foreground text-sm">
+                                                    正在加载图谱...
+                                                </div>
+                                            )
                                         ) : (
                                             <div className="h-full grid place-items-center text-muted-foreground">
                                                 请选择左侧图谱，或新建一个
@@ -86,16 +115,18 @@ export default function GraphPage() {
                     {/* right-side detail panel - inside page container to avoid covering header */}
                     <div className="absolute inset-y-0 right-0 z-20 pointer-events-none">
                         <div className="h-full">
-                            <div className="w-[38rem] max-w-[90vw] h-full transform transition-transform duration-300 shadow-xl pointer-events-auto"
-                                style={{ transform: detailOpen ? 'translateX(0)' : 'translateX(100%)' }}>
-                                <LiteratureDetailPanel
-                                    open={detailOpen}
-                                    onOpenChange={setDetailOpen}
-                                    paperId={activePaperId}
-                                    onUpdated={() => { }}
-                                    variant="side"
-                                />
-                            </div>
+                            {detailOpen && (
+                                <div className="w-[38rem] max-w-[90vw] h-full transform transition-transform duration-300 shadow-xl pointer-events-auto"
+                                    style={{ transform: detailOpen ? 'translateX(0)' : 'translateX(100%)' }}>
+                                    <LiteratureDetailPanel
+                                        open={detailOpen}
+                                        onOpenChange={setDetailOpen}
+                                        paperId={activePaperId}
+                                        onUpdated={() => { }}
+                                        variant="side"
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
