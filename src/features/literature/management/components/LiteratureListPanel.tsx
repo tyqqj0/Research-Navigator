@@ -77,7 +77,7 @@ export function LiteratureListPanel({
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(limit || 6);
+    const [pageSize, setPageSize] = useState(limit || 3);
     const [sourceFilter, setSourceFilter] = useState<string>('all');
     const [yearFilter, setYearFilter] = useState<string>('all');
     const [pageInput, setPageInput] = useState<string>('1');
@@ -506,7 +506,7 @@ export function LiteratureListPanel({
                             <div className="flex items-center gap-4">
                                 {/* 结果统计 */}
                                 <div className="text-sm text-muted-foreground">
-                                    显示 {paginatedItems.length} / {filteredAndSortedItems.length} 条结果
+                                    {/* 显示 {paginatedItems.length} / {filteredAndSortedItems.length} 条结果 */}
                                     {selectedItems.size > 0 && (
                                         <Badge variant="secondary" className="ml-2">
                                             已选择 {selectedItems.size} 项
@@ -733,10 +733,10 @@ export function LiteratureListPanel({
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
+                                                <SelectItem value="2">2</SelectItem>
+                                                <SelectItem value="3">3</SelectItem>
                                                 <SelectItem value="6">6</SelectItem>
-                                                <SelectItem value="8">8</SelectItem>
-                                                <SelectItem value="14">14</SelectItem>
-                                                <SelectItem value="18">18</SelectItem>
+                                                <SelectItem value="9">9</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>

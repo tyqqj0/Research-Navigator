@@ -4,6 +4,8 @@ import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import * as d3 from 'd3-force';
 import TimelineAxis from './TimelineAxis';
 import { useGraphStore } from '@/features/graph/data-access/graph-store';
+import type { GraphDataSource, GraphSnapshot } from '@/features/graph/data-access';
+import { graphStoreDataSource } from '@/features/graph/data-access/graph-store';
 import type { PaperSummary } from '../paper-catalog';
 
 interface GraphCanvasProps {
@@ -11,15 +13,46 @@ interface GraphCanvasProps {
     getPaperSummary?: (paperId: string) => PaperSummary | undefined;
     onNodeOpenDetail?: (paperId: string) => void;
     layoutMode?: 'free' | 'timeline';
+    dataSource?: GraphDataSource; // optional injection for decoupling storage/backend
+    className?: string;
+    style?: React.CSSProperties;
+    axisWidth?: number;
+    densityWidth?: number;
+    edgeHitbox?: number;
+    handleBaseSize?: number;
+    nodeRenderer?: (ctx: { nodeId: string; title: string; dateStr: string; scale: number; selected: boolean }) => React.ReactNode;
+    onNodeSelect?: (nodeId: string | null) => void;
+    onEdgeSelect?: (edgeId: string | null) => void;
+    onEdgeCreate?: (edge: { from: string; to: string; relation: string }) => void;
+    onViewportChange?: (v: { pxPerYear: number; scrollTop: number }) => void;
+}
+
+export interface GraphCanvasRef {
+    center: () => void;
+    zoomBy: (factor: number, anchorY?: number) => void;
+    zoomToDate: (d: Date, anchorY?: number) => void;
+    setLayoutMode: (mode: 'free' | 'timeline') => void;
 }
 
 type Pos = { x: number; y: number };
 
 type SimNode = { id: string; x: number; y: number; vx?: number; vy?: number; fx?: number | null; fy?: number | null };
 
-export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSummary, onNodeOpenDetail, layoutMode = 'free' }) => {
+export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((props, ref) => {
+    const { graphId, getPaperSummary, onNodeOpenDetail, layoutMode = 'free', dataSource, className, style, axisWidth, densityWidth, edgeHitbox, handleBaseSize, nodeRenderer, onNodeSelect, onEdgeSelect, onEdgeCreate, onViewportChange } = props;
     const store = useGraphStore();
-    const graph = store.getGraphById(graphId);
+    const ds: GraphDataSource = dataSource || graphStoreDataSource;
+    const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
+    const [internalLayoutMode, setInternalLayoutMode] = useState<'free' | 'timeline'>(layoutMode);
+    useEffect(() => { setInternalLayoutMode(layoutMode); }, [layoutMode]);
+
+    // subscribe to data source for live updates
+    useEffect(() => {
+        setSnapshot(ds.getSnapshot(graphId));
+        const unsub = ds.subscribe(graphId, (snap) => setSnapshot(snap));
+        return () => { try { unsub?.(); } catch { /* ignore */ } };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [graphId, ds]);
 
     // local UI state: node positions and simple pan/zoom (MVP)
     const [nodePos, setNodePos] = useState<Record<string, Pos>>({});
@@ -55,13 +88,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
 
     // layout constants
     const NODE_HALF_HEIGHT = 22; // approx node half height for anchor
-    const LEFT_AXIS_WIDTH = 96; // px, wider to include months/quarters inside axis
+    const LEFT_AXIS_WIDTH = axisWidth ?? 96; // px, wider to include months/quarters inside axis
     const NODE_START_OFFSET_X = 72; // px after axis
-    const DENSITY_WIDTH = 36; // px, density bar rendered to the RIGHT of the axis (adjust here)
+    const DENSITY_WIDTH = densityWidth ?? 36; // px, density bar rendered to the RIGHT of the axis (adjust here)
     const DENSITY_RIGHT_MARGIN = 5; // px, margin between density and right edge
 
-    const nodes = useMemo(() => Object.values(graph?.nodes || {}), [graph]);
-    const edges = useMemo(() => Object.values(graph?.edges || {}), [graph]);
+    const nodes = useMemo(() => Object.values(snapshot?.nodes || {}), [snapshot]);
+    const edges = useMemo(() => Object.values(snapshot?.edges || {}), [snapshot]);
 
     // timeline scale
     const timeline = useMemo(() => {
@@ -286,7 +319,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
 
     // ----- physics simulation (timeline mode) -----
     React.useEffect(() => {
-        if (layoutMode !== 'timeline' || !nodes.length) {
+        if (internalLayoutMode !== 'timeline' || !nodes.length) {
             if (simRef.current) { simRef.current.stop(); simRef.current = null; simNodesRef.current = []; }
             return;
         }
@@ -353,11 +386,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
             }
         } catch { /* ignore */ }
         for (const id of ids) {
-            await store.addNode({ id, kind: 'paper' }, { graphId });
+            await ds.addNode(graphId, { id, kind: 'paper' });
         }
 
         // after nodes are added, if in timeline mode, set their y according to publicationDate
-        if (layoutMode === 'timeline' && getPaperSummary) {
+        if (internalLayoutMode === 'timeline' && getPaperSummary) {
             setNodePos((prev) => {
                 const next = { ...prev } as Record<string, Pos>;
                 ids.forEach((id, idx) => {
@@ -403,7 +436,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
             container.scrollTop = panning.scrollTop - dy;
         }
         if (drag) {
-            if (layoutMode === 'timeline' && simRef.current) {
+            if (internalLayoutMode === 'timeline' && simRef.current) {
                 const sim = simRef.current;
                 const sn = simNodesRef.current.find(n => n.id === drag.id);
                 if (sn) {
@@ -505,7 +538,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
     };
 
     const handleWheel = useCallback((e: WheelEvent) => {
-        if (layoutMode !== 'timeline' || !containerRef.current) return;
+        if (internalLayoutMode !== 'timeline' || !containerRef.current) return;
         // Zoom only when Ctrl is pressed; otherwise let native scrolling happen
         if (!e.ctrlKey) return;
         e.preventDefault();
@@ -529,7 +562,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
         const newScrollTop = Math.max(0, newAbsY - mouseY);
         container.scrollTop = newScrollTop;
         setTimelineScale(newScale);
-    }, [layoutMode, timeline, timelineScale]);
+    }, [internalLayoutMode, timeline, timelineScale]);
 
     useEffect(() => {
         const el = containerRef.current;
@@ -590,7 +623,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
 
     // center timeline on mount/changes when content taller than viewport (via scroll)
     useEffect(() => {
-        if (layoutMode !== 'timeline') return;
+        if (internalLayoutMode !== 'timeline') return;
         const el = containerRef.current;
         if (!el) return;
         if (timeline.contentHeight <= el.clientHeight) return; // handled via margins in render
@@ -605,7 +638,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
             });
         });
         hasCenteredRef.current = true;
-    }, [layoutMode, timeline.contentHeight, timeline.minDate, timeline.maxDate]);
+    }, [internalLayoutMode, timeline.contentHeight, timeline.minDate, timeline.maxDate]);
 
     // responsive fades and center margins
     // Simple rule: zoom in -> fades get shorter; zoom out -> fades get taller
@@ -616,12 +649,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
         return Math.round(Math.max(18, Math.min(90, mapped)));
     }, [timeline.pxPerYear]);
     const fadeHeight = useMemo(() => Math.round(Math.max(16, Math.min(80, timeline.pxPerYear * 0.35))), [timeline.pxPerYear]);
-    const centerMargin = useMemo(() => layoutMode === 'timeline' ? Math.max(0, (viewportH - timeline.contentHeight) / 2) : 0, [layoutMode, viewportH, timeline.contentHeight]);
+    const centerMargin = useMemo(() => internalLayoutMode === 'timeline' ? Math.max(0, (viewportH - timeline.contentHeight) / 2) : 0, [internalLayoutMode, viewportH, timeline.contentHeight]);
 
     return (
         <div
             ref={containerRef}
-            className="h-full relative overflow-auto overscroll-y-contain outline-none focus:outline-none"
+            className={`h-full relative overflow-auto overscroll-y-contain outline-none focus:outline-none ${className || ''}`}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onMouseMove={onMouseMove}
@@ -632,10 +665,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
             tabIndex={0}
             style={{
                 backgroundImage: 'conic-gradient(at 10% 10%, var(--color-background-secondary), var(--color-background-tertiary))'
+                , ...(style || {})
             }}
         >
             {/* sticky, non-layout overlays: top and bottom gradients stick to viewport edges of the scroll container */}
-            {layoutMode === 'timeline' && (
+            {internalLayoutMode === 'timeline' && (
                 <>
                     <div className="pointer-events-none sticky top-0 z-[30] overflow-visible relative" style={{ height: 0 }}>
                         <div className="absolute left-0 right-0 top-0" style={{ height: stickyFadeH, background: 'linear-gradient(to bottom, var(--color-background-primary) 0%, color-mix(in srgb, var(--color-background-primary) 80%, transparent) 60%, transparent 100%)' }} />
@@ -646,8 +680,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
                 </>
             )}
 
-            <div className="relative" style={{ height: layoutMode === 'timeline' ? timeline.contentHeight : '100%', marginTop: centerMargin, marginBottom: centerMargin }}>
-                {layoutMode === 'timeline' && (
+            <div className="relative" style={{ height: internalLayoutMode === 'timeline' ? timeline.contentHeight : '100%', marginTop: centerMargin, marginBottom: centerMargin }}>
+                {internalLayoutMode === 'timeline' && (
                     <>
                         <TimelineAxis width={LEFT_AXIS_WIDTH} timeline={timeline as any} density={null as any} densityWidth={DENSITY_WIDTH} />
                         {/* density bar to the RIGHT of the axis */}
@@ -697,10 +731,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
                                     d={d}
                                     fill="none"
                                     stroke="transparent"
-                                    strokeWidth={12}
+                                    strokeWidth={edgeHitbox ?? 12}
                                     className="cursor-pointer"
-                                    onMouseDown={(evt) => onMouseDownEdge(e.id, evt)}
-                                    onContextMenu={(evt) => onContextMenuEdge(e.id, evt)}
+                                    onMouseDown={(evt) => { onMouseDownEdge(e.id, evt); onEdgeSelect?.(e.id); }}
+                                    onContextMenu={(evt) => { onContextMenuEdge(e.id, evt); onEdgeSelect?.(e.id); }}
                                 />
                             </g>
                         );
@@ -728,24 +762,28 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
                             key={n.id}
                             className="absolute select-none"
                             style={{ left: pos.x, top: pos.y, transform: `translate(-50%, -50%) scale(${nodeUi.scale})`, transition: 'transform 120ms ease' }}
-                            onMouseDown={(e) => onMouseDownNode(n.id, e)}
+                            onMouseDown={(e) => { onMouseDownNode(n.id, e); onNodeSelect?.(n.id); }}
                             onDoubleClick={() => { onNodeOpenDetail?.(n.id); }}
                             onMouseUp={() => completeLink(n.id)}
                         >
-                            <div className={`px-3 py-2 rounded-md shadow border text-sm min-w-[140px] ${selectedNodeId === n.id ? 'ring-2' : ''} relative`} style={{ backgroundColor: 'var(--color-background-primary)', borderColor: selectedNodeId === n.id ? 'var(--color-primary)' : 'var(--color-border-primary)', boxShadow: selectedNodeId === n.id ? '0 0 0 2px var(--color-primary) inset' : undefined }}>
-                                <div className="font-medium truncate max-w-[200px]">{nodeUi.mode === 'full' ? title : shortTitle}</div>
-                                {nodeUi.showDate && (<div className="text-xs text-muted-foreground truncate">{dateStr}</div>)}
-                                {/* handles for linking (top/bottom) */}
-                                <div className="absolute left-1/2 -translate-x-1/2 -top-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: nodeUi.handleSize, height: nodeUi.handleSize, backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'top', e)} title="拖动以连线" />
-                                <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: nodeUi.handleSize, height: nodeUi.handleSize, backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'bottom', e)} title="拖动以连线" />
-                            </div>
+                            {nodeRenderer ? (
+                                nodeRenderer({ nodeId: n.id, title: nodeUi.mode === 'full' ? title : shortTitle, dateStr, scale: nodeUi.scale, selected: selectedNodeId === n.id })
+                            ) : (
+                                <div className={`px-3 py-2 rounded-md shadow border text-sm min-w-[140px] ${selectedNodeId === n.id ? 'ring-2' : ''} relative`} style={{ backgroundColor: 'var(--color-background-primary)', borderColor: selectedNodeId === n.id ? 'var(--color-primary)' : 'var(--color-border-primary)', boxShadow: selectedNodeId === n.id ? '0 0 0 2px var(--color-primary) inset' : undefined }}>
+                                    <div className="font-medium truncate max-w-[200px]">{nodeUi.mode === 'full' ? title : shortTitle}</div>
+                                    {nodeUi.showDate && (<div className="text-xs text-muted-foreground truncate">{dateStr}</div>)}
+                                    {/* handles for linking (top/bottom) */}
+                                    <div className="absolute left-1/2 -translate-x-1/2 -top-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: (handleBaseSize ?? nodeUi.handleSize), height: (handleBaseSize ?? nodeUi.handleSize), backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'top', e)} title="拖动以连线" />
+                                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: (handleBaseSize ?? nodeUi.handleSize), height: (handleBaseSize ?? nodeUi.handleSize), backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'bottom', e)} title="拖动以连线" />
+                                </div>
+                            )}
                         </div>
                     );
                 })}
 
                 {/* edge context menu / editor */}
                 {(edgeMenu || edgeEdit) && (
-                    <div className="absolute inset-0 z-50" onMouseDown={closeMenus}>
+                    <div className="absolute inset-0 z-50" onMouseDown={() => { closeMenus(); onNodeSelect?.(null); onEdgeSelect?.(null); }}>
                         {(edgeMenu && containerRef.current) && (() => {
                             const rect = containerRef.current!.getBoundingClientRect();
                             const left = edgeMenu.x - rect.left + containerRef.current!.scrollLeft;
@@ -777,7 +815,63 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ graphId, getPaperSumma
             </div>
         </div>
     );
-};
+    // viewport change notifications
+    useEffect(() => {
+        if (!onViewportChange) return;
+        const el = containerRef.current;
+        if (!el) return;
+        const notify = () => onViewportChange({ pxPerYear: timeline.pxPerYear, scrollTop: el.scrollTop });
+        notify();
+        const onScroll = () => notify();
+        el.addEventListener('scroll', onScroll, { passive: true } as any);
+        return () => { el.removeEventListener('scroll', onScroll as any); };
+    }, [onViewportChange, timeline.pxPerYear]);
+
+    // imperative api
+    React.useImperativeHandle(ref, () => ({
+        center() {
+            const el = containerRef.current; if (!el) return;
+            const target = Math.max(0, timeline.contentHeight / 2 - el.clientHeight / 2);
+            el.scrollTop = target;
+        },
+        zoomBy(factor: number, anchorY?: number) {
+            const el = containerRef.current; if (!el) return;
+            const mouseY = Math.max(0, Math.min(el.clientHeight, (anchorY ?? el.clientHeight / 2)));
+            const absY = el.scrollTop + mouseY;
+            const dateUnder = timeline.dateFromY(absY);
+            const newScale = Math.max(0.2, Math.min(8, timelineScale * factor));
+            const t = Math.max(0, Math.min(1, (dateUnder.getTime() - (timeline.minDate as Date).getTime()) / timeline.rangeMs));
+            const MS_PER_YEAR = 365.2425 * 24 * 3600 * 1000;
+            const yearsSpan = Math.max(0.25, timeline.rangeMs / MS_PER_YEAR);
+            const BASE_PX_PER_YEAR = 120;
+            const newPxPerYear = BASE_PX_PER_YEAR * newScale;
+            const newTrackHeight2 = newPxPerYear * yearsSpan;
+            const newAbsY = timeline.paddingTop + t * newTrackHeight2;
+            el.scrollTop = Math.max(0, newAbsY - mouseY);
+            setTimelineScale(newScale);
+        },
+        zoomToDate(d: Date, anchorY?: number) {
+            const el = containerRef.current; if (!el) return;
+            const mouseY = Math.max(0, Math.min(el.clientHeight, (anchorY ?? el.clientHeight / 2)));
+            const t = Math.max(0, Math.min(1, (d.getTime() - (timeline.minDate as Date).getTime()) / timeline.rangeMs));
+            const MS_PER_YEAR = 365.2425 * 24 * 3600 * 1000;
+            const yearsSpan = Math.max(0.25, timeline.rangeMs / MS_PER_YEAR);
+            const BASE_PX_PER_YEAR = 120;
+            const newPxPerYear = BASE_PX_PER_YEAR * timelineScale;
+            const newTrackHeight2 = newPxPerYear * yearsSpan;
+            const newAbsY = timeline.paddingTop + t * newTrackHeight2;
+            el.scrollTop = Math.max(0, newAbsY - mouseY);
+        },
+        setLayoutMode(mode: 'free' | 'timeline') {
+            setInternalLayoutMode(mode);
+        }
+    }), [timeline, timelineScale]);
+
+    return (
+        // component body already returned above
+        null as any
+    );
+});
 
 export default GraphCanvas;
 

@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { ResearchGraph, GraphNode, GraphEdge, PaperId, EdgeId } from './graph-types';
+import type { ResearchGraph, GraphNode, GraphEdge, PaperId, EdgeId, GraphDataSource, GraphSnapshot, GraphId } from './graph-types';
 import { graphRepository } from './graph-repository';
 
 interface GraphStoreState {
@@ -190,5 +190,34 @@ export const useGraphStore = create<GraphStoreState>()(
 );
 
 export default useGraphStore;
+
+// Adapter that makes current zustand store conform to GraphDataSource
+export const graphStoreDataSource: GraphDataSource = {
+    getSnapshot(graphId: GraphId): GraphSnapshot | null {
+        const s = useGraphStore.getState();
+        const g = s.graphs.get(graphId) ?? null;
+        if (!g) return null;
+        // return shallow copy to prevent external mutation
+        return { id: g.id, name: g.name, nodes: { ...g.nodes }, edges: { ...g.edges } };
+    },
+    subscribe(graphId: GraphId, cb: (snap: GraphSnapshot) => void): () => void {
+        const unsub = useGraphStore.subscribe((state) => state.graphs.get(graphId), (g) => {
+            if (g) cb({ id: g.id, name: g.name, nodes: { ...g.nodes }, edges: { ...g.edges } });
+        });
+        return unsub as any;
+    },
+    async addNode(graphId: GraphId, node: GraphNode): Promise<void> {
+        await useGraphStore.getState().addNode(node, { graphId });
+    },
+    async removeNode(graphId: GraphId, paperId: PaperId): Promise<void> {
+        await useGraphStore.getState().removeNode(paperId, { graphId });
+    },
+    async addEdge(graphId: GraphId, edge: Omit<GraphEdge, 'id'> & { id?: EdgeId }): Promise<void> {
+        await useGraphStore.getState().addEdge(edge, { graphId });
+    },
+    async removeEdge(graphId: GraphId, edgeId: EdgeId): Promise<void> {
+        await useGraphStore.getState().removeEdge(edgeId, { graphId });
+    },
+};
 
 

@@ -35,4 +35,23 @@ export interface GraphImportResult {
     warnings: string[];
 }
 
+// Snapshot used by UI (immutable per tick)
+export interface GraphSnapshot {
+    id: GraphId;
+    name?: string;
+    nodes: Record<PaperId, GraphNode>;
+    edges: Record<EdgeId, GraphEdge>;
+}
+
+// Abstract data source to decouple UI from storage/backend
+export interface GraphDataSource {
+    getSnapshot(graphId: GraphId): GraphSnapshot | null;
+    subscribe(graphId: GraphId, cb: (snap: GraphSnapshot) => void): () => void;
+
+    addNode(graphId: GraphId, node: GraphNode): Promise<void>;
+    removeNode(graphId: GraphId, paperId: PaperId): Promise<void>;
+    addEdge(graphId: GraphId, edge: Omit<GraphEdge, 'id'> & { id?: EdgeId }): Promise<void>;
+    removeEdge(graphId: GraphId, edgeId: EdgeId): Promise<void>;
+}
+
 
