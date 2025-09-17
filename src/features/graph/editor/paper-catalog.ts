@@ -3,7 +3,7 @@
 import { useCallback } from 'react';
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
 
-export type PaperSummary = { id: string; title: string; year?: number; authors?: string[] };
+export type PaperSummary = { id: string; title: string; year?: number; authors?: string[]; name?: string; publicationDate?: string };
 
 export function usePaperCatalog() {
     const lit = useLiteratureOperations();
@@ -16,6 +16,7 @@ export function usePaperCatalog() {
             title: item.literature.title,
             year: item.literature.year,
             authors: item.literature.authors,
+            publicationDate: item.literature.publicationDate,
         };
     }, [lit]);
 

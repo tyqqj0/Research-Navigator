@@ -22,6 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
     logo,
     actions,
     user,
+    hideUserInfo,
     className
 }) => {
     const router = useRouter();
@@ -44,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
     return (
         <header
             className={cn(
-                'h-16 border-b border-gray-200 bg-white shadow-sm theme-primary-background',
+                'h-16 border-b border-gray-200 bg-white shadow-sm theme-primary-background relative z-40',
                 className
             )}
         >
@@ -72,9 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                     )}
 
-
-
-                    {displayUser && (
+                    {displayUser && !hideUserInfo && (
                         <div className="flex items-center space-x-3">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>

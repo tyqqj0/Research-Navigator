@@ -22,6 +22,7 @@ interface MainLayoutProps extends LayoutProps {
         avatar?: string;
         menu?: MenuActionItem[];
     };
+    hideUserInfo?: boolean;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -35,6 +36,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     showHeader = true,
     pageHeader,
     user,
+    hideUserInfo,
     className
 }) => {
     const [collapsed, setCollapsed] = useState(sidebarCollapsed);
@@ -163,6 +165,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                         title={headerTitle}
                         actions={headerActions}
                         user={user}
+                        hideUserInfo={hideUserInfo}
                     />
                 ) : (
                     <div className="md:hidden">
@@ -170,6 +173,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                             title={headerTitle}
                             actions={headerActions}
                             user={user}
+                            hideUserInfo={hideUserInfo}
                         />
                     </div>
                 )}

@@ -24,7 +24,7 @@ interface GraphStoreState {
     saveCurrentGraph: () => Promise<void>;
     setCurrentGraphId: (graphId: string | null) => void;
     deleteGraph: (graphId: string) => Promise<void>;
-    listGraphs: () => Promise<{ id: string }[]>;
+    listGraphs: () => Promise<{ id: string; name?: string }[]>;
 
     // node ops
     addNode: (node: GraphNode, opts?: { graphId?: string }) => Promise<void>;

@@ -172,12 +172,8 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
             try {
                 const exists = await this.table.get(input.paperId);
                 if (exists) {
-                    return {
-                        paperId: exists.paperId,
-                        isNew: false,
-                        operation: 'updated',
-                        message: 'Existing literature found; skipped creating duplicate',
-                    };
+                    // 对已存在记录执行智能合并（补全缺失字段）
+                    return await this.intelligentMerge(exists as LibraryItem, input);
                 }
             } catch { }
 
@@ -724,6 +720,17 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
         if (!existingItem.pdfPath && newInput.pdfPath) {
             updates.pdfPath = newInput.pdfPath;
             mergedFields.push('pdfPath');
+        }
+
+        // 发表信息
+        if (!existingItem.publication && newInput.publication) {
+            updates.publication = newInput.publication;
+            mergedFields.push('publication');
+        }
+        const newPublicationDate = (newInput as any).publicationDate as string | undefined;
+        if (!existingItem.publicationDate && newPublicationDate) {
+            (updates as any).publicationDate = newPublicationDate;
+            mergedFields.push('publicationDate');
         }
 
         // 合并关键词（如果存在）

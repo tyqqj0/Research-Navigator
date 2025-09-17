@@ -20,6 +20,7 @@ export interface HeaderProps {
         menu?: MenuActionItem[];
     };
     theme?: 'light' | 'dark';
+    hideUserInfo?: boolean;
     className?: string;
 }
 

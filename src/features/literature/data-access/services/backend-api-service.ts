@@ -76,7 +76,9 @@ export class BackendApiService {
 
             console.log('[BackendAPI] Fetching paper:', paperId);
             const response = await this.apiRequest('GET', `/api/v1/paper/${paperId}`);
+            console.log('[BackendAPI] API Response:', response);
             const literature = this.mapBackendToFrontend(response);
+            console.log('[BackendAPI] Mapped literature:', literature);
 
             // 更新缓存
             this.cache.set(cacheKey, {
@@ -351,6 +353,8 @@ export class BackendApiService {
                 throw new Error(`API Error ${response.status}: ${errorData.message || response.statusText}`);
             }
 
+            // console.log('[BackendAPI] API Response:', response);
+
             return await response.json();
         } catch (error) {
             if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -369,6 +373,8 @@ export class BackendApiService {
             : [];
 
         const publication = backendData.publication || backendData.venue || backendData.publicationVenue?.name || null;
+        // 尝试从后端字段提取精确发表日期
+        const publicationDate = backendData.publicationDate || backendData.publication_date || backendData.publishedAt || backendData.published_at || backendData.datePublished || backendData.firstOnline || backendData.first_online || null;
         const doi = backendData.doi || backendData.externalIds?.DOI || backendData.externalIds?.ArXiv || null;
         const url = backendData.url || backendData.s2Url || backendData.openAccessPdf?.url || null;
         const pdfPath = backendData.openAccessPdf?.url || backendData.pdf_url || backendData.pdf_path || null;
@@ -455,6 +461,7 @@ export class BackendApiService {
             year: backendData.year,
             source: backendData.source || 'search',
             publication,
+            publicationDate: publicationDate ?? undefined,
             abstract: backendData.abstract,
             summary: backendData.summary,
             doi,

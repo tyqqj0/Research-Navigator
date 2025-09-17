@@ -285,6 +285,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                     authors: paper.authors || [],
                     year: paper.year,
                     publication: paper.publication || undefined,
+                    publicationDate: paper.publicationDate || undefined,
                     abstract: paper.abstract || undefined,
                     summary: paper.summary || undefined,
                     doi: paper.doi || undefined,

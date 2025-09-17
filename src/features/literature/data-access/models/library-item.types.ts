@@ -35,6 +35,8 @@ export const LibraryItemSchema = z.object({
 
     // 📚 出版信息
     publication: z.string().nullable().optional(),
+    // 精确发表日期（ISO字符串或可解析的日期字符串）
+    publicationDate: z.string().optional(),
     abstract: z.string().nullable().optional(),
     summary: z.string().nullable().optional(),
 

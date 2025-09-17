@@ -39,7 +39,7 @@ export type CollectionItem = {
 
 // 📊 数据库配置
 const DATABASE_NAME = 'ResearchNavigatorLiteratureDB_Enhanced';
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 
 // 📊 扩展常量定义
 const EXTENDED_LITERATURE_CONSTANTS = {
@@ -143,6 +143,7 @@ export class literatureDatabase extends Dexie {
                 title,
                 *authors,
                 year,
+                publicationDate,
                 source,
                 publication,
                 doi,
@@ -154,6 +155,7 @@ export class literatureDatabase extends Dexie {
                 createdAt,
                 updatedAt,
                 [source+year],
+                [year+publicationDate],
                 [status+createdAt],
                 [year+source],
                 [createdAt+status]

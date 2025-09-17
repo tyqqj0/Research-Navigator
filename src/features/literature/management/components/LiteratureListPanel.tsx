@@ -37,7 +37,7 @@ import { useLiteratureCommands } from '../../hooks/use-literature-commands';
 import { LibraryItem, EnhancedLibraryItem } from '../../data-access/models';
 
 // 添加缺失的类型定义
-type SortField = 'title' | 'authors' | 'year' | 'createdAt' | 'updatedAt';
+type SortField = 'title' | 'authors' | 'publicationDate' | 'createdAt' | 'updatedAt';
 type SortOrder = 'asc' | 'desc';
 
 interface LiteratureListPanelProps {
@@ -162,9 +162,9 @@ export function LiteratureListPanel({
                     aValue = a.literature.authors.join(', ').toLowerCase();
                     bValue = b.literature.authors.join(', ').toLowerCase();
                     break;
-                case 'year':
-                    aValue = a.literature.year || 0;
-                    bValue = b.literature.year || 0;
+                case 'publicationDate':
+                    aValue = a.literature.publicationDate || 0;
+                    bValue = b.literature.publicationDate || 0;
                     break;
                 case 'createdAt':
                     aValue = new Date(a.literature.createdAt).getTime();
@@ -180,8 +180,14 @@ export function LiteratureListPanel({
             }
 
             if (sortOrder === 'asc') {
+                if (sortField === 'publicationDate') {
+                    return aValue.localeCompare(bValue);
+                }
                 return aValue > bValue ? 1 : -1;
             } else {
+                if (sortField === 'publicationDate') {
+                    return bValue.localeCompare(aValue);
+                }
                 return aValue < bValue ? 1 : -1;
             }
         });
@@ -446,7 +452,7 @@ export function LiteratureListPanel({
 
                             {/* 筛选器 */}
                             <div className="flex gap-2">
-                                <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                                {/* <Select value={sourceFilter} onValueChange={setSourceFilter}>
                                     <SelectTrigger className="w-18">
                                         <SelectValue placeholder="来源" />
                                     </SelectTrigger>
@@ -457,7 +463,7 @@ export function LiteratureListPanel({
                                         <SelectItem value="import">导入</SelectItem>
                                         <SelectItem value="search">搜索</SelectItem>
                                     </SelectContent>
-                                </Select>
+                                </Select> */}
 
                                 <Select value={yearFilter} onValueChange={setYearFilter}>
                                     <SelectTrigger className="w-18">
@@ -479,7 +485,7 @@ export function LiteratureListPanel({
                                     <SelectContent>
                                         <SelectItem value="title">标题</SelectItem>
                                         <SelectItem value="authors">作者</SelectItem>
-                                        <SelectItem value="year">年份</SelectItem>
+                                        <SelectItem value="publicationDate">发布时间</SelectItem>
                                         <SelectItem value="createdAt">添加时间</SelectItem>
                                         <SelectItem value="updatedAt">更新时间</SelectItem>
                                     </SelectContent>

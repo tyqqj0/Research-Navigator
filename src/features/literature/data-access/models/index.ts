@@ -210,6 +210,7 @@ export class LibraryItemFactory {
             authors: input.authors || [],
             year: input.year,
             publication: input.publication,
+            publicationDate: (input as any).publicationDate,
             abstract: input.abstract,
             summary: input.summary,
             doi: input.doi,

@@ -25,6 +25,7 @@ export interface GraphEdge {
 
 export interface ResearchGraph {
     id: GraphId;
+    name?: string;
     nodes: Record<PaperId, GraphNode>;
     edges: Record<EdgeId, GraphEdge>;
 }

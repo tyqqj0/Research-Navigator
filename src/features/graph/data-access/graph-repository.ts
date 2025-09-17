@@ -23,6 +23,7 @@ class GraphDatabase extends Dexie {
         this.version(1).stores({
             graphs: 'id'
         });
+        // v2: add optional name field (no schema change needed for Dexie since it's schemaless apart from indexes)
     }
 }
 
@@ -61,6 +62,7 @@ export class GraphRepository {
         const id = initial?.id ?? crypto.randomUUID();
         const graph: ResearchGraph = {
             id,
+            name: initial?.name,
             nodes: initial?.nodes ?? {},
             edges: initial?.edges ?? {}
         };
@@ -80,9 +82,9 @@ export class GraphRepository {
         await db.graphs.delete(graphId);
     }
 
-    async listGraphs(): Promise<Pick<ResearchGraph, 'id'>[]> {
+    async listGraphs(): Promise<Pick<ResearchGraph, 'id' | 'name'>[]> {
         const all = await db.graphs.toArray();
-        return all.map(g => ({ id: g.id }));
+        return all.map(g => ({ id: g.id, name: g.name }));
     }
 
     // ----- Node operations -----
@@ -225,7 +227,7 @@ export class GraphRepository {
             edges[id] = { id, from: e.from, to: e.to, relation: e.relation, tags: e.tags, meta: e.meta };
         }
 
-        const graph: ResearchGraph = { id: graphId, nodes, edges };
+        const graph: ResearchGraph = { id: graphId, name: (candidate as any).name, nodes, edges };
 
         if (options?.overwrite) {
             await db.graphs.put(graph);
