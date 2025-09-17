@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchInput, Skeleton } from "@/components/ui";
@@ -190,10 +190,14 @@ export function LiteratureListPanel({
     }, [literatures, searchQuery, sourceFilter, yearFilter, sortField, sortOrder]);
 
     // 当“未分页的可见全集”变化时，通知外部（图谱使用）
+    const prevVisibleIdsSignatureRef = useRef<string>('');
     useEffect(() => {
-        if (onVisibleIdsChange) {
-            onVisibleIdsChange(filteredAndSortedItems.map(i => i.literature.paperId));
-        }
+        if (!onVisibleIdsChange) return;
+        const ids = filteredAndSortedItems.map(i => i.literature.paperId);
+        const signature = ids.join('|');
+        if (signature === prevVisibleIdsSignatureRef.current) return;
+        prevVisibleIdsSignatureRef.current = signature;
+        onVisibleIdsChange(ids);
     }, [filteredAndSortedItems, onVisibleIdsChange]);
 
     // 分页逻辑
