@@ -42,13 +42,14 @@ export const GraphMetaPanel: React.FC<GraphMetaPanelProps> = ({ className, graph
     return (
         <Card className={className}>
             <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">{graph?.name || '图谱信息'}</CardTitle>
+                <CardTitle className="text-sm font-heading">{graph?.name || '图谱信息'}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
                 <div className="text-sm text-muted-foreground mb-2">ID: <span className="text-xs">{graphId}</span></div>
-                {graph?.name && (
-                    <div className="text-sm text-muted-foreground mb-2">名称: <span className="text-xs">{graph.name}</span></div>
-                )}
+                {/* {graph?.name && (
+                    <>  </>
+                    // <div className="text-sm text-muted-foreground mb-2">名称: <span className="text-xs">{graph.name}</span></div>
+                )} */}
                 <div className="flex items-center gap-4 mb-3 text-sm">
                     <div className="flex items-center gap-1"><Circle className="h-4 w-4" /> 节点 {stats.nodes}</div>
                     <div className="flex items-center gap-1"><GitBranch className="h-4 w-4" /> 边 {stats.edges}</div>
