@@ -56,7 +56,7 @@ export const GraphMetaPanel: React.FC<GraphMetaPanelProps> = ({ className, graph
                 </div>
                 <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" onClick={handleExport}>
-                        <Download className="h-4 w-4 mr-1" /> 导出JSON
+                        <Download className="h-4 w-4 mr-1" /> 导出
                     </Button>
                     <label className="inline-flex items-center">
                         <input
@@ -66,7 +66,7 @@ export const GraphMetaPanel: React.FC<GraphMetaPanelProps> = ({ className, graph
                             onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImport(f); e.currentTarget.value = ''; }}
                         />
                         <Button size="sm" variant="outline">
-                            <Upload className="h-4 w-4 mr-1" /> 导入JSON
+                            <Upload className="h-4 w-4 mr-1" /> 导入
                         </Button>
                     </label>
                 </div>
