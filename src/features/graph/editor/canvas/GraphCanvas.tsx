@@ -181,8 +181,10 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     // node UI scaling and label density based on zoom
     const nodeUi = useMemo(() => {
         const ppy = timeline.pxPerYear;
-        if (ppy < 120) return { scale: 0.78, mode: 'micro' as const, handleSize: 10, showDate: false };
-        if (ppy < 170) return { scale: 0.9, mode: 'compact' as const, handleSize: 14, showDate: true };
+        // 新增第四级（nano）：更小，仅显示首字母圆点
+        if (ppy < 80) return { scale: 0.55, mode: 'nano' as const, handleSize: 8, showDate: false };
+        if (ppy < 150) return { scale: 0.78, mode: 'micro' as const, handleSize: 10, showDate: false };
+        if (ppy < 240) return { scale: 0.9, mode: 'compact' as const, handleSize: 14, showDate: true };
         return { scale: 1.0, mode: 'full' as const, handleSize: 16, showDate: true };
     }, [timeline.pxPerYear]);
 
@@ -338,21 +340,41 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
         if (simRef.current) { simRef.current.stop(); simRef.current = null; }
         simNodesRef.current = simNodes;
 
+        // 参数基于缩放调整：级别越小，横向力更强、碰撞半径更小
+        const level = nodeUi.mode; // 'nano' | 'micro' | 'compact' | 'full'
+        const collideR = level === 'nano' ? 42 : level === 'micro' ? 68 : level === 'compact' ? 84 : 90;
+        const xStrength = level === 'nano' ? 0.08 : level === 'micro' ? 0.05 : 0.02;
+        const yStrength = level === 'nano' ? 0.9 : level === 'micro' ? 0.8 : 0.7;
+        const linkDist = level === 'nano' ? 140 : 180;
+
         const sim = d3.forceSimulation(simNodes as any)
             .force('link', d3.forceLink(simNodes as any)
                 .id((d: any) => (d as SimNode).id)
                 .links(links as any)
-                .distance(180)
+                .distance(linkDist)
                 .strength(0.25)
             )
             .force('charge', d3.forceManyBody().strength(-160))
-            .force('collision', d3.forceCollide().radius(90))
-            .force('x', d3.forceX(centerX).strength(0.02))
+            .force('collision', d3.forceCollide().radius(collideR))
+            .force('x', d3.forceX(centerX).strength(xStrength))
             .force('y', d3.forceY((d: any) => {
                 const id = (d as SimNode).id;
                 const s = getPaperSummary?.(id);
                 return s ? timeline.yFromSummary(s) : timeline.paddingTop + timeline.trackHeight / 2;
-            }).strength(1.0))
+            }).strength(yStrength))
+            // 左右边界斥力：靠近边缘时推回
+            .force('left-bound', d3.forceX((d: any) => {
+                const x = (d as SimNode).x || 0;
+                const bound = LEFT_AXIS_WIDTH + 8;
+                return x < bound ? bound : x;
+            }).strength(0.1))
+            .force('right-bound', d3.forceX((d: any) => {
+                const w = containerRef.current?.clientWidth ?? 1200;
+                const margin = 14;
+                const x = (d as SimNode).x || 0;
+                const target = w - margin;
+                return x > target ? target : x;
+            }).strength(0.1))
             .alpha(1)
             .alphaDecay(0.05)
             .velocityDecay(0.4)
@@ -360,6 +382,15 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                 if (rafRef.current != null) return;
                 rafRef.current = requestAnimationFrame(() => {
                     rafRef.current = null;
+                    // clamp to horizontal bounds to avoid nodes running outside the canvas
+                    const el = containerRef.current;
+                    const w = el?.clientWidth ?? 1200;
+                    const minX = LEFT_AXIS_WIDTH + 16;
+                    const maxX = Math.max(minX + 80, w - 16);
+                    for (const sn of simNodesRef.current) {
+                        if (sn.x < minX) { sn.x = minX; if (typeof sn.vx === 'number') sn.vx = Math.max(0, sn.vx) * 0.1; }
+                        if (sn.x > maxX) { sn.x = maxX; if (typeof sn.vx === 'number') sn.vx = Math.min(0, sn.vx) * 0.1; }
+                    }
                     const latest = Object.fromEntries(simNodesRef.current.map(n => [n.id, { x: n.x, y: n.y } as Pos]));
                     setNodePos(latest);
                 });
@@ -704,6 +735,13 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                         <marker id="arrow-active" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-primary)" />
                         </marker>
+                        {/* smaller markers for nano level */}
+                        <marker id="arrow-small" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-foreground-tertiary)" />
+                        </marker>
+                        <marker id="arrow-active-small" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-primary)" />
+                        </marker>
                     </defs>
                     {edges.map((e) => {
                         const p1 = nodePos[e.from];
@@ -715,6 +753,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                         const my = (sy + ty) / 2;
                         const d = `M ${sx} ${sy} C ${sx} ${my} ${tx} ${my} ${tx} ${ty}`;
                         const active = selectedEdgeId === e.id;
+                        const marker = nodeUi.mode === 'nano' ? (active ? 'arrow-active-small' : 'arrow-small') : (active ? 'arrow-active' : 'arrow');
                         return (
                             <g key={e.id}>
                                 {/* visible stroke */}
@@ -723,7 +762,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                                     fill="none"
                                     stroke={active ? 'var(--color-primary)' : 'var(--color-foreground-tertiary)'}
                                     strokeWidth={active ? 3 : 2}
-                                    markerEnd={`url(#${active ? 'arrow-active' : 'arrow'})`}
+                                    markerEnd={`url(#${marker})`}
                                     pointerEvents="none"
                                 />
                                 {/* invisible wide hit area */}
@@ -769,13 +808,19 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                             {nodeRenderer ? (
                                 nodeRenderer({ nodeId: n.id, title: nodeUi.mode === 'full' ? title : shortTitle, dateStr, scale: nodeUi.scale, selected: selectedNodeId === n.id })
                             ) : (
-                                <div className={`px-3 py-2 rounded-md shadow border text-sm min-w-[140px] ${selectedNodeId === n.id ? 'ring-2' : ''} relative`} style={{ backgroundColor: 'var(--color-background-primary)', borderColor: selectedNodeId === n.id ? 'var(--color-primary)' : 'var(--color-border-primary)', boxShadow: selectedNodeId === n.id ? '0 0 0 2px var(--color-primary) inset' : undefined }}>
-                                    <div className="font-medium truncate max-w-[200px]">{nodeUi.mode === 'full' ? title : shortTitle}</div>
-                                    {nodeUi.showDate && (<div className="text-xs text-muted-foreground truncate">{dateStr}</div>)}
-                                    {/* handles for linking (top/bottom) */}
-                                    <div className="absolute left-1/2 -translate-x-1/2 -top-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: (handleBaseSize ?? nodeUi.handleSize), height: (handleBaseSize ?? nodeUi.handleSize), backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'top', e)} title="拖动以连线" />
-                                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: (handleBaseSize ?? nodeUi.handleSize), height: (handleBaseSize ?? nodeUi.handleSize), backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'bottom', e)} title="拖动以连线" />
-                                </div>
+                                nodeUi.mode === 'nano' ? (
+                                    <div className={`px-2 py-1 rounded-full border text-[11px] font-semibold grid place-items-center`} style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', backgroundColor: 'theme-background-primary', minWidth: 28, fontSize: '17px' }}>
+                                        {words.slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('')}
+                                    </div>
+                                ) : (
+                                    <div className={`px-3 py-2 rounded-md shadow border text-sm min-w-[140px] ${selectedNodeId === n.id ? 'ring-2' : ''} relative`} style={{ backgroundColor: 'theme-background-primary', borderColor: selectedNodeId === n.id ? 'var(--color-primary)' : 'var(--color-border-primary)', boxShadow: selectedNodeId === n.id ? '0 0 0 2px var(--color-primary) inset' : undefined }}>
+                                        <div className="font-medium truncate max-w-[200px]">{nodeUi.mode === 'full' ? title : shortTitle}</div>
+                                        {nodeUi.showDate && (<div className="text-xs text-muted-foreground truncate">{dateStr}</div>)}
+                                        {/* handles for linking (top/bottom) */}
+                                        <div className="absolute left-1/2 -translate-x-1/2 -top-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: (handleBaseSize ?? nodeUi.handleSize), height: (handleBaseSize ?? nodeUi.handleSize), backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'top', e)} title="拖动以连线" />
+                                        <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: (handleBaseSize ?? nodeUi.handleSize), height: (handleBaseSize ?? nodeUi.handleSize), backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'bottom', e)} title="拖动以连线" />
+                                    </div>
+                                )
                             )}
                         </div>
                     );
