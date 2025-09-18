@@ -274,14 +274,20 @@ export default function LibraryPage() {
 
                         {/* 中间：图谱区 */}
                         <div className="xl:col-span-3 border-r border-border h-full flex flex-col min-h-0">
-                            <div className="p-6 flex-1 min-h-0">
-                                <CitationGraphPanel
-                                    className="h-full"
-                                    visiblePaperIds={visiblePaperIds}
-                                    isLoading={isLoading}
-                                    onNodeClick={handleNodeClick}
-                                    refreshKey={`${selectedCollectionId ?? virtualFilter ?? 'all'}:${miniStats.total}`}
-                                />
+                            <div className="p-6 flex-1 min-h-0 flex flex-col">
+                                <div className="text-base font-semibold mb-4 flex items-center gap-2">
+                                    <Network className="w-5 h-5 text-blue-500" />
+                                    引用关系图
+                                </div>
+                                <div className="flex-1 min-h-0">
+                                    <CitationGraphPanel
+                                        className="h-full"
+                                        visiblePaperIds={visiblePaperIds}
+                                        isLoading={isLoading}
+                                        onNodeClick={handleNodeClick}
+                                        refreshKey={`${selectedCollectionId ?? virtualFilter ?? 'all'}:${miniStats.total}`}
+                                    />
+                                </div>
                             </div>
                         </div>
 
