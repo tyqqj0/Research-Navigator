@@ -129,7 +129,8 @@ export const useGraphStore = create<GraphStoreState>()(
             const updated = await graphRepository.addNode(target.id, node);
             set((s) => {
                 const graphs = new Map(s.graphs);
-                graphs.set(updated.id, updated);
+                const nextGraph = { ...updated, nodes: { ...updated.nodes }, edges: { ...updated.edges } };
+                graphs.set(updated.id, nextGraph);
                 return { graphs };
             });
         },
@@ -141,7 +142,8 @@ export const useGraphStore = create<GraphStoreState>()(
             const updated = await graphRepository.removeNode(target.id, paperId);
             set((s) => {
                 const graphs = new Map(s.graphs);
-                graphs.set(updated.id, updated);
+                const nextGraph = { ...updated, nodes: { ...updated.nodes }, edges: { ...updated.edges } };
+                graphs.set(updated.id, nextGraph);
                 return { graphs };
             });
         },
@@ -153,7 +155,8 @@ export const useGraphStore = create<GraphStoreState>()(
             const updated = await graphRepository.addEdge(target.id, edge);
             set((s) => {
                 const graphs = new Map(s.graphs);
-                graphs.set(updated.id, updated);
+                const nextGraph = { ...updated, nodes: { ...updated.nodes }, edges: { ...updated.edges } };
+                graphs.set(updated.id, nextGraph);
                 return { graphs };
             });
         },
@@ -165,7 +168,8 @@ export const useGraphStore = create<GraphStoreState>()(
             const updated = await graphRepository.removeEdge(target.id, edgeId);
             set((s) => {
                 const graphs = new Map(s.graphs);
-                graphs.set(updated.id, updated);
+                const nextGraph = { ...updated, nodes: { ...updated.nodes }, edges: { ...updated.edges } };
+                graphs.set(updated.id, nextGraph);
                 return { graphs };
             });
         },
@@ -192,6 +196,18 @@ export const useGraphStore = create<GraphStoreState>()(
 export default useGraphStore;
 
 // Adapter that makes current zustand store conform to GraphDataSource
+// Lightweight pub-sub to guarantee UI updates even if selector subscriptions miss
+const __dsSubscribers = new Map<GraphId, Set<(snap: GraphSnapshot) => void>>();
+function __notify(graphId: GraphId) {
+    const snap = graphStoreDataSource.getSnapshot(graphId);
+    if (!snap) return;
+    const subs = __dsSubscribers.get(graphId);
+    if (!subs || subs.size === 0) return;
+    for (const cb of Array.from(subs)) {
+        try { cb(snap); } catch { /* noop */ }
+    }
+}
+
 export const graphStoreDataSource: GraphDataSource = {
     getSnapshot(graphId: GraphId): GraphSnapshot | null {
         const s = useGraphStore.getState();
@@ -201,22 +217,33 @@ export const graphStoreDataSource: GraphDataSource = {
         return { id: g.id, name: g.name, nodes: { ...g.nodes }, edges: { ...g.edges } };
     },
     subscribe(graphId: GraphId, cb: (snap: GraphSnapshot) => void): () => void {
-        const unsub = useGraphStore.subscribe((state) => state.graphs.get(graphId), (g) => {
-            if (g) cb({ id: g.id, name: g.name, nodes: { ...g.nodes }, edges: { ...g.edges } });
+        let set = __dsSubscribers.get(graphId);
+        if (!set) { set = new Set(); __dsSubscribers.set(graphId, set); }
+        set.add(cb);
+        const unsubStore = useGraphStore.subscribe((state) => {
+            if (state.graphs.has(graphId)) __notify(graphId);
         });
-        return unsub as any;
+        return () => {
+            try { unsubStore(); } catch { /* ignore */ }
+            const curr = __dsSubscribers.get(graphId);
+            if (curr) { curr.delete(cb); if (curr.size === 0) __dsSubscribers.delete(graphId); }
+        };
     },
     async addNode(graphId: GraphId, node: GraphNode): Promise<void> {
         await useGraphStore.getState().addNode(node, { graphId });
+        queueMicrotask(() => __notify(graphId));
     },
     async removeNode(graphId: GraphId, paperId: PaperId): Promise<void> {
         await useGraphStore.getState().removeNode(paperId, { graphId });
+        queueMicrotask(() => __notify(graphId));
     },
     async addEdge(graphId: GraphId, edge: Omit<GraphEdge, 'id'> & { id?: EdgeId }): Promise<void> {
         await useGraphStore.getState().addEdge(edge, { graphId });
+        queueMicrotask(() => __notify(graphId));
     },
     async removeEdge(graphId: GraphId, edgeId: EdgeId): Promise<void> {
         await useGraphStore.getState().removeEdge(edgeId, { graphId });
+        queueMicrotask(() => __notify(graphId));
     },
 };
 

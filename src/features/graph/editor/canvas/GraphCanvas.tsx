@@ -809,11 +809,11 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                                 nodeRenderer({ nodeId: n.id, title: nodeUi.mode === 'full' ? title : shortTitle, dateStr, scale: nodeUi.scale, selected: selectedNodeId === n.id })
                             ) : (
                                 nodeUi.mode === 'nano' ? (
-                                        <div className={`px-2 py-1 rounded-full border text-[11px] font-semibold grid place-items-center`} style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', backgroundColor: 'var(--color-background-primary)', minWidth: 28, fontSize: '17px' }}>
+                                    <div className={`px-2 py-1 rounded-full border text-[11px] font-semibold grid place-items-center`} style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', backgroundColor: 'var(--color-background-primary)', minWidth: 28, fontSize: '17px' }}>
                                         {words.slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('')}
                                     </div>
                                 ) : (
-                                            <div className={`px-3 py-2 rounded-md shadow border text-sm min-w-[140px] ${selectedNodeId === n.id ? 'ring-2' : ''} relative`} style={{ backgroundColor: 'var(--color-background-primary)', borderColor: selectedNodeId === n.id ? 'var(--color-primary)' : 'var(--color-border-primary)', boxShadow: selectedNodeId === n.id ? '0 0 0 2px var(--color-primary) inset' : undefined }}>
+                                    <div className={`px-3 py-2 rounded-md shadow border text-sm min-w-[140px] ${selectedNodeId === n.id ? 'ring-2' : ''} relative`} style={{ backgroundColor: 'var(--color-background-primary)', borderColor: selectedNodeId === n.id ? 'var(--color-primary)' : 'var(--color-border-primary)', boxShadow: selectedNodeId === n.id ? '0 0 0 2px var(--color-primary) inset' : undefined }}>
                                         <div className="font-medium truncate max-w-[200px]">{nodeUi.mode === 'full' ? title : shortTitle}</div>
                                         {nodeUi.showDate && (<div className="text-xs text-muted-foreground truncate">{dateStr}</div>)}
                                         {/* handles for linking (top/bottom) */}

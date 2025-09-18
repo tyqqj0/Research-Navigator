@@ -443,7 +443,7 @@ export function LiteratureListPanel({
                             {/* 搜索框 */}
                             <SearchInput
                                 className="flex-1"
-                                placeholder="搜索文献标题、作者、摘要..."
+                                placeholder="搜索"
                                 value={searchQuery}
                                 onChange={(v: string) => setSearchQuery(v)}
                                 onClear={() => setSearchQuery("")}
@@ -465,7 +465,7 @@ export function LiteratureListPanel({
                                     </SelectContent>
                                 </Select> */}
 
-                                <Select value={yearFilter} onValueChange={setYearFilter}>
+                                {/* <Select value={yearFilter} onValueChange={setYearFilter}>
                                     <SelectTrigger className="w-18">
                                         <SelectValue placeholder="年份" />
                                     </SelectTrigger>
@@ -477,7 +477,7 @@ export function LiteratureListPanel({
                                         <SelectItem value="2010-2014">2010-2014</SelectItem>
                                         <SelectItem value="old">2010年前</SelectItem>
                                     </SelectContent>
-                                </Select>
+                                </Select> */}
                                 <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
                                     <SelectTrigger className="w-25">
                                         <SelectValue />
