@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 import { useSessionStore } from '../data-access/session-store';
 import type { SessionId } from '../data-access/types';
 import { commandBus } from '@/features/session/runtime/command-bus';
@@ -42,10 +43,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
         <Card className="h-full flex flex-col">
             <CardHeader className="py-2 flex items-center justify-between">
                 <CardTitle className="text-sm">对话{(session?.meta as any)?.stage === 'collection' ? ' · 集合阶段' : ''}</CardTitle>
-                <div className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">Deep Research</span>
-                    <Switch checked={deep} onCheckedChange={toggleDeep} />
-                </div>
+                <DeepResearchPill enabled={deep} onToggle={toggleDeep} />
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
                 <div className="flex-1 overflow-auto divide-y">
@@ -70,18 +68,69 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                     )}
                 </div>
 
-                <div className="border-t p-3 space-y-2">
-                    <Input placeholder="输入你的问题（普通对话）或让我们找到研究方向" value={userInput} onChange={(e) => setUserInput(e.target.value)} />
-                    <div className="flex gap-2">
-                        <Button size="sm" onClick={sendUserMessage}>发送</Button>
-                    </div>
-                </div>
+                <ComposerBar value={userInput} onChange={setUserInput} onSend={sendUserMessage} deep={deep} onToggleDeep={toggleDeep} />
             </CardContent>
         </Card>
     );
 };
 
 export default ChatPanel;
+const DeepResearchPill: React.FC<{ enabled: boolean; onToggle: (next: boolean) => void }> = ({ enabled, onToggle }) => {
+    return (
+        <button
+            type="button"
+            onClick={() => onToggle(!enabled)}
+            className={cn(
+                'inline-flex items-center gap-2 rounded-full text-xs px-3 py-1 border',
+                enabled ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-muted text-muted-foreground border-transparent'
+            )}
+        >
+            <span className="i-lucide-search w-3 h-3" />
+            <span>Deep Research</span>
+        </button>
+    );
+};
+
+const ComposerBar: React.FC<{
+    value: string;
+    onChange: (v: string) => void;
+    onSend: () => void;
+    deep: boolean;
+    onToggleDeep: (b: boolean) => void;
+}> = ({ value, onChange, onSend, deep, onToggleDeep }) => {
+    const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
+    };
+    return (
+        <div className="border-t p-3">
+            <div className="relative flex items-center gap-2">
+                <button
+                    type="button"
+                    title="Deep Research"
+                    onClick={() => onToggleDeep(!deep)}
+                    className={cn(
+                        'absolute left-2 inline-flex items-center gap-1 rounded-full text-xs px-2 py-0.5 border',
+                        deep ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-muted text-muted-foreground border-transparent'
+                    )}
+                >
+                    <span className="i-lucide-search w-3 h-3" />
+                    <span>Deep Research</span>
+                </button>
+                <Input
+                    className="pl-32 pr-14"
+                    placeholder="输入你的问题（普通对话）或让我们找到研究方向"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    onKeyDown={onKeyDown}
+                />
+                <Button size="sm" className="absolute right-2" onClick={onSend}>
+                    <span className="i-lucide-send w-4 h-4" />
+                </Button>
+            </div>
+        </div>
+    );
+};
+
 
 const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
     const [feedback, setFeedback] = React.useState('');

@@ -17,8 +17,7 @@ const runners = new Map<string, { service: any }>();
 commandBus.register(async (cmd: SessionCommand) => {
     if (cmd.type === 'InitCollection') {
         const sessionId = cmd.params.sessionId;
-        // 1) 若未绑定集合：创建 temporary 集合并绑定
-        // 简化：集合名用时间戳
+        // 仅创建并绑定集合；不在方向确认阶段执行任何检索或入库
         const collection = await literatureDataAccess.collections.createCollection({
             name: `Session ${new Date().toLocaleString()}`,
             description: 'Auto-created for session',
@@ -28,17 +27,6 @@ commandBus.register(async (cmd: SessionCommand) => {
             parentId: null as any
         } as any);
         await emit({ id: newId(), type: 'SessionCollectionBound', ts: Date.now(), sessionId, payload: { collectionId: collection.id, created: true } });
-
-        // 2) 初次检索 → 直接写入绑定集合
-        const batch = await searchExecutor.execute('initial seed');
-        await sessionRepository.putArtifact(batch as Artifact);
-        await emit({ id: newId(), type: 'SearchExecuted', ts: Date.now(), sessionId, payload: { batchId: batch.id, count: batch.data.paperIds.length } });
-
-        if (batch.data.paperIds.length > 0) {
-            await literatureDataAccess.collections.addItemsToCollection(collection.id, batch.data.paperIds);
-        }
-        await emit({ id: newId(), type: 'PapersIngested', ts: Date.now(), sessionId, payload: { batchId: batch.id, added: batch.data.paperIds.length, total: batch.data.paperIds.length } });
-        await emit({ id: newId(), type: 'CollectionUpdated', ts: Date.now(), sessionId, payload: { collectionId: collection.id, version: 1, total: batch.data.paperIds.length } });
         return;
     }
     if (cmd.type === 'StartExpansion') {

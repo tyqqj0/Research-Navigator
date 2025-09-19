@@ -4,7 +4,7 @@ import React, { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import { MainLayout } from '@/components/layout';
-import { Button } from '@/components/ui';
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input } from '@/components/ui';
 import { ChatPanel } from '@/features/session/ui/ChatPanel';
 import { SessionCollectionPanel } from '@/features/session/ui/SessionCollectionPanel';
 import { GraphCanvas } from '@/features/graph/editor/canvas/GraphCanvas';
@@ -25,7 +25,7 @@ export default function ResearchSessionPage() {
     const pathname = usePathname();
     const sessionId = params?.sessionId;
     const store = useSessionStore();
-    useEffect(() => { if (sessionId) void store.loadSessionProjection(sessionId); }, [sessionId]);
+    useEffect(() => { if (sessionId) void Promise.all([store.loadAllSessions(), store.loadSessionProjection(sessionId)]); }, [sessionId]);
 
     const sessions = store.getSessions();
     // Ensure Deep Research supervisor started once on client
@@ -36,6 +36,9 @@ export default function ResearchSessionPage() {
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'CreateSession', ts: Date.now(), sessionId: id, params: { title: '未命名研究' } } as any);
         router.push(`/research/${id}`);
     };
+
+    const [editingId, setEditingId] = React.useState<string | null>(null);
+    const [titleDraft, setTitleDraft] = React.useState('');
 
     const pageHeader = (
         <div className="px-6 py-3 flex items-center justify-between">
@@ -57,16 +60,27 @@ export default function ResearchSessionPage() {
                     <div className="text-xs text-muted-foreground mb-2 px-1">会话</div>
                     <div className="space-y-1">
                         {sessions.map(s => (
-                            <Link
-                                key={s.id}
-                                href={`/research/${s.id}`}
-                                className={cn(
-                                    'block text-sm rounded-md px-3 py-2 hover:bg-accent',
-                                    pathname === `/research/${s.id}` && 'bg-accent'
-                                )}
-                            >
-                                {s.title || '未命名研究'}
-                            </Link>
+                            <div key={s.id} className="group flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent">
+                                <Link
+                                    href={`/research/${s.id}`}
+                                    className={cn('flex-1 block text-sm px-1 py-1 rounded-md', pathname === `/research/${s.id}` && 'bg-accent')}
+                                >
+                                    {editingId === s.id ? (
+                                        <Input autoFocus value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} onBlur={async () => { if (titleDraft.trim()) await commandBus.dispatch({ id: crypto.randomUUID(), type: 'RenameSession', ts: Date.now(), params: { sessionId: s.id, title: titleDraft.trim() } } as any); setEditingId(null); }} />
+                                    ) : (
+                                        s.title || '未命名研究'
+                                    )}
+                                </Link>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 px-2">···</button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => { setEditingId(s.id); setTitleDraft(s.title || ''); }}>重命名</DropdownMenuItem>
+                                        <DropdownMenuItem className="text-red-600" onClick={async () => { await store.removeSession(s.id); }}>删除</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
                         ))}
                     </div>
                 </div>
