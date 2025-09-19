@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+const EMPTY_MESSAGES: ChatMessage[] = [] as any;
 import type { ChatMessage, ChatSession, MessageId, SessionId } from './types';
 import { sessionRepository } from './session-repository';
 
@@ -30,7 +31,7 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
         return Array.from(get().sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
     },
     getMessages(sessionId) {
-        return get().messagesBySession.get(sessionId) || [];
+        return get().messagesBySession.get(sessionId) ?? EMPTY_MESSAGES;
     },
 
     upsertSession(s) {
@@ -40,6 +41,13 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
             return { sessions } as Partial<SessionProjectionState>;
         });
         void sessionRepository.putSession(s);
+    },
+    // 绑定集合ID
+    bindSessionCollection(sessionId: SessionId, collectionId: string) {
+        const curr = get().sessions.get(sessionId);
+        if (!curr) return;
+        const next = { ...curr, linkedCollectionId: collectionId, updatedAt: Date.now() } as ChatSession;
+        get().upsertSession(next);
     },
     renameSession(sessionId, title) {
         const curr = get().sessions.get(sessionId);
@@ -128,85 +136,6 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
         });
     }
 }));
-
-import { create } from 'zustand';
-import type { ChatMessage, ChatSession, MessageId, SessionId } from './types';
-
-interface SessionStoreState {
-    sessions: Map<SessionId, ChatSession>;
-    messageIdsBySession: Map<SessionId, MessageId[]>;
-    messages: Map<MessageId, ChatMessage>;
-    currentSessionId: SessionId | null;
-
-    // selectors
-    getCurrentSession(): ChatSession | null;
-    getMessages(sessionId: SessionId): ChatMessage[];
-
-    // mutators for projectors
-    upsertSession(s: ChatSession): void;
-    setCurrentSession(id: SessionId | null): void;
-    addMessage(m: ChatMessage): void;
-    appendToMessage(id: MessageId, delta: string): void;
-    markMessage(id: MessageId, patch: Partial<ChatMessage>): void;
-}
-
-export const useSessionStore = create<SessionStoreState>((set, get) => ({
-    sessions: new Map(),
-    messageIdsBySession: new Map(),
-    messages: new Map(),
-    currentSessionId: null,
-
-    getCurrentSession() {
-        const id = get().currentSessionId; if (!id) return null;
-        return get().sessions.get(id) ?? null;
-    },
-
-    getMessages(sessionId) {
-        const ids = get().messageIdsBySession.get(sessionId) ?? [];
-        const list = ids.map(id => get().messages.get(id)).filter(Boolean) as ChatMessage[];
-        return list;
-    },
-
-    upsertSession(s) {
-        set((st) => {
-            const sessions = new Map(st.sessions);
-            sessions.set(s.id, s);
-            return { sessions } as any;
-        });
-    },
-
-    setCurrentSession(id) { set({ currentSessionId: id }); },
-
-    addMessage(m) {
-        set((st) => {
-            const messages = new Map(st.messages);
-            messages.set(m.id, m);
-            const by = new Map(st.messageIdsBySession);
-            const arr = by.get(m.sessionId) ? [...(by.get(m.sessionId) as MessageId[]), m.id] : [m.id];
-            by.set(m.sessionId, arr);
-            return { messages, messageIdsBySession: by } as any;
-        });
-    },
-
-    appendToMessage(id, delta) {
-        set((st) => {
-            const m = st.messages.get(id); if (!m) return {} as any;
-            const messages = new Map(st.messages);
-            messages.set(id, { ...m, content: (m.content || '') + delta });
-            return { messages } as any;
-        });
-    },
-
-    markMessage(id, patch) {
-        set((st) => {
-            const m = st.messages.get(id); if (!m) return {} as any;
-            const messages = new Map(st.messages);
-            messages.set(id, { ...m, ...patch });
-            return { messages } as any;
-        });
-    },
-}));
-
 export default useSessionStore;
 
 

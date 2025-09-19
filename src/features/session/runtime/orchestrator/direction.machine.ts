@@ -1,6 +1,6 @@
 import { createMachine, assign } from 'xstate';
 import type { SessionId } from '../../data-access/types';
-import { directionExecutor } from '../executors/direction-executor';
+// executor 调用改由 orchestrator 管理，避免重复
 
 interface Ctx {
     sessionId: SessionId;
@@ -8,7 +8,6 @@ interface Ctx {
     version: number;
     lastProposal?: string;
     feedback?: string;
-    run?: { abort(): void } | null;
 }
 
 type Ev =
@@ -23,23 +22,12 @@ type Ev =
 export const directionMachine = createMachine<Ctx, Ev>({
     id: 'direction',
     initial: 'idle',
-    context: { sessionId: '' as SessionId, userQuery: '', version: 1, lastProposal: undefined, feedback: undefined, run: null },
+    context: { sessionId: '' as SessionId, userQuery: '', version: 1, lastProposal: undefined, feedback: undefined },
     states: {
         idle: {
             on: { PROPOSE: { target: 'proposing', actions: assign((_, e: any) => ({ userQuery: e.userQuery, version: 1 })) } }
         },
         proposing: {
-            entry: assign((ctx) => {
-                const run = directionExecutor.generateProposal({
-                    userQuery: ctx.userQuery,
-                    version: ctx.version,
-                    feedback: ctx.feedback,
-                    onComplete: (text) => ctxRef.send({ type: 'PROPOSAL_DONE', text }),
-                    onError: (message) => ctxRef.send({ type: 'PROPOSAL_ERROR', message })
-                });
-                return { run } as Partial<Ctx>;
-            }),
-            exit: assign((ctx) => { try { ctx.run?.abort(); } catch { /* ignore */ } return { run: null }; }),
             on: {
                 PROPOSAL_DONE: { target: 'waitDecision', actions: assign((_, e: any) => ({ lastProposal: e.text })) },
                 PROPOSAL_ERROR: { target: 'idle' }
@@ -57,8 +45,6 @@ export const directionMachine = createMachine<Ctx, Ev>({
     }
 });
 
-// 简单的 interpreter 桥接（外部注入）
-let ctxRef: { send: (ev: Ev) => void } = { send: () => { } };
-export function setDirectionMachineBridge(ref: { send: (ev: Ev) => void }) { ctxRef = ref; }
+// 由 orchestrator 持有 interpreter，并负责向 machine 发送 PROPOSAL_DONE/ERROR
 
 

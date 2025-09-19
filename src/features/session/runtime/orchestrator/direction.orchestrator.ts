@@ -20,12 +20,13 @@ async function emit(e: SessionEvent) {
 function ensureInstance(sessionId: SessionId) {
     let rec = instances.get(sessionId);
     if (rec) return rec;
-    const service = interpret(directionMachine.withContext({ sessionId, userQuery: '', version: 1, lastProposal: undefined, feedback: undefined, run: null }));
+    const service = interpret(directionMachine.withContext({ sessionId, userQuery: '', version: 1, lastProposal: undefined, feedback: undefined }));
     const stateWatcher = (state: DirState) => {
         const ctx = state.context as any;
         const curr = instances.get(sessionId)!;
         // manage executor lifecycle
         if (state.matches('proposing')) {
+            // 进入 proposing 由 orchestrator 启动执行器
             if (!curr.run) {
                 curr.run = directionExecutor.generateProposal({
                     userQuery: ctx.userQuery,

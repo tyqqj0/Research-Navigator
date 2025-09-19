@@ -62,6 +62,32 @@ export function applyEventToProjection(e: SessionEvent) {
         store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `方向确定：\n${e.payload.directionSpec}`, status: 'done', createdAt: e.ts });
         return;
     }
+
+    // Collection projections (minimal counters; session meta 可后续扩展)
+    if (e.type === 'SearchExecuted') {
+        const sid = e.sessionId!; const msgId = `search_${e.payload.batchId}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `检索完成：${e.payload.count} 篇`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'PapersIngested') {
+        const sid = e.sessionId!; const msgId = `ingest_${e.payload.batchId}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `合并：新增 ${e.payload.added} 篇，总计 ${e.payload.total}`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'CollectionUpdated') {
+        const sid = e.sessionId!; const msgId = `collection_${e.payload.collectionId}_v${e.payload.version}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `集合版本 v${e.payload.version}，总计 ${e.payload.total}`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'SessionCollectionBound') {
+        const sid = e.sessionId!;
+        // 为了简单：直接写入 session 的 linkedCollectionId（通过公开方法）
+        try { (useSessionStore.getState() as any).bindSessionCollection(sid, e.payload.collectionId); } catch { /* ignore */ }
+        const msgId = `bind_collection_${e.payload.collectionId}`;
+        const note = e.payload.created ? '已为会话创建并绑定集合' : '已绑定到现有集合';
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `${note}：${e.payload.collectionId}`, status: 'done', createdAt: e.ts });
+        return;
+    }
 }
 
 
