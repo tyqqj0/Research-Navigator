@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import { MainLayout } from '@/components/layout';
@@ -13,25 +13,27 @@ import { usePaperCatalog } from '@/features/graph/editor/paper-catalog';
 import '@/features/session/runtime/orchestrator/chat.orchestrator';
 import '@/features/session/runtime/orchestrator/direction.orchestrator';
 import '@/features/session/runtime/orchestrator/collection.orchestrator';
+import { startDirectionSupervisor } from '@/features/session/runtime/orchestrator/direction.supervisor';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSessionStore } from '@/features/session/data-access/session-store';
+import { commandBus } from '@/features/session/runtime/command-bus';
 
 export default function ResearchSessionPage() {
     const params = useParams<{ sessionId: string }>();
     const router = useRouter();
     const pathname = usePathname();
     const sessionId = params?.sessionId;
+    const store = useSessionStore();
+    useEffect(() => { if (sessionId) void store.loadSessionProjection(sessionId); }, [sessionId]);
 
-    const sessions = useMemo(() => (
-        [
-            { id: 'session-a1', title: '关于Transformer在医学影像中的应用' },
-            { id: 'session-b2', title: 'LLM驱动的文献综述起草' },
-            { id: 'session-c3', title: '科研方法论与实验设计探讨' },
-        ]
-    ), []);
+    const sessions = store.getSessions();
+    // Ensure Deep Research supervisor started once on client
+    useEffect(() => { startDirectionSupervisor(); }, []);
 
-    const createSession = () => {
-        const id = Math.random().toString(36).slice(2, 10);
+    const createSession = async () => {
+        const id = crypto.randomUUID();
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'CreateSession', ts: Date.now(), sessionId: id, params: { title: '未命名研究' } } as any);
         router.push(`/research/${id}`);
     };
 
@@ -63,26 +65,41 @@ export default function ResearchSessionPage() {
                                     pathname === `/research/${s.id}` && 'bg-accent'
                                 )}
                             >
-                                {s.title}
+                                {s.title || '未命名研究'}
                             </Link>
                         ))}
                     </div>
                 </div>
 
-                {/* 三栏：左聊/中图/右列 */}
-                <div className="h-full flex-1 grid grid-cols-12 gap-4 p-4">
-                    <div className="col-span-12 md:col-span-3 h-[70vh]"><ChatPanel sessionId={sessionId!} /></div>
-                    <div className="col-span-12 md:col-span-6 h-[70vh]">
-                        {graphId ? (
-                            <GraphCanvas graphId={graphId} getPaperSummary={getPaperSummary} layoutMode="timeline" />
-                        ) : (
-                            <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
-                        )}
-                    </div>
-                    <div className="col-span-12 md:col-span-3 h-[70vh]"><SessionCollectionPanel sessionId={sessionId!} /></div>
-                </div>
+                {/* 动态布局：未进入集合阶段前，聊天全宽；进入集合后三栏 */}
+                <DynamicSessionBody sessionId={sessionId!} getPaperSummary={getPaperSummary} graphId={graphId} />
             </div>
         </MainLayout>
+    );
+}
+
+function DynamicSessionBody({ sessionId, getPaperSummary, graphId }: { sessionId: string; getPaperSummary: any; graphId: any }) {
+    const s = useSessionStore(state => state.sessions.get(sessionId));
+    const inCollection = Boolean(s?.meta && (s.meta as any).stage === 'collection');
+    if (!inCollection) {
+        return (
+            <div className="h-full flex-1 p-4">
+                <div className="h-[70vh]"><ChatPanel sessionId={sessionId} /></div>
+            </div>
+        );
+    }
+    return (
+        <div className="h-full flex-1 grid grid-cols-12 gap-4 p-4">
+            <div className="col-span-12 md:col-span-3 h-[70vh]"><ChatPanel sessionId={sessionId} /></div>
+            <div className="col-span-12 md:col-span-6 h-[70vh]">
+                {graphId ? (
+                    <GraphCanvas graphId={graphId} getPaperSummary={getPaperSummary} layoutMode="timeline" />
+                ) : (
+                    <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
+                )}
+            </div>
+            <div className="col-span-12 md:col-span-3 h-[70vh]"><SessionCollectionPanel sessionId={sessionId} /></div>
+        </div>
     );
 }
 

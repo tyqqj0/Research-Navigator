@@ -1,18 +1,11 @@
 import { startTextStream } from '@/lib/ai/streaming/start';
+import { buildDirectionPrompt, parseDirectionXml } from '../prompts/direction';
 
 export interface DirectionRun {
     abort(): void;
 }
 
-function buildPrompt(input: { userQuery: string; version: number; feedback?: string }) {
-    const { userQuery, version, feedback } = input;
-    const preface = version > 1
-        ? `已收到用户反馈，请据此改写：\n${feedback || ''}`
-        : '请将用户的研究意图细化为一个清晰的研究方向与目标';
-    return [
-        `${preface}。要求：\n- 明确子领域与范围边界\n- 给出3-5个关键研究问题\n- 说明时间范围与数据来源\n- 给出实施建议（仅列要点）\n\n用户意图：${userQuery}`
-    ].join('\n');
-}
+function buildPrompt(input: { userQuery: string; version: number; feedback?: string }) { return buildDirectionPrompt(input); }
 
 export const directionExecutor = {
     generateProposal(opts: { userQuery: string; version: number; feedback?: string; onComplete: (text: string) => void; onError: (msg: string) => void }): DirectionRun {
@@ -21,14 +14,25 @@ export const directionExecutor = {
         (async () => {
             try {
                 const prompt = buildPrompt({ userQuery: opts.userQuery, version: opts.version, feedback: opts.feedback });
+                try { console.debug('[exec][direction][prompt]', { version: opts.version, hasFeedback: Boolean(opts.feedback), preview: String(prompt).slice(0, 160) }); } catch { }
                 const stream = startTextStream({ prompt }, { signal: controller.signal });
                 for await (const ev of stream) {
+                    if (ev.type === 'start') { try { console.debug('[exec][direction][stream][start]'); } catch { } }
                     if (ev.type === 'delta') buf += ev.text;
-                    else if (ev.type === 'done') opts.onComplete(buf);
-                    else if (ev.type === 'error') opts.onError(ev.message);
-                    else if (ev.type === 'aborted') opts.onError('aborted');
+                    else if (ev.type === 'done') {
+                        try { console.debug('[exec][direction][stream][done]', { total: buf.length }); } catch { }
+                        // 尝试解析 XML，不强制要求成功；若成功则回传整段文本
+                        const parsed = parseDirectionXml(buf);
+                        if (!parsed.ok) {
+                            // 附加一个轻量提示，后续可由 orchestrator 触发澄清
+                        }
+                        opts.onComplete(buf);
+                    }
+                    else if (ev.type === 'error') { try { console.debug('[exec][direction][stream][error]', ev.message); } catch { } opts.onError(ev.message); }
+                    else if (ev.type === 'aborted') { try { console.debug('[exec][direction][stream][aborted]'); } catch { } opts.onError('aborted'); }
                 }
             } catch (e) {
+                try { console.debug('[exec][direction][exception]', (e as Error).message); } catch { }
                 opts.onError((e as Error).message);
             }
         })();

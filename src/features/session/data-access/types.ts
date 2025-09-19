@@ -68,6 +68,8 @@ export type SessionCommand =
     | CommandEnvelope<'SendMessage', { sessionId: SessionId; text: string }>
     | CommandEnvelope<'StopStreaming', { sessionId: SessionId }>
     | CommandEnvelope<'RenameSession', { sessionId: SessionId; title: string }>
+    // Deep Research mode
+    | CommandEnvelope<'ToggleDeepResearch', { sessionId: SessionId; enabled: boolean }>
     // Direction phase
     | CommandEnvelope<'ProposeDirection', { sessionId: SessionId; userQuery: string }>
     | CommandEnvelope<'DecideDirection', { sessionId: SessionId; action: 'confirm' | 'refine' | 'cancel'; feedback?: string }>
@@ -91,6 +93,8 @@ export type SessionEvent =
     | EventEnvelope<'AssistantMessageCompleted', { messageId: MessageId }>
     | EventEnvelope<'AssistantMessageAborted', { messageId: MessageId; reason?: string }>
     | EventEnvelope<'AssistantMessageFailed', { messageId: MessageId; error: string }>
+    // Deep Research mode events
+    | EventEnvelope<'DeepResearchModeChanged', { enabled: boolean }>
     // Direction phase events
     | EventEnvelope<'DirectionProposed', { proposalText: string; version: number }>
     | EventEnvelope<'DecisionRequested', { kind: 'direction'; version: number }>

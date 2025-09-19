@@ -1,4 +1,5 @@
 import { useSessionStore } from '../data-access/session-store';
+import { extractDirectionText } from './prompts/direction';
 import type { SessionEvent } from '../data-access/types';
 
 export function applyEventToProjection(e: SessionEvent) {
@@ -37,15 +38,38 @@ export function applyEventToProjection(e: SessionEvent) {
         return;
     }
 
+    // Deep Research mode projection
+    if (e.type === 'DeepResearchModeChanged') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, deepResearchEnabled: e.payload.enabled }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        const sid = e.sessionId!;
+        const msgId = `deep_research_${e.ts}`;
+        const note = e.payload.enabled ? '已开启 Deep Research 模式' : '已关闭 Deep Research 模式';
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: note, status: 'done', createdAt: e.ts });
+        return;
+    }
+
     // Direction phase projection additions (minimal):
     if (e.type === 'DirectionProposed') {
         const sid = e.sessionId!;
         const msgId = `proposal_${e.payload.version}`;
-        store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: e.payload.proposalText, status: 'done', createdAt: e.ts });
+        const content = extractDirectionText(e.payload.proposalText || '');
+        store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content, status: 'done', createdAt: e.ts });
         return;
     }
     if (e.type === 'DecisionRequested') {
-        // could set a UI flag in session meta in the future
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), version: e.payload.version, awaitingDecision: true } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
     if (e.type === 'DirectionDecisionRecorded') {
@@ -54,12 +78,28 @@ export function applyEventToProjection(e: SessionEvent) {
         const msgId = `decision_${e.payload.version}_${e.id}`;
         const text = e.payload.action === 'confirm' ? '已确认方向。' : e.payload.action === 'refine' ? `请求细化：${e.payload.feedback || ''}` : '已取消方向。';
         store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: text, status: 'done', createdAt: e.ts });
+        // clear awaiting flag
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), awaitingDecision: false } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
     if (e.type === 'DirectionConfirmed') {
         const sid = e.sessionId!;
         const msgId = `direction_${e.payload.version}`;
         store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `方向确定：\n${e.payload.directionSpec}`, status: 'done', createdAt: e.ts });
+        // update session stage/meta
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), confirmed: true, version: e.payload.version, spec: e.payload.directionSpec }, stage: 'collection' }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
 

@@ -11,8 +11,10 @@ import { useSessionStore } from '../data-access/session-store';
 import '../runtime/orchestrator/chat.orchestrator';
 import '../runtime/orchestrator/direction.orchestrator';
 import '../runtime/orchestrator/collection.orchestrator';
+import { startDirectionSupervisor } from '@/features/session/runtime/orchestrator/direction.supervisor';
 
 export const SessionPage: React.FC<{ sessionId: string }> = ({ sessionId }) => {
+    React.useEffect(() => { startDirectionSupervisor(); }, []);
     const { getPaperSummary } = usePaperCatalog();
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const graphId = undefined as any; // 后续由编排器设置并接入 GraphCanvas

@@ -4,10 +4,12 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { useSessionStore } from '../data-access/session-store';
 import type { SessionId } from '../data-access/types';
-import { commandBus } from '../runtime/command-bus';
+import { commandBus } from '@/features/session/runtime/command-bus';
+import { Markdown } from '@/components/ui/markdown';
+import { DirectionProposalCard } from './DirectionProposalCard';
 
 interface ChatPanelProps {
     sessionId: SessionId;
@@ -15,8 +17,14 @@ interface ChatPanelProps {
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
     const messages = useSessionStore(s => s.getMessages(sessionId));
+    const session = useSessionStore(s => s.sessions.get(sessionId));
     const [userInput, setUserInput] = React.useState('');
-    const [feedback, setFeedback] = React.useState('');
+    const [deep, setDeep] = React.useState<boolean>(() => {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(sessionId);
+            return Boolean(s?.meta?.deepResearchEnabled);
+        } catch { return false; }
+    });
 
     const sendUserMessage = async () => {
         const text = userInput.trim();
@@ -25,61 +33,47 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
         setUserInput('');
     };
 
-    const proposeDirection = async () => {
-        const text = userInput.trim();
-        if (!text) return;
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: text } } as any);
-    };
-
-    const decide = async (action: 'confirm' | 'refine' | 'cancel') => {
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action, feedback: feedback.trim() || undefined } } as any);
-        if (action !== 'refine') setFeedback('');
-    };
-
-    const initCollection = async () => {
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'InitCollection', ts: Date.now(), params: { sessionId } } as any);
-    };
-    const startExpansion = async () => {
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'StartExpansion', ts: Date.now(), params: { sessionId } } as any);
-    };
-    const stopExpansion = async () => {
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopExpansion', ts: Date.now(), params: { sessionId } } as any);
+    const toggleDeep = async (enabled: boolean) => {
+        setDeep(enabled);
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ToggleDeepResearch', ts: Date.now(), params: { sessionId, enabled } } as any);
     };
 
     return (
         <Card className="h-full flex flex-col">
-            <CardHeader className="py-2">
-                <CardTitle className="text-sm">对话</CardTitle>
+            <CardHeader className="py-2 flex items-center justify-between">
+                <CardTitle className="text-sm">对话{(session?.meta as any)?.stage === 'collection' ? ' · 集合阶段' : ''}</CardTitle>
+                <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Deep Research</span>
+                    <Switch checked={deep} onCheckedChange={toggleDeep} />
+                </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
                 <div className="flex-1 overflow-auto divide-y">
                     {messages.map(m => (
                         <div key={m.id} className="p-3 text-sm">
                             <div className="text-xs text-muted-foreground mb-1">{m.role} · {new Date(m.createdAt).toLocaleTimeString()}</div>
-                            <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                            {m.id.startsWith('proposal_') ? (
+                                <DirectionProposalCard content={m.content} />
+                            ) : (
+                                <Markdown text={m.content} />
+                            )}
                         </div>
                     ))}
+                    {/* 决策任务卡：当等待决定时渲染卡片 */}
+                    {!!(session as any)?.meta?.direction?.awaitingDecision && (
+                        <div className="p-3">
+                            <DecisionCard sessionId={sessionId} />
+                        </div>
+                    )}
                     {messages.length === 0 && (
                         <div className="p-4 text-sm text-muted-foreground">还没有消息，输入内容试试</div>
                     )}
                 </div>
 
                 <div className="border-t p-3 space-y-2">
-                    <Input placeholder="输入问题或方向（用于提案）" value={userInput} onChange={(e) => setUserInput(e.target.value)} />
+                    <Input placeholder="输入你的问题（普通对话）或让我们找到研究方向" value={userInput} onChange={(e) => setUserInput(e.target.value)} />
                     <div className="flex gap-2">
                         <Button size="sm" onClick={sendUserMessage}>发送</Button>
-                        <Button size="sm" variant="secondary" onClick={proposeDirection}>生成方向提案</Button>
-                        <Button size="sm" variant="outline" onClick={initCollection}>初始化集合</Button>
-                        <Button size="sm" variant="outline" onClick={startExpansion}>开始扩展</Button>
-                        <Button size="sm" variant="destructive" onClick={stopExpansion}>停止扩展</Button>
-                    </div>
-                    <div className="space-y-2">
-                        <Textarea placeholder="细化反馈（可选）" value={feedback} onChange={(e) => setFeedback(e.target.value)} className="min-h-[60px]" />
-                        <div className="flex gap-2">
-                            <Button size="sm" onClick={() => decide('confirm')}>确认</Button>
-                            <Button size="sm" variant="secondary" onClick={() => decide('refine')}>细化</Button>
-                            <Button size="sm" variant="outline" onClick={() => decide('cancel')}>取消</Button>
-                        </div>
                     </div>
                 </div>
             </CardContent>
@@ -89,4 +83,29 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
 
 export default ChatPanel;
 
+const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
+    const [feedback, setFeedback] = React.useState('');
+    const onConfirm = async () => {
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'confirm' } } as any);
+    };
+    const onRefine = async () => {
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'refine', feedback } } as any);
+        setFeedback('');
+    };
+    const onCancel = async () => {
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'cancel' } } as any);
+    };
+    return (
+        <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+            <div className="text-xs text-muted-foreground">需要决定</div>
+            <div className="text-sm font-medium">是否确认当前研究方向？</div>
+            <Input placeholder="如需细化，可输入补充/反馈" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+            <div className="flex gap-2">
+                <Button size="sm" onClick={onConfirm}>确认</Button>
+                <Button size="sm" variant="secondary" onClick={onRefine}>细化</Button>
+                <Button size="sm" variant="ghost" onClick={onCancel}>取消</Button>
+            </div>
+        </div>
+    );
+};
 

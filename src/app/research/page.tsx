@@ -1,27 +1,27 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { MainLayout } from '@/components/layout';
 import { Button, Card, CardContent } from '@/components/ui';
+import { useSessionStore } from '@/features/session/data-access/session-store';
+import { commandBus } from '@/features/session/runtime/command-bus';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function ResearchPage() {
     const router = useRouter();
     const pathname = usePathname();
+    const store = useSessionStore();
+    const [hydrated, setHydrated] = useState(false);
 
-    const sessions = useMemo(() => (
-        [
-            { id: 'session-a1', title: '关于Transformer在医学影像中的应用' },
-            { id: 'session-b2', title: 'LLM驱动的文献综述起草' },
-            { id: 'session-c3', title: '科研方法论与实验设计探讨' },
-        ]
-    ), []);
+    useEffect(() => { void store.loadAllSessions().then(() => setHydrated(true)); }, []);
+    const sessions = store.getSessions();
 
-    const createSession = () => {
-        const id = Math.random().toString(36).slice(2, 10);
+    const createSession = async () => {
+        const id = crypto.randomUUID();
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'CreateSession', ts: Date.now(), sessionId: id, params: { title: '未命名研究' } } as any);
         router.push(`/research/${id}`);
     };
 
@@ -50,7 +50,7 @@ export default function ResearchPage() {
                                     pathname === `/research/${s.id}` && 'bg-accent'
                                 )}
                             >
-                                {s.title}
+                                {s.title || '未命名研究'}
                             </Link>
                         ))}
                     </div>
@@ -59,7 +59,7 @@ export default function ResearchPage() {
                 <div className="flex-1 p-6">
                     <Card>
                         <CardContent className="p-6 text-sm text-muted-foreground">
-                            选择左侧一个会话或点击“新建会话”开始研究讨论。
+                            {hydrated ? '选择左侧一个会话或点击“新建会话”开始研究讨论。' : '正在加载会话…'}
                         </CardContent>
                     </Card>
                 </div>

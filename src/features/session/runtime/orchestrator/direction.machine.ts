@@ -11,7 +11,7 @@ interface Ctx {
 }
 
 type Ev =
-    | { type: 'PROPOSE'; userQuery: string }
+    | { type: 'PROPOSE'; userQuery: string; sessionId: SessionId }
     | { type: 'FEEDBACK'; feedback: string }
     | { type: 'CONFIRM' }
     | { type: 'REFINE' }
@@ -19,26 +19,27 @@ type Ev =
     | { type: 'PROPOSAL_DONE'; text: string }
     | { type: 'PROPOSAL_ERROR'; message: string };
 
-export const directionMachine = createMachine<Ctx, Ev>({
+export const directionMachine = createMachine({
+    types: {} as { context: Ctx; events: Ev },
     id: 'direction',
     initial: 'idle',
     context: { sessionId: '' as SessionId, userQuery: '', version: 1, lastProposal: undefined, feedback: undefined },
     states: {
         idle: {
-            on: { PROPOSE: { target: 'proposing', actions: assign((_, e: any) => ({ userQuery: e.userQuery, version: 1 })) } }
+            on: { PROPOSE: { target: 'proposing', actions: assign(({ event }) => ({ userQuery: (event as any).userQuery, version: 1, sessionId: (event as any).sessionId })) } }
         },
         proposing: {
             on: {
-                PROPOSAL_DONE: { target: 'waitDecision', actions: assign((_, e: any) => ({ lastProposal: e.text })) },
+                PROPOSAL_DONE: { target: 'waitDecision', actions: assign(({ event }) => ({ lastProposal: (event as any).text })) },
                 PROPOSAL_ERROR: { target: 'idle' }
             }
         },
         waitDecision: {
             on: {
                 CONFIRM: 'done',
-                REFINE: { target: 'proposing', actions: assign((ctx) => ({ version: ctx.version + 1 })) },
+                REFINE: { target: 'proposing', actions: assign(({ context }) => ({ version: context.version + 1 })) },
                 CANCEL: 'idle',
-                FEEDBACK: { actions: assign((_, e: any) => ({ feedback: e.feedback })) }
+                FEEDBACK: { actions: assign(({ event }) => ({ feedback: (event as any).feedback })) }
             }
         },
         done: { type: 'final' }
