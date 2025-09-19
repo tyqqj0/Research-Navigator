@@ -81,7 +81,7 @@ if (!g_any.__directionOrchestratorRegistered) {
     g_any.__directionOrchestratorRegistered = true;
     try { console.debug('[orch][direction][init]', ORCH_ID); } catch { }
     commandBus.register(async (cmd: SessionCommand) => {
-        try { console.debug('[orch][direction][cmd]', ORCH_ID, cmd.type, cmd.id); } catch { }
+        // try { console.debug('[orch][direction][cmd]', ORCH_ID, cmd.type, cmd.id); } catch { }
         if (cmd.type === 'ProposeDirection') {
             const { sessionId, userQuery } = cmd.params as any;
             const { service } = ensureInstance(sessionId);

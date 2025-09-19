@@ -43,7 +43,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
         <Card className="h-full flex flex-col">
             <CardHeader className="py-2 flex items-center justify-between">
                 <CardTitle className="text-sm">对话{(session?.meta as any)?.stage === 'collection' ? ' · 集合阶段' : ''}</CardTitle>
-                <DeepResearchPill enabled={deep} onToggle={toggleDeep} />
+                {/* <DeepResearchPill enabled={deep} onToggle={toggleDeep} />=-0 */}
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
                 <div className="flex-1 overflow-auto divide-y">
