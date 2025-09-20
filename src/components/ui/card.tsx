@@ -54,6 +54,41 @@ const cardHeaderVariants = cva(
   }
 )
 
+// CardContent 变体样式配置，比 CardHeader 整体浅一点，并多一个 rounded 变体
+const cardContentVariants = cva(
+  "p-6 pt-0", 
+  {
+    variants: {
+      variant: {
+        default: "p-6 pt-0",
+        blue: "theme-card-blue-softer",
+        green: "theme-card-green-softer",
+        purple: "theme-card-purple-softer",
+        orange: "theme-card-orange-softer",
+        red: "theme-card-red-softer",
+        gray: "theme-card-gray-softer",
+        cyan: "theme-card-cyan-softer",
+        pink: "theme-card-pink-softer",
+        gradient: "bg-gradient-to-r from-primary/10 to-secondary/10 theme-card-primary"
+      },
+      rounded: {
+        none: "",
+        sm: "rounded-b-sm",
+        md: "rounded-b-md",
+        lg: "rounded-b-lg",
+        xl: "rounded-b-xl"
+      }
+    }
+  }
+)
+
+
+
+
+
+
+
+
 export interface CardHeaderProps
   extends React.HTMLAttributes<HTMLDivElement>,
   VariantProps<typeof cardHeaderVariants> { }
@@ -95,9 +130,9 @@ CardDescription.displayName = "CardDescription"
 
 const CardContent = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+  React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof cardContentVariants>
+>(({ className, variant, rounded, ...props  }, ref) => (
+  <div ref={ref} className={cn(cardContentVariants({ variant, rounded }), className)} {...props} />
 ))
 CardContent.displayName = "CardContent"
 
@@ -120,5 +155,6 @@ export {
   CardTitle,
   CardDescription,
   CardContent,
-  cardHeaderVariants
+  cardHeaderVariants,
+  cardContentVariants
 }

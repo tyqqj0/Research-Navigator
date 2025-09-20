@@ -380,6 +380,10 @@ body {
 .theme-card-blue {
   background-color: var(--icon-blue);
 }
+.theme-card-blue-softer {
+  background-color: color-mix(in srgb, var(--icon-blue) 7%, var(--color-background) 93%);
+  border-color: color-mix(in srgb, var(--icon-blue) 15%, var(--color-border) 85%);
+}
 .theme-card-blue-soft {
   background-color: color-mix(in srgb, var(--icon-blue) 15%, var(--color-background) 85%);
   border-color: color-mix(in srgb, var(--icon-blue) 30%, var(--color-border) 70%);
@@ -391,6 +395,10 @@ body {
 
 .theme-card-green {
   background-color: var(--icon-green);
+}
+.theme-card-green-softer {
+  background-color: color-mix(in srgb, var(--icon-green) 7%, var(--color-background) 93%);
+  border-color: color-mix(in srgb, var(--icon-green) 15%, var(--color-border) 85%);
 }
 .theme-card-green-soft {
   background-color: color-mix(in srgb, var(--icon-green) 15%, var(--color-background) 85%);
@@ -404,7 +412,10 @@ body {
 .theme-card-yellow {
   background-color: var(--icon-yellow);
 }
-
+.theme-card-yellow-softer {
+  background-color: color-mix(in srgb, var(--icon-yellow) 7%, var(--color-background) 93%);
+  border-color: color-mix(in srgb, var(--icon-yellow) 15%, var(--color-border) 85%);
+}
 .theme-card-yellow-soft {
   background-color: color-mix(in srgb, var(--icon-yellow) 15%, var(--color-background) 85%);
   border-color: color-mix(in srgb, var(--icon-yellow) 30%, var(--color-border) 70%);
@@ -416,6 +427,10 @@ body {
 
 .theme-card-red {
   background-color: var(--icon-red);
+}
+.theme-card-red-softer {
+  background-color: color-mix(in srgb, var(--icon-red) 7%, var(--color-background) 93%);
+  border-color: color-mix(in srgb, var(--icon-red) 15%, var(--color-border) 85%);
 }
 .theme-card-red-soft {
   background-color: color-mix(in srgb, var(--icon-red) 15%, var(--color-background) 85%);
@@ -429,6 +444,10 @@ body {
 .theme-card-cyan {
   background-color: var(--icon-cyan);
 }
+.theme-card-cyan-softer {
+  background-color: color-mix(in srgb, var(--icon-cyan) 7%, var(--color-background) 93%);
+  border-color: color-mix(in srgb, var(--icon-cyan) 15%, var(--color-border) 85%);
+}
 .theme-card-cyan-soft {
   background-color: color-mix(in srgb, var(--icon-cyan) 15%, var(--color-background) 85%);
   border-color: color-mix(in srgb, var(--icon-cyan) 30%, var(--color-border) 70%);
@@ -441,12 +460,14 @@ body {
 .theme-card-gray {
   background-color: var(--icon-gray);
 }
-
+.theme-card-gray-softer {
+  background-color: color-mix(in srgb, var(--icon-gray) 7%, var(--color-background) 93%);
+  border-color: color-mix(in srgb, var(--icon-gray) 15%, var(--color-border) 85%);
+}
 .theme-card-gray-soft {
   background-color: color-mix(in srgb, var(--icon-gray) 15%, var(--color-background) 85%);
   border-color: color-mix(in srgb, var(--icon-gray) 30%, var(--color-border) 70%);
 }
-
 .theme-card-gray-outline {
   background-color: transparent;
   color: var(--icon-gray);
@@ -455,12 +476,14 @@ body {
 .theme-card-purple {
   background-color: var(--icon-purple);
 }
-
+.theme-card-purple-softer {
+  background-color: color-mix(in srgb, var(--icon-purple) 7%, var(--color-background) 93%);
+  border-color: color-mix(in srgb, var(--icon-purple) 15%, var(--color-border) 85%);
+}
 .theme-card-purple-soft {
   background-color: color-mix(in srgb, var(--icon-purple) 15%, var(--color-background) 85%);
   border-color: color-mix(in srgb, var(--icon-purple) 30%, var(--color-border) 70%);
 }
-
 .theme-card-purple-outline {
   background-color: transparent;
   color: var(--icon-purple);
@@ -469,12 +492,14 @@ body {
 .theme-card-pink {
   background-color: var(--icon-pink);
 }
-
+.theme-card-pink-softer {
+  background-color: color-mix(in srgb, var(--icon-pink) 7%, var(--color-background) 93%);
+  border-color: color-mix(in srgb, var(--icon-pink) 15%, var(--color-border) 85%);
+}
 .theme-card-pink-soft {
   background-color: color-mix(in srgb, var(--icon-pink) 15%, var(--color-background) 85%);
   border-color: color-mix(in srgb, var(--icon-pink) 30%, var(--color-border) 70%);
 }
-
 .theme-card-pink-outline {
   background-color: transparent;
   color: var(--icon-pink);
@@ -483,12 +508,14 @@ body {
 .theme-card-orange {
   background-color: var(--icon-orange);
 }
-
+.theme-card-orange-softer {
+  background-color: color-mix(in srgb, var(--icon-orange) 7%, var(--color-background) 93%);
+  border-color: color-mix(in srgb, var(--icon-orange) 15%, var(--color-border) 85%);
+}
 .theme-card-orange-soft {
   background-color: color-mix(in srgb, var(--icon-orange) 15%, var(--color-background) 85%);
   border-color: color-mix(in srgb, var(--icon-orange) 30%, var(--color-border) 70%);
 }
-
 .theme-card-orange-outline {
   background-color: transparent;
   color: var(--icon-orange);

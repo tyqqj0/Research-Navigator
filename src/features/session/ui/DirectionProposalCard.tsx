@@ -11,10 +11,10 @@ interface DirectionProposalCardProps {
 export const DirectionProposalCard: React.FC<DirectionProposalCardProps> = ({ content }) => {
     return (
         <Card className="border rounded-md">
-            <CardHeader className="py-3">
+            <CardHeader className="py-3" variant="blue">
                 <CardTitle className="text-sm">研究方向提案</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm">
+            <CardContent className="text-sm" variant="blue" rounded="md">
                 <Markdown text={content} />
             </CardContent>
         </Card>
