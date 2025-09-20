@@ -31,10 +31,11 @@ export interface TavilyConfig {
     apiKey: string;
     apiBase?: string; // 可选代理或自建中转
     maxResults?: number;
+    includeDomains?: string[];
 }
 
 export interface WebDiscoveryAPI {
-    searchWeb(query: string, opts?: { limit?: number }): Promise<DiscoveryResult>;
+    searchWeb(query: string, opts?: { limit?: number; includeDomains?: string[] }): Promise<DiscoveryResult>;
     resolveToPaperIds(candidates: DiscoveryCandidate[]): Promise<{ paperIds: string[]; resolved: Array<{ candidateId: string; paperId: string }> }>;
     addCandidateToLibrary(candidate: DiscoveryCandidate, options?: any): Promise<{ paperId: string }>;
     addIdentifierToLibrary(identifier: string, options?: any): Promise<{ paperId: string }>;

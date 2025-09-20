@@ -6,7 +6,7 @@ import { literatureEntry } from '../data-access';
 
 export const webDiscovery: WebDiscoveryAPI = {
     async searchWeb(query, opts) {
-        const items = await tavilySearch(query, { maxResults: opts?.limit });
+        const items = await tavilySearch(query, { maxResults: opts?.limit, includeDomains: opts?.includeDomains });
         const candidates = buildCandidatesFromWebResults(query, items);
         return { query, candidates } as DiscoveryResult;
     },
@@ -23,7 +23,11 @@ export const webDiscovery: WebDiscoveryAPI = {
         for (const c of candidates) {
             if (!c.bestIdentifier) continue;
             try {
-                const lit = await backendApiService.getPaper(c.bestIdentifier);
+                // 对包含斜杠的标识（DOI/URL）进行路径安全编码
+                const idForPath = /^(DOI:|URL:)/i.test(c.bestIdentifier)
+                    ? encodeURIComponent(c.bestIdentifier)
+                    : c.bestIdentifier;
+                const lit = await backendApiService.getPaper(idForPath);
                 if (lit?.paperId) resolved.push({ candidateId: c.id, paperId: lit.paperId });
             } catch { /* ignore single failure */ }
         }

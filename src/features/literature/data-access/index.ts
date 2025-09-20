@@ -253,7 +253,10 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
 
             // 1) 直接使用详细信息接口（兼容更多后端实现）
             // 对于带斜杠的标识（DOI/URL），需要编码；S2/CorpusId 等可以直接使用原始形式
-            const idForPath = /^(DOI:|URL:)/i.test(normalized) ? encoded : normalized;
+            // 后端 /api/v1/paper/:id 期望：
+            // - 对于包含斜杠的标识（DOI、URL）必须 URL 编码
+            // - 其他（S2、CorpusId、ARXIV、MAG、ACL、PMID、PMCID）保持原样
+            const idForPath = /^(DOI:|URL:)/i.test(normalized) ? encodeURIComponent(normalized) : normalized;
             const searchRes = await this.services.backend.getPaper(idForPath);
             const paper = searchRes;
             if (!paper) throw new Error('No paper found for identifier');

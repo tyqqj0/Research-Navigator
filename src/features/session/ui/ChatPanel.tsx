@@ -134,9 +134,7 @@ const SearchCandidatesCard: React.FC<{ sessionId: SessionId; artifactId: string 
                                     <a className="text-blue-600 hover:underline" href={c.sourceUrl} target="_blank" rel="noreferrer">来源</a>
                                 </div>
                             </div>
-                            <div className="shrink-0">
-                                <Button size="sm" onClick={() => onAdd(c.bestIdentifier)} disabled={!c.bestIdentifier || !collectionId}>+ 入库</Button>
-                            </div>
+                            {/* Chat 中不提供入库按钮，自动入库由 orchestrator 负责 */}
                         </div>
                     ))}
                 </div>

@@ -131,6 +131,8 @@ export default function GraphPage() {
                                         paperId={activePaperId}
                                         onUpdated={() => { }}
                                         variant="side"
+                                        // 图谱页右侧通常配合集合树使用：此处暂无选中集合上下文，传 undefined
+                                        defaultCollectionId={undefined}
                                     />
                                 </div>
                             )}

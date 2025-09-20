@@ -27,8 +27,32 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 
 import { useSearchSettings } from '../../data-access';
+
+// 预设域名分组（可按需扩展/调整）
+const PREDEFINED_DOMAINS: Record<string, string[]> = {
+    academic: [
+        'arxiv.org',
+        'openreview.net',
+        'aclanthology.org',
+        'semanticscholar.org',
+        'scholar.google.com'
+    ],
+    publishers: [
+        'ieeexplore.ieee.org',
+        'dl.acm.org',
+        'link.springer.com',
+        'sciencedirect.com',
+        'nature.com'
+    ],
+    indexes: [
+        'crossref.org',
+        'doaj.org'
+    ]
+};
 
 const SEARCH_PROVIDERS = [
     { value: 'tavily', label: 'Tavily', description: '综合搜索引擎', status: 'stable' },
@@ -55,6 +79,18 @@ const getStatusColor = (status: string) => {
 
 export function SearchSettingsTab() {
     const { settings, updateSettings } = useSearchSettings();
+
+    const currentDomains = settings.searchDomainStrategy?.tavily?.domains || { predefined: [], custom: [] };
+    const setDomains = (next: { predefined?: string[]; custom?: string[] }) => {
+        const p = next.predefined ?? currentDomains.predefined;
+        const c = next.custom ?? currentDomains.custom;
+        updateSettings({
+            searchDomainStrategy: {
+                ...settings.searchDomainStrategy,
+                tavily: { domains: { predefined: p, custom: c } }
+            }
+        } as any);
+    };
 
     return (
         <div className="space-y-6">
@@ -372,6 +408,102 @@ export function SearchSettingsTab() {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                            </TabsContent>
+                        </Tabs>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* 域限制（预设 + 自定义） */}
+            {settings.enableSearch && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            搜索域限制（Tavily）
+                        </CardTitle>
+                        <CardDescription>
+                            仅从选中的域检索结果；可添加自定义域名
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Tabs defaultValue={Object.keys(PREDEFINED_DOMAINS)[0] || 'custom'}>
+                            <TabsList className="grid w-full grid-cols-4">
+                                {Object.keys(PREDEFINED_DOMAINS).map((group) => (
+                                    <TabsTrigger key={group} value={group}>
+                                        {group}
+                                    </TabsTrigger>
+                                ))}
+                                <TabsTrigger value="custom">custom</TabsTrigger>
+                            </TabsList>
+
+                            {Object.entries(PREDEFINED_DOMAINS).map(([group, domains]) => (
+                                <TabsContent key={group} value={group} className="mt-4 max-h-56 overflow-y-auto">
+                                    <div className="grid grid-cols-1 gap-y-2 md:grid-cols-2 md:gap-x-8">
+                                        {domains.map((domain) => {
+                                            const checked = currentDomains.predefined.includes(domain);
+                                            return (
+                                                <label key={domain} className="flex items-center gap-3 text-sm">
+                                                    <Checkbox
+                                                        checked={checked}
+                                                        onCheckedChange={(ck: boolean) => {
+                                                            const next = ck
+                                                                ? Array.from(new Set([...(currentDomains.predefined || []), domain]))
+                                                                : (currentDomains.predefined || []).filter((d) => d !== domain);
+                                                            setDomains({ predefined: next });
+                                                        }}
+                                                    />
+                                                    <span>{domain}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </TabsContent>
+                            ))}
+
+                            <TabsContent value="custom" className="mt-4 space-y-3">
+                                <div className="text-sm text-muted-foreground">手动添加域名（如 arxiv.org），每次添加一个</div>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        placeholder="输入域名"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const v = (e.currentTarget.value || '').trim();
+                                                if (!v) return;
+                                                const next = Array.from(new Set([...(currentDomains.custom || []), v]));
+                                                setDomains({ custom: next });
+                                                e.currentTarget.value = '';
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        onClick={(e) => {
+                                            const input = (e.currentTarget.previousSibling as HTMLInputElement);
+                                            if (!input) return;
+                                            const v = (input.value || '').trim();
+                                            if (!v) return;
+                                            const next = Array.from(new Set([...(currentDomains.custom || []), v]));
+                                            setDomains({ custom: next });
+                                            input.value = '';
+                                        }}
+                                    >添加</Button>
+                                </div>
+
+                                {currentDomains.custom.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {currentDomains.custom.map((d) => (
+                                            <span key={d} className="px-2 py-1 rounded border text-xs flex items-center gap-2">
+                                                {d}
+                                                <button
+                                                    type="button"
+                                                    className="text-muted-foreground hover:text-destructive"
+                                                    onClick={() => setDomains({ custom: currentDomains.custom.filter((x) => x !== d) })}
+                                                >×</button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </TabsContent>
                         </Tabs>
                     </CardContent>

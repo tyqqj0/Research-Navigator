@@ -4,6 +4,23 @@ const DOI_REGEX = /10\.\d{4,9}\/[-._;()/:A-Z0-9]+/i;
 const ARXIV_REGEX = /(arxiv\.org\/abs\/\d{4}\.\d{4,5})|(arXiv:\d{4}\.\d{4,5})/i;
 const S2_REGEX = /semanticscholar\.org\/paper\/([A-Za-z0-9-]+)/i;
 
+// 只允许作为 URL:* 的识别来源（与后端/S2 接口允许的来源保持一致）
+const SUPPORTED_URL_HOSTS = new Set<string>([
+    'semanticscholar.org',
+    'www.semanticscholar.org',
+    'arxiv.org',
+    'www.arxiv.org',
+    'aclanthology.org',
+    'www.aclanthology.org',
+    'aclweb.org',
+    'www.aclweb.org',
+    'acm.org',
+    'dl.acm.org',
+    'www.acm.org',
+    'biorxiv.org',
+    'www.biorxiv.org'
+]);
+
 function hashId(input: string): string {
     try {
         // 简易 hash（避免引入额外依赖）
@@ -34,14 +51,14 @@ export function buildCandidatesFromWebResults(query: string, items: WebSearchIte
         const extracted = [
             ...extractIdentifiersFromText(text),
         ];
-        // URL 兜底
+        // URL 兜底（仅用于展示）；作为 bestIdentifier 时需校验来源是否受支持
         extracted.push({ kind: 'URL', value: item.url });
 
-        // 决策优先级：S2 > DOI > ARXIV > URL
+        // 决策优先级：S2 > DOI > ARXIV > URL(仅支持白名单来源)
         const best = extracted.find(x => x.kind === 'S2')
             || extracted.find(x => x.kind === 'DOI')
             || extracted.find(x => x.kind === 'ARXIV')
-            || extracted.find(x => x.kind === 'URL');
+            || (site && SUPPORTED_URL_HOSTS.has(site) ? extracted.find(x => x.kind === 'URL') : undefined);
 
         const site = (() => {
             try { return new URL(item.url).hostname; } catch { return undefined; }

@@ -21,6 +21,8 @@ interface LiteratureDetailPanelProps {
     item?: EnhancedLibraryItem;
     onUpdated?: (updated: boolean) => void;
     variant?: 'modal' | 'side';
+    /** 默认添加到的集合ID（从页面/上下文传入） */
+    defaultCollectionId?: string;
 }
 
 const READING_STATUS_OPTIONS: Array<{ value: UpdateUserLiteratureMetaInput['readingStatus']; label: string }> = [
@@ -31,7 +33,7 @@ const READING_STATUS_OPTIONS: Array<{ value: UpdateUserLiteratureMetaInput['read
     { value: 'abandoned', label: '已放弃' },
 ];
 
-export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpdated, variant = 'modal' }: LiteratureDetailPanelProps) {
+export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpdated, variant = 'modal', defaultCollectionId }: LiteratureDetailPanelProps) {
     const { getLiterature } = useLiteratureOperations();
     const { updateUserMeta, addByIdentifier } = useLiteratureCommands();
 
@@ -140,7 +142,7 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
         if (!pid) return;
         setAddingIds(prev => new Set(prev).add(pid));
         try {
-            await addByIdentifier(makeIdentifier(pid), { autoExtractCitations: false });
+            await addByIdentifier(makeIdentifier(pid), { autoExtractCitations: false, addToCollection: defaultCollectionId });
         } catch (e) {
             // noop; keep silent per request
         } finally {
@@ -150,7 +152,7 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
                 return next;
             });
         }
-    }, [addByIdentifier, makeIdentifier]);
+    }, [addByIdentifier, makeIdentifier, defaultCollectionId]);
 
     const Body = (
         <div className="h-full overflow-hidden">

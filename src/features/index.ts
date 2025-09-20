@@ -3,7 +3,7 @@
 
 // Core Business Domains
 export * as Literature from './literature';
-export * as ResearchTree from './research-tree';
+// export * as ResearchTree from './research-tree';
 export * as Session from './session';
 
 // Supporting Domains (when implemented)
@@ -11,5 +11,5 @@ export * as Session from './session';
 // export * as User from './user';
 
 // Cross-domain utilities and types
-export type { LiteratureItem } from './literature';
+export type { LibraryItem } from './literature';
 export type { ResearchSession, DialogueMessage } from './session';

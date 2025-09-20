@@ -406,6 +406,7 @@ export default function LibraryPage() {
                                         paperId={activePaperId}
                                         onUpdated={() => { }}
                                         variant="side"
+                                        defaultCollectionId={selectedCollectionId || undefined}
                                     />
                                 </div>
                             )}

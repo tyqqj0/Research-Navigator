@@ -50,7 +50,7 @@ export function applyEventToProjection(e: SessionEvent) {
         const sid = e.sessionId!;
         const msgId = `deep_research_${e.ts}`;
         const note = e.payload.enabled ? '已开启 Deep Research 模式' : '已关闭 Deep Research 模式';
-        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: note, status: 'done', createdAt: e.ts });
+        // store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: note, status: 'done', createdAt: e.ts });
         return;
     }
 

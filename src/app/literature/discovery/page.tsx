@@ -3,17 +3,21 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { MainLayout } from '@/components/layout';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/components/ui';
 import { webDiscovery } from '@/features/literature/discovery';
+import { useSettingsStore } from '@/features/user/settings/data-access/settings-store';
+import { CollectionSelectDialog } from '@/features/literature/management/components/CollectionSelectDialog';
 import { toast } from 'sonner';
 
 export default function LiteratureDiscoveryPage() {
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [candidates, setCandidates] = useState<ReturnType<typeof useMemo> | any[]>([]);
+    const [candidates, setCandidates] = useState<any[]>([]);
+    const [selectOpen, setSelectOpen] = useState(false);
+    const [pendingIdentifier, setPendingIdentifier] = useState<string | null>(null);
 
     const headerActions = (
         <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm">高级筛选</Button>
+            <Button variant="outline" size="sm" onClick={() => window.open('/settings?tab=search', '_blank')}>高级筛选</Button>
             <Button size="sm">保存查询</Button>
         </div>
     );
@@ -24,7 +28,9 @@ export default function LiteratureDiscoveryPage() {
         setLoading(true);
         setError(null);
         try {
-            const res = await webDiscovery.searchWeb(q, { limit: 8 });
+            const dom = (useSettingsStore.getState().search.searchDomainStrategy?.tavily?.domains) || { predefined: [], custom: [] } as any;
+            const includeDomains = [...(dom.predefined || []), ...(dom.custom || [])].filter(Boolean);
+            const res = await webDiscovery.searchWeb(q, { limit: 8, includeDomains: includeDomains.length ? includeDomains : undefined });
             setCandidates(res.candidates);
         } catch (e: any) {
             setError(e?.message || '搜索失败');
@@ -34,12 +40,12 @@ export default function LiteratureDiscoveryPage() {
     }, [query]);
 
     const handleAdd = useCallback(async (c: any) => {
-        try {
-            const { paperId } = await webDiscovery.addCandidateToLibrary(c);
-            toast.success('已添加到文库', { description: paperId });
-        } catch (e: any) {
-            toast.error('添加失败', { description: e?.message });
+        if (!c?.bestIdentifier) {
+            toast.error('该候选未解析到可用标识');
+            return;
         }
+        setPendingIdentifier(c.bestIdentifier);
+        setSelectOpen(true);
     }, []);
 
     return (
@@ -97,9 +103,11 @@ export default function LiteratureDiscoveryPage() {
                                                     <a className="text-blue-600 hover:underline" href={c.sourceUrl} target="_blank" rel="noreferrer">来源</a>
                                                 </div>
                                             </div>
-                                            <div className="shrink-0">
-                                                <Button size="sm" onClick={() => handleAdd(c)} disabled={!c.bestIdentifier}>+ 入库</Button>
-                                            </div>
+                                            {c.bestIdentifier && (
+                                                <div className="shrink-0">
+                                                    <Button size="sm" onClick={() => handleAdd(c)}>+ 入库</Button>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -108,6 +116,21 @@ export default function LiteratureDiscoveryPage() {
                     )}
                 </div>
             </div>
+            <CollectionSelectDialog
+                open={selectOpen}
+                onOpenChange={setSelectOpen}
+                onConfirm={async (collectionId) => {
+                    if (!pendingIdentifier) return;
+                    try {
+                        const { paperId } = await webDiscovery.addIdentifierToLibrary(pendingIdentifier, { addToCollection: collectionId });
+                        toast.success('已添加到文库', { description: paperId });
+                    } catch (e: any) {
+                        toast.error('添加失败', { description: e?.message });
+                    } finally {
+                        setPendingIdentifier(null);
+                    }
+                }}
+            />
         </MainLayout>
     );
 }

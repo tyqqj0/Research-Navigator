@@ -84,6 +84,15 @@ commandBus.register(async (cmd: SessionCommand) => {
             total = merged.data.paperIds.length;
             await sessionRepository.putArtifact(merged as unknown as Artifact);
 
+            // 将新 paperIds 自动加入当前会话绑定集合（Chat 中无需手动入库）
+            try {
+                const s = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
+                const collectionId = s?.linkedCollectionId;
+                if (collectionId && batch.data.paperIds.length) {
+                    await literatureDataAccess.collections.addItemsToCollection(collectionId as any, batch.data.paperIds);
+                }
+            } catch { /* ignore add to collection errors */ }
+
             // 简要元数据（用于后续查询生成）
             const brief = await paperMetadataExecutor.fetchBriefs(batch.data.paperIds.slice(0, Math.min(lastAdded, 6)));
             const summary = { id: newId(), kind: 'search_round_summary', version: 1, data: { round, query, briefList: brief }, createdAt: Date.now() } as unknown as Artifact;
