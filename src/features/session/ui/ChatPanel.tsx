@@ -126,7 +126,7 @@ const SearchCandidatesCard: React.FC<{ sessionId: SessionId; artifactId: string 
                             <div className="min-w-0 flex-1">
                                 <div className="text-sm font-medium truncate">{c.title || c.sourceUrl}</div>
                                 <div className="text-[11px] text-muted-foreground truncate">{c.site}</div>
-                                <div className="text-[12px] line-clamp-2 mt-1">{c.snippet}</div>
+                                {/* <div className="text-[12px] line-clamp-2 mt-1">{c.snippet}</div> */}
                                 <div className="text-[11px] mt-1 flex items-center gap-2 flex-wrap">
                                     {c.bestIdentifier && (
                                         <span className="px-1.5 py-0.5 rounded bg-muted">{c.bestIdentifier}</span>

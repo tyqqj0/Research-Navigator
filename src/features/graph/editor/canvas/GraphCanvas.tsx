@@ -7,6 +7,7 @@ import { useGraphStore } from '@/features/graph/data-access/graph-store';
 import type { GraphDataSource, GraphSnapshot } from '@/features/graph/data-access';
 import { graphStoreDataSource } from '@/features/graph/data-access/graph-store';
 import type { PaperSummary } from '../paper-catalog';
+import { useLiteratureStore } from '@/features/literature/data-access';
 
 interface GraphCanvasProps {
     graphId: string;
@@ -43,6 +44,8 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     const { graphId, getPaperSummary, onNodeOpenDetail, layoutMode = 'free', dataSource, className, style, height, axisWidth, densityWidth, edgeHitbox, handleBaseSize, nodeRenderer, onNodeSelect, onEdgeSelect, onEdgeCreate, onViewportChange } = props;
     const store = useGraphStore();
     const ds: GraphDataSource = dataSource || graphStoreDataSource;
+    // subscribe to literature updates so node labels (titles/dates) refresh when store changes
+    const _literatureLastUpdated = useLiteratureStore(s => s.stats.lastUpdated);
     const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
     const [internalLayoutMode, setInternalLayoutMode] = useState<'free' | 'timeline'>(layoutMode);
     useEffect(() => { setInternalLayoutMode(layoutMode); }, [layoutMode]);
@@ -53,11 +56,19 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
         return undefined;
     }, [height]);
 
-    // subscribe to data source for live updates
+    // subscribe to data source for live updates, and ensure graph is loaded on mount/refresh
     useEffect(() => {
-        setSnapshot(ds.getSnapshot(graphId));
+        let cancelled = false;
+        (async () => {
+            try {
+                if (!store.getGraphById(graphId)) {
+                    await store.loadGraph(graphId);
+                }
+            } catch { /* ignore load errors */ }
+            if (!cancelled) setSnapshot(ds.getSnapshot(graphId));
+        })();
         const unsub = ds.subscribe(graphId, (snap) => setSnapshot(snap));
-        return () => { try { unsub?.(); } catch { /* ignore */ } };
+        return () => { cancelled = true; try { unsub?.(); } catch { /* ignore */ } };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [graphId, ds]);
 
@@ -95,7 +106,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
 
     // layout constants
     const NODE_HALF_HEIGHT = 22; // approx node half height for anchor
-    const LEFT_AXIS_WIDTH = axisWidth ?? 96; // px, wider to include months/quarters inside axis
+    const LEFT_AXIS_WIDTH = axisWidth ?? 64; // px, wider to include months/quarters inside axis
     const NODE_START_OFFSET_X = 72; // px after axis
     const DENSITY_WIDTH = densityWidth ?? 36; // px, density bar rendered to the RIGHT of the axis (adjust here)
     const DENSITY_RIGHT_MARGIN = 5; // px, margin between density and right edge

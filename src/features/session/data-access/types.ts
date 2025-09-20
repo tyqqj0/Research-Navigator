@@ -103,6 +103,7 @@ export type SessionEvent =
     | EventEnvelope<'DirectionDecisionRecorded', { action: 'confirm' | 'refine' | 'cancel'; feedback?: string; version: number }>
     | EventEnvelope<'DirectionConfirmed', { directionSpec: string; version: number }>
     // Collection phase events
+    | EventEnvelope<'SearchRoundPlanned', { round: number; reasoning: string; query: string }>
     | EventEnvelope<'SearchExecuted', { batchId: ArtifactId; count: number }>
     | EventEnvelope<'PapersIngested', { batchId: ArtifactId; added: number; total: number }>
     | EventEnvelope<'CollectionUpdated', { collectionId: ArtifactId; version: number; total: number }>
@@ -110,6 +111,7 @@ export type SessionEvent =
     | EventEnvelope<'SearchRoundStarted', { round: number; query: string }>
     | EventEnvelope<'SearchRoundCompleted', { round: number; added: number; total: number }>
     | EventEnvelope<'NoNewResults', { round: number }>
+    | EventEnvelope<'SearchRoundFailed', { round: number; stage: 'thinking' | 'candidates' | 'execute'; error: string }>
     | EventEnvelope<'ExpansionSaturated', { round: number; reason: 'no_new' | 'max_rounds' }>
     | EventEnvelope<'ExpansionEvaluated', { lastAdded: number; recentGrowth: number; coverageScore?: number }>
     | EventEnvelope<'ExpansionStopped', { by: 'user' | 'ai' | 'rule'; reason?: string }>

@@ -51,18 +51,22 @@ export function buildCandidatesFromWebResults(query: string, items: WebSearchIte
         const extracted = [
             ...extractIdentifiersFromText(text),
         ];
-        // URL 兜底（仅用于展示）；作为 bestIdentifier 时需校验来源是否受支持
-        extracted.push({ kind: 'URL', value: item.url });
+        // URL 兜底仅用于展示，不再作为 bestIdentifier 候选
+        // 仍然对 arXiv URL 做归一，便于展示
+        let normalizedUrl = item.url;
+        try {
+            const u = new URL(item.url);
+            if (u.hostname.includes('arxiv.org')) {
+                const m = u.pathname.match(/\/(\d{4}\.\d{4,5})(v\d+)?/);
+                if (m) normalizedUrl = `https://arxiv.org/abs/${m[1]}${m[2] || ''}`;
+            }
+        } catch { /* ignore */ }
+        extracted.push({ kind: 'URL', value: normalizedUrl });
 
-        // 决策优先级：S2 > DOI > ARXIV > URL(仅支持白名单来源)
+        // 决策优先级：仅 S2 > DOI > ARXIV；不再选择 URL
         const best = extracted.find(x => x.kind === 'S2')
             || extracted.find(x => x.kind === 'DOI')
-            || extracted.find(x => x.kind === 'ARXIV')
-            || (site && SUPPORTED_URL_HOSTS.has(site) ? extracted.find(x => x.kind === 'URL') : undefined);
-
-        const site = (() => {
-            try { return new URL(item.url).hostname; } catch { return undefined; }
-        })();
+            || extracted.find(x => x.kind === 'ARXIV');
 
         const id = hashId(`${query}#${idx}#${item.url}`);
         candidates.push({
@@ -70,10 +74,10 @@ export function buildCandidatesFromWebResults(query: string, items: WebSearchIte
             title: item.title,
             snippet: item.content,
             sourceUrl: item.url,
-            site,
+            site: (() => { try { return new URL(item.url).hostname; } catch { return undefined; } })(),
             extracted,
             bestIdentifier: best ? normalizeIdentifier(best) : undefined,
-            confidence: best?.kind === 'S2' ? 0.95 : best?.kind === 'DOI' ? 0.9 : best?.kind === 'ARXIV' ? 0.8 : 0.6,
+            confidence: best?.kind === 'S2' ? 0.95 : best?.kind === 'DOI' ? 0.9 : best?.kind === 'ARXIV' ? 0.8 : 0.5,
         });
     });
     return candidates;

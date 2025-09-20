@@ -18,15 +18,20 @@ export const webDiscovery: WebDiscoveryAPI = {
         if (ids.length === 0) return { paperIds: [], resolved: [] };
 
         // 批量解析：尽可能用批量接口，但后端当前暴露 getPapersBatch 仅接受统一 paperIds
-        // 这里逐条调用 getPaper 以兼容 DOI/URL/ARXIV
+        // 这里逐条调用 getPaper；不再直接解析 URL，优先 DOI，其次 ARXIV
         const resolved: Array<{ candidateId: string; paperId: string }> = [];
         for (const c of candidates) {
             if (!c.bestIdentifier) continue;
             try {
-                // 对包含斜杠的标识（DOI/URL）进行路径安全编码
-                const idForPath = /^(DOI:|URL:)/i.test(c.bestIdentifier)
-                    ? encodeURIComponent(c.bestIdentifier)
-                    : c.bestIdentifier;
+                // 只接受 S2 / DOI / ARXIV 三种；URL 将在更早阶段转换，否则跳过
+                let identifier = c.bestIdentifier;
+                if (/^URL:/i.test(identifier)) {
+                    // 跳过 URL，统一改由前置阶段抽取 DOI 或 ARXIV
+                    continue;
+                }
+                const idForPath = /^(DOI:)/i.test(identifier)
+                    ? encodeURIComponent(identifier)
+                    : identifier;
                 const lit = await backendApiService.getPaper(idForPath);
                 if (lit?.paperId) resolved.push({ candidateId: c.id, paperId: lit.paperId });
             } catch { /* ignore single failure */ }

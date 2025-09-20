@@ -213,7 +213,24 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
         let normalized = v;
         if (!hasPrefix) {
             if (/^https?:\/\//i.test(v)) {
-                normalized = `URL:${v}`;
+                // 不再直接保留 URL。尝试从 URL 中提取 DOI 或 ARXIV
+                try {
+                    const u = new URL(v);
+                    const href = u.toString();
+                    // 先尝试 DOI 识别（包含 10.x/ 部分）
+                    const doi = href.match(/10\.[^\s/]+\/[\w\-\.\(\)\/:;]+/i)?.[0];
+                    if (doi) {
+                        normalized = `DOI:${doi}`;
+                    } else if (u.hostname.includes('arxiv.org')) {
+                        const m = u.pathname.match(/\/(\d{4}\.\d{4,5})(v\d+)?/);
+                        if (m) normalized = `ARXIV:${m[1]}${m[2] || ''}`;
+                        else normalized = v; // 回退为原始，后续上层会拒绝 URL
+                    } else {
+                        normalized = v; // 回退
+                    }
+                } catch {
+                    normalized = v;
+                }
             } else if (/^10\.\S+\/\S+/.test(v)) {
                 normalized = `DOI:${v}`;
             } else {
@@ -249,14 +266,28 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
         userMeta?: Partial<import('./models').CreateUserLiteratureMetaInput> | Partial<import('./models').UpdateUserLiteratureMetaInput>;
     } = {}): Promise<LibraryItem> {
         try {
-            const { normalized, encoded } = this.normalizeIdentifier(identifier);
+            let { normalized, encoded } = this.normalizeIdentifier(identifier);
+            // 不再接受 URL: 前缀的标识，除非在 normalize 阶段已被转成 DOI 或 ARXIV
+            if (/^URL:/i.test(normalized)) {
+                throw new Error('暂不支持直接通过 URL 抓取，请提供 DOI 或 arXiv 标识');
+            }
+            // 进一步规范化：DOI 去除尾部 .pdf 或多余标点
+            if (/^DOI:/i.test(normalized)) {
+                const v = normalized.replace(/^DOI:/i, '');
+                let core = v.replace(/\s+/g, '').replace(/[\u3000-\u303F]/g, '');
+                core = core.replace(/\.pdf(?:[?#].*)?$/i, '');
+                core = core.replace(/[\.,;:!?]+$/g, '');
+                normalized = `DOI:${core}`;
+                encoded = encodeURIComponent(normalized);
+            }
 
             // 1) 直接使用详细信息接口（兼容更多后端实现）
             // 对于带斜杠的标识（DOI/URL），需要编码；S2/CorpusId 等可以直接使用原始形式
             // 后端 /api/v1/paper/:id 期望：
             // - 对于包含斜杠的标识（DOI、URL）必须 URL 编码
             // - 其他（S2、CorpusId、ARXIV、MAG、ACL、PMID、PMCID）保持原样
-            const idForPath = /^(DOI:|URL:)/i.test(normalized) ? encodeURIComponent(normalized) : normalized;
+            const idForPath = /^(DOI:)/i.test(normalized) ? encodeURIComponent(normalized) : normalized;
+            try { console.debug('[LiteratureEntry] addByIdentifier start', { identifier, normalized, idForPath }); } catch { }
             const searchRes = await this.services.backend.getPaper(idForPath);
             const paper = searchRes;
             if (!paper) throw new Error('No paper found for identifier');
@@ -273,6 +304,41 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                             (literatureStore as any).getState().addLiterature(enhanced as EnhancedLibraryItem);
                         }
                     } catch { }
+
+                    // 若指定集合，则将已存在文献加入集合（以前缺失这一步导致右侧列表不更新）
+                    const collectionIds = [
+                        ...(options.addToCollections || []),
+                        ...(options.addToCollection ? [options.addToCollection] : [])
+                    ];
+                    if (collectionIds.length) {
+                        const userId = this.authUtils.getStoreInstance().requireAuth();
+                        for (const cid of collectionIds) {
+                            try {
+                                try { console.debug('[LiteratureEntry] add existing to collection', { cid, paperId: existing.paperId }); } catch { }
+                                await this.services.collection.addLiteratureToCollection(cid, [existing.paperId], userId);
+                                // 本地 CollectionStore 同步
+                                try {
+                                    const collectionStore = require('./stores').useCollectionStore;
+                                    (collectionStore as any).getState().addLiteraturesToCollection(cid, [existing.paperId]);
+                                } catch (e) {
+                                    console.warn('[LiteratureEntry] Failed to sync existing to CollectionStore', cid, e);
+                                }
+                                // 图谱节点（若会话已绑定图谱）
+                                try {
+                                    const { useSessionStore } = require('@/features/session/data-access/session-store');
+                                    const { useGraphStore } = require('@/features/graph/data-access/graph-store');
+                                    const sessions: Map<string, any> = (useSessionStore as any).getState().sessions;
+                                    const bound = Array.from(sessions.values()).find((s: any) => s?.linkedCollectionId === cid);
+                                    const graphId: string | undefined = bound?.meta?.graphId;
+                                    if (graphId) {
+                                        await (useGraphStore as any).getState().addNode({ id: existing.paperId, kind: 'paper' }, { graphId });
+                                    }
+                                } catch { /* ignore graph add errors */ }
+                            } catch (e) {
+                                console.warn('[LiteratureEntry] Failed to add existing to collection', cid, e);
+                            }
+                        }
+                    }
                     return existing;
                 }
             } catch { }
@@ -281,6 +347,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
             const refs = paper?.parsedContent?.extractedReferences;
             const pc = paper?.parsedContent as any;
             console.log('[LiteratureEntry] addByIdentifier refs from backend:', Array.isArray(refs) ? refs.length : 0);
+            try { console.debug('[LiteratureEntry] creating composed literature', { paperId: paper.paperId, title: paper.title }); } catch { }
             const created = await this.composition.createComposedLiterature({
                 literature: {
                     paperId: paper.paperId, // 使用后端返回的原生ID（S2/CorpusId/DOI/URL）
@@ -312,6 +379,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                 const userId = this.authUtils.getStoreInstance().requireAuth();
                 for (const cid of collectionIds) {
                     try {
+                        try { console.debug('[LiteratureEntry] add to collection', { cid, paperId: created.literature.paperId }); } catch { }
                         await this.services.collection.addLiteratureToCollection(cid, [created.literature.paperId], userId);
                         // 本地 CollectionStore 同步
                         try {
@@ -338,12 +406,24 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                 }
             }
 
-            // 5) 同步到本地 Store（文献）
+            // 5) 同步到本地 Store（文献 + 集合 + 图谱）
             try {
                 const literatureStore = require('./stores').useLiteratureStore;
                 (literatureStore as any).getState().addLiterature(created as EnhancedLibraryItem);
             } catch (e) {
                 console.warn('[LiteratureEntry] Failed to sync to LiteratureStore', e);
+            }
+            try {
+                const collectionStore = require('./stores').useCollectionStore;
+                const cidList = [
+                    ...(options.addToCollections || []),
+                    ...(options.addToCollection ? [options.addToCollection] : [])
+                ];
+                cidList.forEach((cid: string) => {
+                    try { (collectionStore as any).getState().addLiteraturesToCollection(cid, [created.literature.paperId]); } catch { }
+                });
+            } catch (e) {
+                console.warn('[LiteratureEntry] Failed to sync to CollectionStore (local)', e);
             }
 
             // 注：autoExtractCitations 为只读关系，暂不在前端写入

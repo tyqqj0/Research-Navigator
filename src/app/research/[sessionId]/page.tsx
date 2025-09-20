@@ -18,6 +18,8 @@ import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSessionStore } from '@/features/session/data-access/session-store';
 import { commandBus } from '@/features/session/runtime/command-bus';
+import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
+import { useCollectionOperations } from '@/features/literature/hooks/use-collection-operations';
 
 export default function ResearchSessionPage() {
     const params = useParams<{ sessionId: string }>();
@@ -50,6 +52,14 @@ export default function ResearchSessionPage() {
     );
 
     const { getPaperSummary } = usePaperCatalog();
+    const { loadLiteratures } = useLiteratureOperations();
+    const { loadCollections } = useCollectionOperations();
+    // 确保刷新后加载用户文献/集合，以便时间线/集合面板可用
+    useEffect(() => {
+        void loadLiteratures({ force: false });
+        void loadCollections({ force: false });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const current = useSessionStore(state => state.sessions.get(sessionId!));
     const graphId = (current?.meta as any)?.graphId;
 
