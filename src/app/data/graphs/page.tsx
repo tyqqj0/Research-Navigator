@@ -63,13 +63,20 @@ export default function GraphPage() {
         <RequireAuth>
             <MainLayout headerTitle="图谱编辑" showSidebar={true} hideUserInfo={true}>
                 <div className="p-4 h-full relative">
-                    <div className={`grid grid-cols-12 gap-4 transition-all duration-300 ${detailOpen ? 'pr-[38rem]' : ''}`}>
-                        <div className="col-span-12 md:col-span-2 space-y-4">
+                    {/* 使用 grid 并通过自定义比例分配三栏宽度 */}
+                    <div
+                        className={`grid gap-4 transition-all duration-300 ${detailOpen ? 'pr-[38rem]' : ''}`}
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 2.5fr 1.5fr', // 左:中:右 = 1:2.5:1.5
+                        }}
+                    >
+                        <div className="space-y-4">
                             <GraphPickerPanel onSelectGraph={setGraphId} />
                             {graphId && <GraphMetaPanel graphId={graphId} />}
                         </div>
 
-                        <div className="col-span-12 md:col-span-6 space-y-3">
+                        <div className="space-y-3">
                             <Card>
                                 <CardHeader className="py-2">
                                     <CardTitle className="text-sm">Canvas</CardTitle>
@@ -102,7 +109,7 @@ export default function GraphPage() {
                             </Card>
                         </div>
 
-                        <div className="col-span-12 md:col-span-3 space-y-4">
+                        <div className="space-y-4">
                             <CollectionTreePanel onSelectCollection={handleSelectCollection} />
                             <LiteratureListPanel
                                 onVisibleIdsChange={setVisibleIds}
@@ -112,7 +119,7 @@ export default function GraphPage() {
                             />
                         </div>
                     </div>
-                    {/* right-side detail panel - inside page container to avoid covering header */}
+                    {/* 右侧详情面板，依然绝对定位避免遮挡 header */}
                     <div className="absolute inset-y-0 right-0 z-20 pointer-events-none">
                         <div className="h-full">
                             {detailOpen && (

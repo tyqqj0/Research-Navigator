@@ -50,7 +50,8 @@ export default function ResearchSessionPage() {
     );
 
     const { getPaperSummary } = usePaperCatalog();
-    const graphId = undefined as any; // 后续与编排器打通
+    const current = useSessionStore(state => state.sessions.get(sessionId!));
+    const graphId = (current?.meta as any)?.graphId;
 
     return (
         <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>

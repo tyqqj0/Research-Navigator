@@ -109,6 +109,31 @@ export function applyEventToProjection(e: SessionEvent) {
         store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `检索完成：${e.payload.count} 篇`, status: 'done', createdAt: e.ts });
         return;
     }
+    if (e.type === 'SearchRoundStarted') {
+        const sid = e.sessionId!; const msgId = `round_start_${e.payload.round}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `第 ${e.payload.round} 轮开始：${e.payload.query}`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'SearchRoundCompleted') {
+        const sid = e.sessionId!; const msgId = `round_done_${e.payload.round}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `第 ${e.payload.round} 轮完成：新增 ${e.payload.added}，总计 ${e.payload.total}`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'SearchCandidatesReady') {
+        const sid = e.sessionId!; const msgId = `cands_${e.payload.artifactId}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: `候选已就绪（点击展开查看查询与链接）`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'NoNewResults') {
+        const sid = e.sessionId!; const msgId = `round_none_${e.payload.round}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `第 ${e.payload.round} 轮没有新结果`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'ExpansionSaturated') {
+        const sid = e.sessionId!; const msgId = `saturated_${e.payload.round}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `扩展已停止（原因：${e.payload.reason}）`, status: 'done', createdAt: e.ts });
+        return;
+    }
     if (e.type === 'PapersIngested') {
         const sid = e.sessionId!; const msgId = `ingest_${e.payload.batchId}`;
         store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `合并：新增 ${e.payload.added} 篇，总计 ${e.payload.total}`, status: 'done', createdAt: e.ts });
@@ -126,6 +151,42 @@ export function applyEventToProjection(e: SessionEvent) {
         const msgId = `bind_collection_${e.payload.collectionId}`;
         const note = e.payload.created ? '已为会话创建并绑定集合' : '已绑定到现有集合';
         store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `${note}：${e.payload.collectionId}`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'CollectionPruned') {
+        const sid = e.sessionId!; const msgId = `pruned_${e.id}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `集合裁剪：${e.payload.from} → ${e.payload.to}（规则：${e.payload.rule}）`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'GraphConstructionStarted') {
+        const sid = e.sessionId!; const msgId = `graph_start_${e.ts}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `开始构建关系图（候选 ${e.payload.size} 篇）`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'GraphRelationsProposed') {
+        const sid = e.sessionId!; const msgId = `graph_rel_${e.payload.textArtifactId}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `已生成关系文本（Artifact: ${e.payload.textArtifactId}）`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'GraphEdgesStructured') {
+        const sid = e.sessionId!; const msgId = `graph_edges_${e.payload.edgeArtifactId}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `已抽取结构化边：${e.payload.size} 条`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'GraphConstructionCompleted') {
+        const sid = e.sessionId!; const msgId = `graph_done_${e.ts}`;
+        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `关系图构建完成：节点 ${e.payload.nodes}，边 ${e.payload.edges}`, status: 'done', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'GraphReady') {
+        // 写入 session.meta.graphId，驱动 UI 渲染 GraphCanvas
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, graphId: e.payload.graphId }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
 }

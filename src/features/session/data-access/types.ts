@@ -81,6 +81,8 @@ export type SessionCommand =
     | CommandEnvelope<'StartExpansion', { sessionId: SessionId }>
     | CommandEnvelope<'StopExpansion', { sessionId: SessionId; reason?: string }>
     | CommandEnvelope<'SelectCandidates', { sessionId: SessionId; topK?: number; sinceYear?: number }>
+    | CommandEnvelope<'PruneCollection', { sessionId: SessionId; targetMax: number; criterion?: 'citation_low_first' | 'random' }>
+    | CommandEnvelope<'BuildGraph', { sessionId: SessionId; window?: number; strategy?: 'nl+struct' }>
     // Session-Collection binding
     | CommandEnvelope<'BindSessionCollection', { sessionId: SessionId; collectionId: string }>;
 
@@ -105,9 +107,21 @@ export type SessionEvent =
     | EventEnvelope<'PapersIngested', { batchId: ArtifactId; added: number; total: number }>
     | EventEnvelope<'CollectionUpdated', { collectionId: ArtifactId; version: number; total: number }>
     | EventEnvelope<'ExpansionStarted', {}>
+    | EventEnvelope<'SearchRoundStarted', { round: number; query: string }>
+    | EventEnvelope<'SearchRoundCompleted', { round: number; added: number; total: number }>
+    | EventEnvelope<'NoNewResults', { round: number }>
+    | EventEnvelope<'ExpansionSaturated', { round: number; reason: 'no_new' | 'max_rounds' }>
     | EventEnvelope<'ExpansionEvaluated', { lastAdded: number; recentGrowth: number; coverageScore?: number }>
     | EventEnvelope<'ExpansionStopped', { by: 'user' | 'ai' | 'rule'; reason?: string }>
+    | EventEnvelope<'SearchCandidatesReady', { round: number; artifactId: ArtifactId }>
+    | EventEnvelope<'CollectionPruned', { removed: number; from: number; to: number; rule: string }>
     | EventEnvelope<'CandidatesSelected', { candidateId: ArtifactId; size: number; ruleSet: string }>
+    // Graph construction
+    | EventEnvelope<'GraphConstructionStarted', { size: number }>
+    | EventEnvelope<'GraphRelationsProposed', { textArtifactId: ArtifactId }>
+    | EventEnvelope<'GraphEdgesStructured', { edgeArtifactId: ArtifactId; size: number }>
+    | EventEnvelope<'GraphConstructionCompleted', { nodes: number; edges: number }>
+    | EventEnvelope<'GraphReady', { graphId: string }>
     // Session-Collection binding
     | EventEnvelope<'SessionCollectionBound', { collectionId: string; created?: boolean }>;
 
