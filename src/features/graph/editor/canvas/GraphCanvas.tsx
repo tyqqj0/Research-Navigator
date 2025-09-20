@@ -16,6 +16,7 @@ interface GraphCanvasProps {
     dataSource?: GraphDataSource; // optional injection for decoupling storage/backend
     className?: string;
     style?: React.CSSProperties;
+    height?: number | string; // 优先级高于 className/外部容器高度
     axisWidth?: number;
     densityWidth?: number;
     edgeHitbox?: number;
@@ -39,12 +40,18 @@ type Pos = { x: number; y: number };
 type SimNode = { id: string; x: number; y: number; vx?: number; vy?: number; fx?: number | null; fy?: number | null };
 
 export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((props, ref) => {
-    const { graphId, getPaperSummary, onNodeOpenDetail, layoutMode = 'free', dataSource, className, style, axisWidth, densityWidth, edgeHitbox, handleBaseSize, nodeRenderer, onNodeSelect, onEdgeSelect, onEdgeCreate, onViewportChange } = props;
+    const { graphId, getPaperSummary, onNodeOpenDetail, layoutMode = 'free', dataSource, className, style, height, axisWidth, densityWidth, edgeHitbox, handleBaseSize, nodeRenderer, onNodeSelect, onEdgeSelect, onEdgeCreate, onViewportChange } = props;
     const store = useGraphStore();
     const ds: GraphDataSource = dataSource || graphStoreDataSource;
     const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
     const [internalLayoutMode, setInternalLayoutMode] = useState<'free' | 'timeline'>(layoutMode);
     useEffect(() => { setInternalLayoutMode(layoutMode); }, [layoutMode]);
+
+    const computedHeight = useMemo(() => {
+        if (typeof height === 'number') return `${height}px`;
+        if (typeof height === 'string') return height;
+        return undefined;
+    }, [height]);
 
     // subscribe to data source for live updates
     useEffect(() => {
@@ -695,8 +702,9 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
             onWheelCapture={() => { /* handled via native listener to ensure preventDefault */ }}
             tabIndex={0}
             style={{
-                backgroundImage: 'conic-gradient(at 10% 10%, var(--color-background-secondary), var(--color-background-tertiary))'
-                , ...(style || {})
+                backgroundImage: 'conic-gradient(at 10% 10%, var(--color-background-secondary), var(--color-background-tertiary))',
+                ...(style || {}),
+                ...(computedHeight ? { height: computedHeight } : {})
             }}
         >
             {/* sticky, non-layout overlays: top and bottom gradients stick to viewport edges of the scroll container */}

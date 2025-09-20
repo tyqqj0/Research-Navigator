@@ -105,10 +105,11 @@ function DynamicSessionBody({ sessionId, getPaperSummary, graphId }: { sessionId
     }
     return (
         <div className="h-full flex-1 grid grid-cols-12 gap-4 p-4">
-            <div className="col-span-12 md:col-span-3 h-[70vh]"><ChatPanel sessionId={sessionId} /></div>
-            <div className="col-span-12 md:col-span-6 h-[70vh]">
+            {/* 略微加宽左侧对话栏 */}
+            <div className="col-span-12 md:col-span-4 h-[70vh]"><ChatPanel sessionId={sessionId} /></div>
+            <div className="col-span-12 md:col-span-5">
                 {graphId ? (
-                    <GraphCanvas graphId={graphId} getPaperSummary={getPaperSummary} layoutMode="timeline" />
+                    <GraphCanvas graphId={graphId} getPaperSummary={getPaperSummary} layoutMode="timeline" height={'calc(100vh - 5rem)'} />
                 ) : (
                     <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
                 )}

@@ -317,6 +317,18 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                         } catch (e) {
                             console.warn('[LiteratureEntry] Failed to sync to CollectionStore', cid, e);
                         }
+                        // 如果当前会话已绑定集合且已有图谱，则把新文献作为节点加入图谱
+                        try {
+                            const { useSessionStore } = require('@/features/session/data-access/session-store');
+                            const { useGraphStore } = require('@/features/graph/data-access/graph-store');
+                            const sessions: Map<string, any> = (useSessionStore as any).getState().sessions;
+                            // 找到绑定了该集合的活跃会话（简单策略：任意一个绑定匹配即可）
+                            const bound = Array.from(sessions.values()).find((s: any) => s?.linkedCollectionId === cid);
+                            const graphId: string | undefined = bound?.meta?.graphId;
+                            if (graphId) {
+                                await (useGraphStore as any).getState().addNode({ id: created.literature.paperId, kind: 'paper' }, { graphId });
+                            }
+                        } catch { /* ignore graph add errors */ }
                     } catch (e) {
                         console.warn('[LiteratureEntry] Failed to add to collection', cid, e);
                     }

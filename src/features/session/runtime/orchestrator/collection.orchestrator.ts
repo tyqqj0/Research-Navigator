@@ -32,6 +32,13 @@ commandBus.register(async (cmd: SessionCommand) => {
             parentId: null as any
         } as any);
         await emit({ id: newId(), type: 'SessionCollectionBound', ts: Date.now(), sessionId, payload: { collectionId: collection.id, created: true } });
+        // 提前创建空图谱以便中间面板立即出现，并支持后续实时加点
+        try {
+            const { useGraphStore } = require('@/features/graph/data-access/graph-store');
+            const gs = useGraphStore.getState();
+            const graph = await gs.createGraph({ name: `Session Graph ${new Date().toLocaleString()}` });
+            await emit({ id: newId(), type: 'GraphReady', ts: Date.now(), sessionId, payload: { graphId: graph.id } as any });
+        } catch { /* ignore graph creation errors */ }
         return;
     }
     if (cmd.type === 'StartExpansion') {
