@@ -2,22 +2,25 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { StreamCard } from '@/components/ui/stream-card';
 import { Markdown } from '@/components/ui/markdown';
 
-interface DirectionProposalCardProps {
-    content: string;
-}
+interface DirectionProposalCardProps { sessionId: string; content: string; status?: 'streaming' | 'done' | 'error' | 'aborted' }
 
-export const DirectionProposalCard: React.FC<DirectionProposalCardProps> = ({ content }) => {
+export const DirectionProposalCard: React.FC<DirectionProposalCardProps> = ({ sessionId, content, status = 'done' }) => {
     return (
-        <Card className="border rounded-md">
-            <CardHeader className="py-3" variant="blue">
-                <CardTitle className="text-sm">研究方向提案</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm" variant="blue" rounded="md">
-                <Markdown text={content} />
-            </CardContent>
-        </Card>
+        <StreamCard
+            title="研究方向提案"
+            status={status}
+            headerVariant="blue"
+            headerRight={status === 'streaming' ? (
+                <Button size="sm" variant="ghost" onClick={() => import('@/features/session/runtime/command-bus').then(({ commandBus }) => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopStreaming', ts: Date.now(), params: { sessionId } } as any))}>停止</Button>
+            ) : undefined}
+            contentClassName="text-sm"
+        >
+            <Markdown text={content} />
+        </StreamCard>
     );
 };
 

@@ -4,6 +4,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useSessionStore } from '../data-access/session-store';
@@ -14,6 +15,7 @@ import { sessionRepository } from '../data-access/session-repository';
 import { useLiteratureStore } from '@/features/literature/data-access/stores';
 import { DirectionProposalCard } from './DirectionProposalCard';
 import { runtimeConfig } from '@/features/session/runtime/runtime-config';
+import { StreamCard } from '@/components/ui';
 
 interface ChatPanelProps {
     sessionId: SessionId;
@@ -54,7 +56,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                         <div key={m.id} className="p-3 text-sm">
                             <div className="text-xs text-muted-foreground mb-1">{m.role} · {new Date(m.createdAt).toLocaleTimeString()}</div>
                             {m.id.startsWith('proposal_') ? (
-                                <DirectionProposalCard content={m.content} />
+                                <DirectionProposalCard sessionId={sessionId} content={m.content} status={m.status} />
+                            ) : m.id.startsWith('plan_') ? (
+                                <SearchThinkingCard status={m.status} content={m.content} />
                             ) : m.id.startsWith('cands_') ? (
                                 <SearchCandidatesCard sessionId={sessionId} artifactId={m.id.replace('cands_', '')} />
                             ) : m.id.startsWith('graph_decision_') ? (
@@ -94,6 +98,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
 
 export default ChatPanel;
 
+const SearchThinkingCard: React.FC<{ status: any; content: string }> = ({ status, content }) => {
+    return (
+        <StreamCard
+            title="思考"
+            status={status}
+            headerVariant="purple"
+            contentClassName="space-y-2"
+        >
+            <Markdown text={content} />
+        </StreamCard>
+    );
+};
+
 const SearchCandidatesCard: React.FC<{ sessionId: SessionId; artifactId: string }> = ({ sessionId, artifactId }) => {
     const [open, setOpen] = React.useState(false);
     const [loading, setLoading] = React.useState(true);
@@ -119,15 +136,30 @@ const SearchCandidatesCard: React.FC<{ sessionId: SessionId; artifactId: string 
             await literatureEntry.addByIdentifier(identifier, { addToCollection: collectionId });
         } catch { /* ignore */ }
     };
-    if (loading || !data) return <div className="text-xs text-muted-foreground">加载候选...</div>;
+    if (loading || !data) {
+        return (
+            <Card className="border rounded-md">
+                <CardHeader className="py-2">
+                    <CardTitle className="text-sm">搜索候选</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-4 w-5/6" />
+                    <Skeleton className="h-4 w-2/3" />
+                </CardContent>
+            </Card>
+        );
+    }
     return (
-        <div className="border rounded-md">
-            <div className="px-3 py-2 flex items-center justify-between cursor-pointer" onClick={() => setOpen(o => !o)}>
-                <div className="font-medium">搜索：{data.query}</div>
-                <div className="text-xs text-muted-foreground">{open ? '收起' : '展开'}</div>
-            </div>
+        <Card className="border rounded-md ">
+            <CardHeader className="py-2">
+                <div className="flex items-center justify-between cursor-pointer" onClick={() => setOpen(o => !o)}>
+                    <CardTitle className="text-sm">搜索：{data.query}</CardTitle>
+                    <div className="text-xs text-muted-foreground">{open ? '收起' : '展开'}</div>
+                </div>
+            </CardHeader>
             {open && (
-                <div className="px-3 pb-3 space-y-2">
+                <CardContent className="space-y-2 ">
                     {data.candidates.map((c: any) => (
                         <div key={c.id} className="p-2 border rounded flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
@@ -144,9 +176,9 @@ const SearchCandidatesCard: React.FC<{ sessionId: SessionId; artifactId: string 
                             {/* Chat 中不提供入库按钮，自动入库由 orchestrator 负责 */}
                         </div>
                     ))}
-                </div>
+                </CardContent>
             )}
-        </div>
+        </Card>
     );
 };
 const DeepResearchPill: React.FC<{ enabled: boolean; onToggle: (next: boolean) => void }> = ({ enabled, onToggle }) => {
@@ -219,16 +251,20 @@ const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'cancel' } } as any);
     };
     return (
-        <div className="border rounded-md p-3 space-y-2 bg-muted/30">
-            <div className="text-xs text-muted-foreground">需要决定</div>
-            <div className="text-sm font-medium">是否确认当前研究方向？</div>
-            <Input placeholder="如需细化，可输入补充/反馈" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
-            <div className="flex gap-2">
-                <Button size="sm" onClick={onConfirm}>确认</Button>
-                <Button size="sm" variant="secondary" onClick={onRefine}>细化</Button>
-                <Button size="sm" variant="ghost" onClick={onCancel}>取消</Button>
-            </div>
-        </div>
+        <Card className="border rounded-md">
+            <CardHeader className="py-2">
+                <CardTitle className="text-sm">需要决定</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+                <div className="text-sm">是否确认当前研究方向？</div>
+                <Input placeholder="如需细化，可输入补充/反馈" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+                <div className="flex gap-2">
+                    <Button size="sm" onClick={onConfirm}>确认</Button>
+                    <Button size="sm" variant="secondary" onClick={onRefine}>细化</Button>
+                    <Button size="sm" variant="ghost" onClick={onCancel}>取消</Button>
+                </div>
+            </CardContent>
+        </Card>
     );
 };
 
@@ -245,16 +281,20 @@ const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) =>
         setSuggestion('');
     };
     return (
-        <div className="border rounded-md p-3 space-y-2 bg-muted/30">
-            <div className="text-xs text-muted-foreground">需要确认</div>
-            <div className="text-sm font-medium">是否接受当前图谱？（节点 {info.nodes ?? '-'}，边 {info.edges ?? '-'}）</div>
-            <div className="text-xs text-muted-foreground">可随时手动修改/添加节点</div>
-            <div className="flex gap-2">
-                <Button size="sm" onClick={onGenerate} disabled={locked}>生成报告</Button>
-                <Input className="max-w-sm" placeholder="输入补充/扩展建议（可选）" value={suggestion} onChange={(e) => setSuggestion(e.target.value)} disabled={locked} />
-                <Button size="sm" variant="secondary" onClick={onSupplement} disabled={!suggestion.trim() || locked}>补充图谱</Button>
-            </div>
-        </div>
+        <Card className="border rounded-md">
+            <CardHeader className="py-2" variant="blue">
+                <CardTitle className="text-sm">需要确认</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+                <div className="text-sm">是否接受当前图谱？（节点 {info.nodes ?? '-'}，边 {info.edges ?? '-'}）</div>
+                <div className="text-xs text-muted-foreground">可随时手动修改/添加节点</div>
+                <div className="flex gap-2">
+                    <Button size="sm" onClick={onGenerate} disabled={locked}>生成报告</Button>
+                    <Input className="max-w-sm" placeholder="输入补充/扩展建议（可选）" value={suggestion} onChange={(e) => setSuggestion(e.target.value)} disabled={locked} />
+                    <Button size="sm" variant="secondary" onClick={onSupplement} disabled={!suggestion.trim() || locked}>补充图谱</Button>
+                </div>
+            </CardContent>
+        </Card>
     );
 };
 
@@ -408,16 +448,16 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
     }, [formatAuthorsIEEE]);
 
     return (
-        <div className="border rounded-md p-3 space-y-3">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <div>报告 {status === 'streaming' ? '生成中…' : status === 'done' ? '已完成' : status === 'error' ? '失败' : status === 'aborted' ? '已中止' : ''}</div>
-                {status === 'streaming' && (
-                    <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopStreaming', ts: Date.now(), params: { sessionId } } as any)}>停止</Button>
-                )}
-            </div>
-            <Markdown text={rendered} />
-            {(status === 'done' || status === 'error' || status === 'aborted') && references.length > 0 && (
-                <div className="pt-2 border-t">
+        <StreamCard
+            title="报告"
+            status={status}
+            headerVariant="blue"
+            headerRight={status === 'streaming' ? (
+                <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopStreaming', ts: Date.now(), params: { sessionId } } as any)}>停止</Button>
+            ) : undefined}
+            contentClassName="space-y-3"
+            footer={(status === 'done' || status === 'error' || status === 'aborted') && references.length > 0 ? (
+                <div>
                     <div className="text-sm font-medium mb-2">References</div>
                     <ol className="list-decimal pl-4 space-y-1">
                         {references.map((ref) => (
@@ -427,8 +467,10 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                         ))}
                     </ol>
                 </div>
-            )}
-        </div>
+            ) : undefined}
+        >
+            <Markdown text={rendered} />
+        </StreamCard>
     );
 };
 

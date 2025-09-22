@@ -49,7 +49,7 @@ const cardHeaderVariants = cva(
     defaultVariants: {
       variant: "default",
       animated: false,
-      rounded: "xl"
+      rounded: "sm"
     }
   }
 )

@@ -100,7 +100,10 @@ export type SessionEvent =
     // Deep Research mode events
     | EventEnvelope<'DeepResearchModeChanged', { enabled: boolean }>
     // Direction phase events
+    | EventEnvelope<'DirectionProposalStarted', { version: number }>
+    | EventEnvelope<'DirectionProposalDelta', { version: number; delta: string }>
     | EventEnvelope<'DirectionProposed', { proposalText: string; version: number }>
+    | EventEnvelope<'DirectionProposalAborted', { version: number; reason?: string }>
     | EventEnvelope<'DecisionRequested', { kind: 'direction'; version: number }>
     | EventEnvelope<'DirectionDecisionRecorded', { action: 'confirm' | 'refine' | 'cancel'; feedback?: string; version: number }>
     | EventEnvelope<'DirectionConfirmed', { directionSpec: string; version: number }>

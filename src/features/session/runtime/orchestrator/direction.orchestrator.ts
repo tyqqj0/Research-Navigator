@@ -11,7 +11,8 @@ type DirState = StateFrom<typeof directionMachine>;
 
 const g_any: any = globalThis as any;
 if (!g_any.__directionInstances) g_any.__directionInstances = new Map<SessionId, { service: any; run: { abort(): void } | null; prev: any | null }>();
-const instances: Map<SessionId, { service: any; run: { abort(): void } | null; prev: any | null }> = g_any.__directionInstances;
+type InstanceRec = { service: any; run: { abort(): void } | null; prev: any | null };
+const instances: Map<SessionId, InstanceRec> = g_any.__directionInstances;
 if (!g_any.__directionOrchId) g_any.__directionOrchId = `dir-orch:${Math.random().toString(36).slice(2, 7)}`;
 const ORCH_ID: string = g_any.__directionOrchId;
 
@@ -23,12 +24,12 @@ async function emit(e: SessionEvent) {
     applyEventToProjection(e);
 }
 
-function ensureInstance(sessionId: SessionId) {
-    let rec = instances.get(sessionId);
-    if (rec) return rec;
+function ensureInstance(sessionId: SessionId): InstanceRec {
+    let rec: InstanceRec | undefined = instances.get(sessionId);
+    if (rec) return rec as InstanceRec;
     const service = createActor(directionMachine);
     // pre-register the record before subscribing to avoid race on first snapshot
-    rec = { service, run: null, prev: null } as any;
+    rec = { service, run: null, prev: null } as InstanceRec;
     instances.set(sessionId, rec);
     const stateWatcher = (state: DirState) => {
         const ctx = state.context as any;
@@ -39,13 +40,17 @@ function ensureInstance(sessionId: SessionId) {
             // 进入 proposing 由 orchestrator 启动执行器
             if (!curr.run) {
                 try { console.debug('[orch][direction][exec_start]', ORCH_ID, { sessionId, version: ctx.version }); } catch { }
+                // streaming bridge to projection
+                void emit({ id: newId(), type: 'DirectionProposalStarted', ts: Date.now(), sessionId, payload: { version: ctx.version } });
                 curr.run = directionExecutor.generateProposal({
                     userQuery: ctx.userQuery,
                     version: ctx.version,
                     feedback: ctx.feedback,
-                    onComplete: (text) => { try { curr.service.send({ type: 'PROPOSAL_DONE', text }); } catch { /* ignore */ } },
-                    onError: (message) => { try { curr.service.send({ type: 'PROPOSAL_ERROR', message }); } catch { /* ignore */ } }
-                });
+                    onDelta: (delta: string) => { void emit({ id: newId(), type: 'DirectionProposalDelta', ts: Date.now(), sessionId, payload: { version: ctx.version, delta } }); },
+                    onComplete: (text: string) => { try { curr.service.send({ type: 'PROPOSAL_DONE', text }); } catch { /* ignore */ } },
+                    onAborted: (reason: string) => { void emit({ id: newId(), type: 'DirectionProposalAborted', ts: Date.now(), sessionId, payload: { version: ctx.version, reason } }); },
+                    onError: (message: string) => { try { curr.service.send({ type: 'PROPOSAL_ERROR', message }); } catch { /* ignore */ } }
+                } as any);
             }
         } else {
             if (curr.run) { try { curr.run.abort(); } catch { /* ignore */ } curr.run = null; }
@@ -73,7 +78,7 @@ function ensureInstance(sessionId: SessionId) {
     };
     service.subscribe(stateWatcher);
     service.start();
-    return rec;
+    return rec as InstanceRec;
 }
 
 // Bridge commands to machine events
@@ -84,13 +89,13 @@ if (!g_any.__directionOrchestratorRegistered) {
         // try { console.debug('[orch][direction][cmd]', ORCH_ID, cmd.type, cmd.id); } catch { }
         if (cmd.type === 'ProposeDirection') {
             const { sessionId, userQuery } = cmd.params as any;
-            const { service } = ensureInstance(sessionId);
-            service.send({ type: 'PROPOSE', userQuery, sessionId });
+            const inst = ensureInstance(sessionId)!;
+            inst.service.send({ type: 'PROPOSE', userQuery, sessionId });
             return;
         }
         if (cmd.type === 'DecideDirection') {
             const { sessionId, action, feedback } = cmd.params as any;
-            const rec = ensureInstance(sessionId);
+            const rec = ensureInstance(sessionId)!;
             if (feedback) rec.service.send({ type: 'FEEDBACK', feedback });
             if (action === 'confirm') rec.service.send({ type: 'CONFIRM' });
             else if (action === 'refine') {
@@ -101,6 +106,17 @@ if (!g_any.__directionOrchestratorRegistered) {
             else if (action === 'cancel') {
                 await emit({ id: newId(), type: 'DirectionDecisionRecorded', ts: Date.now(), sessionId, payload: { action: 'cancel', version: (rec.service.getSnapshot()?.context?.version || 1) } });
                 rec.service.send({ type: 'CANCEL' });
+            }
+            return;
+        }
+        if (cmd.type === 'StopStreaming') {
+            const sessionId = (cmd.params as any).sessionId;
+            const rec = ensureInstance(sessionId)!;
+            if (rec.run) {
+                try { rec.run.abort(); } catch { /* ignore */ }
+                const version = rec.service.getSnapshot()?.context?.version || 1;
+                void emit({ id: newId(), type: 'DirectionProposalAborted', ts: Date.now(), sessionId, payload: { version, reason: 'user' } });
+                try { rec.service.send({ type: 'PROPOSAL_ERROR', message: 'aborted' }); } catch { /* ignore */ }
             }
             return;
         }
