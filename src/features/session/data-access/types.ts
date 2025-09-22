@@ -83,6 +83,8 @@ export type SessionCommand =
     | CommandEnvelope<'SelectCandidates', { sessionId: SessionId; topK?: number; sinceYear?: number }>
     | CommandEnvelope<'PruneCollection', { sessionId: SessionId; targetMax: number; criterion?: 'citation_low_first' | 'random' }>
     | CommandEnvelope<'BuildGraph', { sessionId: SessionId; window?: number; strategy?: 'nl+struct' }>
+    | CommandEnvelope<'GenerateReport', { sessionId: SessionId; graphId?: string }>
+    | CommandEnvelope<'SupplementGraph', { sessionId: SessionId; suggestion?: string }>
     // Session-Collection binding
     | CommandEnvelope<'BindSessionCollection', { sessionId: SessionId; collectionId: string }>;
 
@@ -123,7 +125,11 @@ export type SessionEvent =
     | EventEnvelope<'GraphRelationsProposed', { textArtifactId: ArtifactId }>
     | EventEnvelope<'GraphEdgesStructured', { edgeArtifactId: ArtifactId; size: number }>
     | EventEnvelope<'GraphConstructionCompleted', { nodes: number; edges: number }>
+    | EventEnvelope<'GraphDecisionRequested', { graphId: string; nodes: number; edges: number }>
     | EventEnvelope<'GraphReady', { graphId: string }>
+    // Report generation
+    | EventEnvelope<'ReportGenerationStarted', { messageId: MessageId; citeKeys: Array<{ paperId: string; key: string }>; bibtexByKey: Record<string, string> }>
+    | EventEnvelope<'ReportGenerationCompleted', { messageId: MessageId }>
     // Session-Collection binding
     | EventEnvelope<'SessionCollectionBound', { collectionId: string; created?: boolean }>;
 

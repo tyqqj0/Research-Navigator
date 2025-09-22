@@ -10,6 +10,7 @@ import { pruneExecutor } from '../executors/prune-executor';
 import { paperMetadataExecutor } from '../executors/paper-metadata-executor';
 import { graphBuilderExecutor } from '../executors/graph-builder-executor';
 import { sessionRepository } from '../../data-access/session-repository';
+import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { literatureDataAccess } from '@/features/literature/data-access';
 import { interpret, StateFrom } from 'xstate';
 import { collectionMachine } from './collection.machine';
@@ -73,10 +74,10 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
             service.start();
             runners.set(sessionId, { service });
 
-            // 参数
-            const maxRounds = 4;
-            const roundSize = 8;
-            const upperBound = 80;
+            // 参数（集中在 runtimeConfig）
+            const maxRounds = runtimeConfig.EXPANSION_MAX_ROUNDS;
+            const roundSize = runtimeConfig.EXPANSION_ROUND_SIZE;
+            const upperBound = runtimeConfig.COLLECTION_UPPER_BOUND;
 
             let total = 0;
             let round = 0;
@@ -129,13 +130,35 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 } catch { /* noop */ }
                 const ingested: string[] = [];
                 try {
-                    const { literatureEntry } = require('@/features/literature/data-access');
+                    const { literatureEntry, literatureDataAccess } = require('@/features/literature/data-access');
                     const collectionId = (useSessionStore as any)?.getState?.().sessions?.get(sessionId)?.linkedCollectionId;
+                    // 记录批量导入前集合中的条目，用于准确计算新增数量
+                    let beforeIds: string[] = [];
+                    if (collectionId) {
+                        try {
+                            const before = await literatureDataAccess.collections.getCollection(collectionId);
+                            beforeIds = (before as any)?.paperIds || [];
+                        } catch { /* noop */ }
+                    }
                     // 使用批量导入提升速度：后端批量 + 本地并发 + 批量加入集合
                     const result = await literatureEntry.batchImport(
                         identifiers.map((id) => ({ type: 'identifier', data: id, options: { addToCollection: collectionId } }))
                     );
-                    ingested.push(...result.successful.map((i: any) => i.paperId));
+                    // 重新读取集合，计算真正新增的 paperId（避免“看起来更新了但统计为 0”）
+                    if (collectionId) {
+                        try {
+                            const after = await literatureDataAccess.collections.getCollection(collectionId);
+                            const afterIds: string[] = (after as any)?.paperIds || [];
+                            const beforeSet = new Set(beforeIds);
+                            const newlyAdded = afterIds.filter((pid: string) => !beforeSet.has(pid));
+                            ingested.push(...newlyAdded);
+                        } catch {
+                            // 回退：若读取失败，则以成功结果作为近似
+                            ingested.push(...result.successful.map((i: any) => i.paperId));
+                        }
+                    } else {
+                        ingested.push(...result.successful.map((i: any) => i.paperId));
+                    }
                 } catch (err: any) {
                     await emit({ id: newId(), type: 'SearchRoundFailed', ts: Date.now(), sessionId, payload: { round, stage: 'execute', error: 'ingestion_failed' } as any });
                     return;
@@ -187,14 +210,14 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 if (total > upperBound) {
                     await emit({ id: newId(), type: 'ExpansionSaturated', ts: Date.now(), sessionId, payload: { round, reason: 'max_rounds' } as any });
                     // 触发裁剪
-                    await commandBus.dispatch({ id: newId(), type: 'PruneCollection', ts: Date.now(), sessionId, params: { sessionId, targetMax: 60, criterion: 'citation_low_first' } } as any);
+                    await commandBus.dispatch({ id: newId(), type: 'PruneCollection', ts: Date.now(), sessionId, params: { sessionId, targetMax: runtimeConfig.PRUNE_TARGET_MAX, criterion: 'citation_low_first' } } as any);
                     try {
                         const { toast } = require('sonner');
-                        toast.message('已达到集合上限，正在自动裁剪到 60 篇');
+                        toast.message(`已达到集合上限，正在自动裁剪到 ${runtimeConfig.PRUNE_TARGET_MAX} 篇`);
                     } catch { /* ignore toast errors */ }
                     // 裁剪后自动进入图谱阶段
                     try {
-                        await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: 60 } } as any);
+                        await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: runtimeConfig.GRAPH_WINDOW_SIZE } } as any);
                         const { toast } = require('sonner');
                         toast.message('自动开始构建关系图');
                     } catch { /* ignore */ }
@@ -206,7 +229,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 } else {
                     // 达到最大轮数后自动进入图谱阶段
                     try {
-                        await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: 60 } } as any);
+                        await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: runtimeConfig.GRAPH_WINDOW_SIZE } } as any);
                         const { toast } = require('sonner');
                         toast.message('已完成多轮扩展，开始构建关系图');
                     } catch { /* ignore */ }
@@ -237,7 +260,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
             const collectionId = s?.linkedCollectionId;
             if (!collectionId) return;
             // 以当前图中的节点为唯一来源；若图为空，则用集合进行一次性播种
-            const windowSize = (cmd.params as any).window || 60;
+            const windowSize = (cmd.params as any).window || runtimeConfig.GRAPH_WINDOW_SIZE;
             let papers: Array<{ id: string; title: string }>;
             try {
                 const { useGraphStore } = require('@/features/graph/data-access/graph-store');
@@ -295,6 +318,14 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 }
             } catch { /* ignore */ }
             await emit({ id: newId(), type: 'GraphConstructionCompleted', ts: Date.now(), sessionId, payload: { nodes: papers.length, edges: edges.data.length } });
+            // 请求用户决策：确认图谱或补充扩展
+            try {
+                const curr = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
+                const graphId = curr?.meta?.graphId as string | undefined;
+                if (graphId) {
+                    await emit({ id: newId(), type: 'GraphDecisionRequested', ts: Date.now(), sessionId, payload: { graphId, nodes: papers.length, edges: edges.data.length } as any });
+                }
+            } catch { /* ignore */ }
             return;
         }
     });

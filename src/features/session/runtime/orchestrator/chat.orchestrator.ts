@@ -4,7 +4,60 @@ import { applyEventToProjection } from '../projectors';
 import { assistantExecutor } from '../executors/assistant-executor';
 import type { SessionCommand, SessionEvent } from '../../data-access/types';
 import { buildAssistantMessages } from '../prompts/assistant';
+import { buildReportMessages } from '@/features/session/runtime/prompts/report';
 
+function newId() { return crypto.randomUUID(); }
+async function emit(e: SessionEvent) { await eventBus.publish(e); applyEventToProjection(e); }
+
+declare const globalThis: any;
+if (!(globalThis as any).__chatOrchestratorGraphExtRegistered) {
+    (globalThis as any).__chatOrchestratorGraphExtRegistered = true;
+    commandBus.register(async (cmd: SessionCommand) => {
+        if (cmd.type === 'GenerateReport') {
+            const sessionId = cmd.params.sessionId;
+            // 避免并发生成
+            const g: any = globalThis as any;
+            if (!g.__chatOrchestratorRunning) g.__chatOrchestratorRunning = new Map<string, { abort(): void }>();
+            const running: Map<string, { abort(): void }> = g.__chatOrchestratorRunning;
+            if (running.has(sessionId)) { try { console.warn('[orch][report][running_exists_skip]', sessionId); } catch { } return; }
+
+            // 构建报告提示词并启动流式生成
+            let messages: string[] = [];
+            let citeKeys: Array<{ paperId: string; key: string }> = [];
+            let bibtexByKey: Record<string, string> = {};
+            try {
+                const prompt = await buildReportMessages(sessionId, (cmd.params as any).graphId);
+                messages = prompt.messages;
+                citeKeys = prompt.citeMap;
+                bibtexByKey = prompt.bibtexByKey;
+            } catch (err) {
+                try { const { toast } = require('sonner'); toast.error('生成报告失败：缺少图谱或数据'); } catch { }
+                return;
+            }
+            const reportMid = `report_${cmd.id}`;
+            await emit({ id: newId(), type: 'ReportGenerationStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid, citeKeys, bibtexByKey } as any });
+            console.log('[orch][report][messages]', messages);
+            const run = assistantExecutor.start({
+                messages,
+                onStart: () => emit({ id: newId(), type: 'AssistantMessageStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } }),
+                onDelta: (d) => emit({ id: newId(), type: 'AssistantMessageDelta', ts: Date.now(), sessionId, payload: { messageId: reportMid, delta: d } }),
+                onDone: () => { emit({ id: newId(), type: 'AssistantMessageCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid } }); emit({ id: newId(), type: 'ReportGenerationCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid } } as any); running.delete(sessionId); },
+                onAbort: (reason) => { emit({ id: newId(), type: 'AssistantMessageAborted', ts: Date.now(), sessionId, payload: { messageId: reportMid, reason } }); running.delete(sessionId); },
+                onError: (msg) => { emit({ id: newId(), type: 'AssistantMessageFailed', ts: Date.now(), sessionId, payload: { messageId: reportMid, error: msg } }); running.delete(sessionId); }
+            });
+            running.set(sessionId, run);
+            try { const { toast } = require('sonner'); toast.message('开始生成报告…'); } catch { }
+            return;
+        }
+        if (cmd.type === 'SupplementGraph') {
+            // 简化：补充触发重新构建图谱一轮（使用窗口配置）
+            const { runtimeConfig } = require('../runtime-config');
+            await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), params: { sessionId: cmd.params.sessionId, window: runtimeConfig.GRAPH_WINDOW_SIZE } } as any);
+            try { const { toast } = require('sonner'); toast.message('已开始补充图谱'); } catch { }
+            return;
+        }
+    });
+}
 // Ensure singleton across HMR/duplicate imports
 const g: any = globalThis as any;
 if (!g.__chatOrchestratorRunning) g.__chatOrchestratorRunning = new Map<string, { abort(): void }>();
@@ -13,14 +66,6 @@ if (!g.__chatHandledCmdIds) g.__chatHandledCmdIds = new Set<string>();
 const handledCmdIds: Set<string> = g.__chatHandledCmdIds;
 if (!g.__chatOrchId) g.__chatOrchId = `chat-orch:${Math.random().toString(36).slice(2, 7)}`;
 const ORCH_ID: string = g.__chatOrchId;
-
-function newId() { return crypto.randomUUID(); }
-
-// Project event immediately after publish
-async function emit(e: SessionEvent) {
-    await eventBus.publish(e);
-    applyEventToProjection(e);
-}
 
 if (!g.__chatOrchestratorRegistered) {
     g.__chatOrchestratorRegistered = true;

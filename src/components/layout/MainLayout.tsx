@@ -85,11 +85,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                     label: '文献发现',
                     path: '/literature/discovery'
                 },
-                {
-                    key: 'collections',
-                    label: '收藏夹',
-                    path: '/literature/collections'
-                },
+                // {
+                //     key: 'collections',
+                //     label: '收藏夹',
+                //     path: '/literature/collections'
+                // },
                 {
                     key: 'notes',
                     label: '笔记',
@@ -97,32 +97,32 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 }
             ]
         },
-        {
-            key: 'projects',
-            label: '研究项目',
-            icon: (
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-            ),
-            children: [
-                {
-                    key: 'my-projects',
-                    label: '我的项目',
-                    path: '/projects/my'
-                },
-                {
-                    key: 'shared-projects',
-                    label: '共享项目',
-                    path: '/projects/shared'
-                },
-                {
-                    key: 'templates',
-                    label: '项目模板',
-                    path: '/projects/templates'
-                }
-            ]
-        },
+        // {
+        //     key: 'projects',
+        //     label: '研究项目',
+        //     icon: (
+        //         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
+        //             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        //         </svg>
+        //     ),
+        //     children: [
+        //         {
+        //             key: 'my-projects',
+        //             label: '我的项目',
+        //             path: '/projects/my'
+        //         },
+        //         {
+        //             key: 'shared-projects',
+        //             label: '共享项目',
+        //             path: '/projects/shared'
+        //         },
+        //         {
+        //             key: 'templates',
+        //             label: '项目模板',
+        //             path: '/projects/templates'
+        //         }
+        //     ]
+        // },
         {
             key: 'data',
             label: '数据管理',

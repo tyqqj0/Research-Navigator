@@ -238,6 +238,22 @@ export function applyEventToProjection(e: SessionEvent) {
         } catch { /* ignore toast errors */ }
         return;
     }
+    if (e.type === 'GraphDecisionRequested') {
+        // 将等待确认的标记写入 session.meta.graphDecision，并追加一条消息以在消息流中渲染决策卡
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, graphDecision: { awaiting: true, graphId: e.payload.graphId, nodes: (e as any).payload.nodes, edges: (e as any).payload.edges } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        try {
+            const sid = e.sessionId!;
+            const msgId = `graph_decision_${e.ts}`;
+            store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '请确认当前图谱', status: 'done', createdAt: e.ts });
+        } catch { /* ignore */ }
+        return;
+    }
     if (e.type === 'GraphReady') {
         // 写入 session.meta.graphId，驱动 UI 渲染 GraphCanvas
         try {
@@ -248,6 +264,30 @@ export function applyEventToProjection(e: SessionEvent) {
             }
         } catch { /* ignore */ }
         console.log(`[Session] Graph ready: ${e.payload.graphId}`);
+        return;
+    }
+
+    // Report generation lifecycle
+    if (e.type === 'ReportGenerationStarted') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const reportMeta = { ...prevReport, [e.payload.messageId]: { citeKeys: e.payload.citeKeys, bibtexByKey: e.payload.bibtexByKey } };
+                const next = { ...s, meta: { ...s.meta, report: reportMeta, stage: 'reporting', graphDecision: { ...((s.meta as any)?.graphDecision || {}), awaiting: false, locked: true } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportGenerationCompleted') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, stage: 'report_done' }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
 }

@@ -588,6 +588,17 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                         }
                     } catch { /* ignore */ }
                     successful.push(existing as LibraryItem);
+                    // 即时更新集合：若指定集合，先本地写入，避免“等整批完成才出现”
+                    try {
+                        const collectionStore = require('./stores').useCollectionStore;
+                        const cids = [
+                            ...(entry.options?.addToCollections || []),
+                            ...(entry.options?.addToCollection ? [entry.options.addToCollection] : [])
+                        ].filter(Boolean);
+                        cids.forEach((cid: string) => {
+                            try { (collectionStore as any).getState().addLiteraturesToCollection(cid, [existing.paperId]); } catch { /* ignore */ }
+                        });
+                    } catch { /* ignore */ }
                 } else {
                     // 创建组合文献
                     const pc = paper?.parsedContent as any;
@@ -618,6 +629,17 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                         (literatureStore as any).getState().addLiterature(created as EnhancedLibraryItem);
                     } catch { /* ignore */ }
                     successful.push(created.literature as LibraryItem);
+                    // 即时更新集合：若指定集合，先本地写入
+                    try {
+                        const collectionStore = require('./stores').useCollectionStore;
+                        const cids = [
+                            ...(entry.options?.addToCollections || []),
+                            ...(entry.options?.addToCollection ? [entry.options.addToCollection] : [])
+                        ].filter(Boolean);
+                        cids.forEach((cid: string) => {
+                            try { (collectionStore as any).getState().addLiteraturesToCollection(cid, [created.literature.paperId]); } catch { /* ignore */ }
+                        });
+                    } catch { /* ignore */ }
                 }
             } catch (err: any) {
                 failed.push({ entry, error: err?.message || String(err) });
@@ -643,11 +665,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                     // 去重，避免重复加入
                     const unique = Array.from(new Set(paperIds));
                     await this.services.collection.addLiteratureToCollection(cid, unique, userId);
-                    // 同步 CollectionStore
-                    try {
-                        const collectionStore = require('./stores').useCollectionStore;
-                        (collectionStore as any).getState().addLiteraturesToCollection(cid, unique);
-                    } catch { /* ignore */ }
+                    // 已在逐项阶段即时更新 CollectionStore；这里不再重复写入，避免重复 toast/闪烁
                     // 若当前会话绑定了该集合，尝试把节点加入现有图谱
                     try {
                         const { useSessionStore } = require('@/features/session/data-access/session-store');

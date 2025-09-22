@@ -11,7 +11,9 @@ import type { SessionId } from '../data-access/types';
 import { commandBus } from '@/features/session/runtime/command-bus';
 import { Markdown } from '@/components/ui/markdown';
 import { sessionRepository } from '../data-access/session-repository';
+import { useLiteratureStore } from '@/features/literature/data-access/stores';
 import { DirectionProposalCard } from './DirectionProposalCard';
+import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 
 interface ChatPanelProps {
     sessionId: SessionId;
@@ -55,6 +57,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                                 <DirectionProposalCard content={m.content} />
                             ) : m.id.startsWith('cands_') ? (
                                 <SearchCandidatesCard sessionId={sessionId} artifactId={m.id.replace('cands_', '')} />
+                            ) : m.id.startsWith('graph_decision_') ? (
+                                <GraphDecisionCard sessionId={sessionId} />
+                            ) : m.id.startsWith('report_') ? (
+                                <ReportCard sessionId={sessionId} messageId={m.id} status={m.status} content={m.content} />
                             ) : (
                                 <Markdown text={m.content} />
                             )}
@@ -64,8 +70,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                         <div className="p-3 flex gap-2">
                             <Button size="sm" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StartExpansion', ts: Date.now(), params: { sessionId } } as any)}>开始扩展</Button>
                             <Button size="sm" variant="secondary" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopExpansion', ts: Date.now(), params: { sessionId } } as any)}>停止扩展</Button>
-                            <Button size="sm" variant="outline" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'PruneCollection', ts: Date.now(), params: { sessionId, targetMax: 60 } } as any)}>裁剪集合</Button>
-                            <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'BuildGraph', ts: Date.now(), params: { sessionId, window: 60 } } as any)}>构建关系图</Button>
+                            <Button size="sm" variant="outline" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'PruneCollection', ts: Date.now(), params: { sessionId, targetMax: runtimeConfig.PRUNE_TARGET_MAX } } as any)}>裁剪集合</Button>
+                            <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'BuildGraph', ts: Date.now(), params: { sessionId, window: runtimeConfig.GRAPH_WINDOW_SIZE } } as any)}>构建关系图</Button>
                         </div>
                     )}
                     {/* 决策任务卡：当等待决定时渲染卡片 */}
@@ -74,6 +80,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                             <DecisionCard sessionId={sessionId} />
                         </div>
                     )}
+                    {/* 取消底部常驻的 GraphDecisionCard，改为消息驱动 */}
                     {messages.length === 0 && (
                         <div className="p-4 text-sm text-muted-foreground">还没有消息，输入内容试试</div>
                     )}
@@ -221,6 +228,206 @@ const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
                 <Button size="sm" variant="secondary" onClick={onRefine}>细化</Button>
                 <Button size="sm" variant="ghost" onClick={onCancel}>取消</Button>
             </div>
+        </div>
+    );
+};
+
+const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
+    const session = useSessionStore(s => s.sessions.get(sessionId));
+    const info = (session as any)?.meta?.graphDecision || {};
+    const locked = Boolean((session as any)?.meta?.graphDecision?.locked);
+    const [suggestion, setSuggestion] = React.useState('');
+    const onGenerate = async () => {
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any);
+    };
+    const onSupplement = async () => {
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SupplementGraph', ts: Date.now(), params: { sessionId, suggestion } } as any);
+        setSuggestion('');
+    };
+    return (
+        <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+            <div className="text-xs text-muted-foreground">需要确认</div>
+            <div className="text-sm font-medium">是否接受当前图谱？（节点 {info.nodes ?? '-'}，边 {info.edges ?? '-'}）</div>
+            <div className="text-xs text-muted-foreground">可随时手动修改/添加节点</div>
+            <div className="flex gap-2">
+                <Button size="sm" onClick={onGenerate} disabled={locked}>生成报告</Button>
+                <Input className="max-w-sm" placeholder="输入补充/扩展建议（可选）" value={suggestion} onChange={(e) => setSuggestion(e.target.value)} disabled={locked} />
+                <Button size="sm" variant="secondary" onClick={onSupplement} disabled={!suggestion.trim() || locked}>补充图谱</Button>
+            </div>
+        </div>
+    );
+};
+
+const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: any; content: string }> = ({ sessionId, messageId, status, content }) => {
+    const session = useSessionStore(s => s.sessions.get(sessionId));
+    const meta = (session as any)?.meta || {};
+    const reportMeta = (meta.report || {})[messageId] || {};
+    const citeKeys: Array<{ paperId: string; key: string }> = reportMeta.citeKeys || [];
+    const bibtexByKey: Record<string, string> = reportMeta.bibtexByKey || {};
+    const getLiterature = useLiteratureStore(s => s.getLiterature);
+
+    // key -> paperId 快速映射
+    const keyToPaperId = React.useMemo(() => {
+        const m = new Map<string, string>();
+        (citeKeys || []).forEach(({ key, paperId }) => { if (key && paperId) m.set(key, paperId); });
+        return m;
+    }, [citeKeys]);
+
+    // Known keys from prompt data to avoid numbering unrelated brackets
+    const allKnownKeys = React.useMemo(() => {
+        const set = new Set<string>();
+        Object.keys(bibtexByKey || {}).forEach(k => set.add(k));
+        (citeKeys || []).forEach(c => set.add(c.key));
+        return set;
+    }, [citeKeys, bibtexByKey]);
+
+    // Preprocess: strip model-supplied References/BibTeX, map numeric [n] -> [@key] when possible
+    const preprocessed = React.useMemo(() => {
+        let txt = content || '';
+        const numToKey = new Map<number, string>();
+        // Locate References/参考文献 section and extract mapping like: [1]Key followed by @article{Key,
+        const refsHeadingIdx = (() => {
+            const m = txt.match(/(^|\n)\s*(?:#{1,6}\s*)?(References|参考文献)\s*(\n|$)/i);
+            return m ? m.index! + (m[1] ? m[1].length : 0) : -1;
+        })();
+        if (refsHeadingIdx >= 0) {
+            const headToEnd = txt.slice(refsHeadingIdx);
+            // Extract [n]Key lines
+            const lineRe = /^\s*\[(\d+)\]\s*([A-Za-z][A-Za-z0-9_]*)/gm;
+            let lm: RegExpExecArray | null;
+            while ((lm = lineRe.exec(headToEnd)) !== null) {
+                const num = parseInt(lm[1], 10);
+                const key = lm[2];
+                if (allKnownKeys.has(key)) numToKey.set(num, key);
+            }
+            // Remove the entire references block from content
+            txt = txt.slice(0, refsHeadingIdx).trimEnd();
+        }
+        // Fallback: if no heading, try to glean keys from trailing @article blocks order [1..]
+        if (numToKey.size === 0) {
+            const bibKeyRe = /@article\{\s*([A-Za-z][A-Za-z0-9_]*)\s*,[\s\S]*?\}/gi;
+            const keys: string[] = [];
+            let bm: RegExpExecArray | null;
+            while ((bm = bibKeyRe.exec(content || '')) !== null) {
+                const key = bm[1];
+                if (allKnownKeys.has(key)) keys.push(key);
+            }
+            if (keys.length > 0) {
+                keys.forEach((k, idx) => numToKey.set(idx + 1, k));
+                // Remove bib blocks if present
+                txt = txt.replace(bibKeyRe, '').trimEnd();
+            }
+        }
+        // Replace numeric citations with [@key]
+        if (numToKey.size > 0) {
+            txt = txt.replace(/\[(\d+)\]/g, (m: string, nStr: string) => {
+                const n = parseInt(nStr, 10);
+                const key = numToKey.get(n);
+                return key && allKnownKeys.has(key) ? `[@${key}]` : m;
+            });
+        }
+        // Remove any stray bibtex blocks leftover anywhere
+        txt = txt.replace(/@article\{[\s\S]*?\}/g, '').trim();
+        return { text: txt };
+    }, [content, allKnownKeys]);
+
+    // Support both [@key] and [key] forms; only number when key is known
+    const { rendered, numbering } = React.useMemo(() => {
+        const numberingMap = new Map<string, number>();
+        let nextNum = 1;
+        const pattern = /\[(?:@)?([A-Za-z][A-Za-z0-9_]*)\]/g;
+        const replaced = preprocessed.text.replace(pattern, (m: string, key: string) => {
+            if (allKnownKeys.has(key)) {
+                if (!numberingMap.has(key)) numberingMap.set(key, nextNum++);
+                const n = numberingMap.get(key)!;
+                return `[${n}]`;
+            }
+            return m;
+        });
+        return { rendered: replaced, numbering: numberingMap };
+    }, [preprocessed.text, allKnownKeys]);
+
+    const references = React.useMemo(() => {
+        const items = Array.from(numbering.entries()).sort((a, b) => a[1] - b[1]);
+        return items.map(([key, n]) => {
+            const paperId = keyToPaperId.get(key);
+            const paper = paperId ? getLiterature(paperId) : undefined;
+            return { n, key, bib: bibtexByKey[key], paper };
+        }).filter(x => !!x.bib || !!x.paper);
+    }, [numbering, bibtexByKey, keyToPaperId, getLiterature]);
+
+    // Helpers: format authors in IEEE-like style
+    const formatAuthorsIEEE = React.useCallback((authors: string[] | undefined): string => {
+        if (!authors || authors.length === 0) return '';
+        const toIEEE = (full: string): string => {
+            const parts = full.split(/\s+/).filter(Boolean);
+            if (parts.length === 1) return parts[0];
+            const last = parts[parts.length - 1];
+            const initials = parts.slice(0, -1).map(p => (p[0] || '').toUpperCase() + '.').join(' ');
+            return `${initials} ${last}`.trim();
+        };
+        if (authors.length <= 3) {
+            const formatted = authors.map(toIEEE);
+            if (formatted.length === 2) return `${formatted[0]} and ${formatted[1]}`;
+            if (formatted.length === 3) return `${formatted[0]}, ${formatted[1]}, and ${formatted[2]}`;
+            return formatted[0];
+        }
+        return `${toIEEE(authors[0])} et al.`;
+    }, []);
+
+    // Format references: IEEE-like "Authors, \"Title,\" Venue, Year. DOI/URL"
+    const formatReference = React.useCallback((entry: { bib?: string; key: string; paper?: any }): string => {
+        const pick = (name: string): string | undefined => {
+            if (!entry.bib) return undefined;
+            const re = new RegExp(name + '\\s*=\\s*\\{([^}]*)\\}', 'i');
+            const m = re.exec(entry.bib);
+            return m ? m[1].trim() : undefined;
+        };
+        const p = entry.paper?.literature;
+        const title = (p?.title || pick('title') || entry.key).replace(/[{}]/g, '').trim();
+        const authorsArr: string[] | undefined = p?.authors || undefined;
+        let authors = formatAuthorsIEEE(authorsArr);
+        if (!authors) {
+            // fallback to bib author raw string
+            const rawAuthor = (pick('author') || '').replace(/[{}]/g, '').trim();
+            if (rawAuthor) authors = rawAuthor.includes(' and ') ? rawAuthor.split(/\s+and\s+/i)[0] + ' et al.' : rawAuthor;
+        }
+        const year = String(p?.year || pick('year') || '').trim();
+        const venue = (p?.publication || '').trim();
+        const doi = (p?.doi || '').trim();
+        const url = (p?.url || '').trim();
+        const parts: string[] = [];
+        if (authors) parts.push(authors);
+        parts.push(`"${title},"`);
+        if (venue) parts.push(venue);
+        if (year) parts.push(year);
+        let tail = '';
+        if (doi) tail = ` DOI: ${doi}.`;
+        else if (url) tail = ` Available: ${url}`;
+        return `${parts.join(', ')}.${tail}`.replace(/\s+\./g, '.');
+    }, [formatAuthorsIEEE]);
+
+    return (
+        <div className="border rounded-md p-3 space-y-3">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div>报告 {status === 'streaming' ? '生成中…' : status === 'done' ? '已完成' : status === 'error' ? '失败' : status === 'aborted' ? '已中止' : ''}</div>
+                {status === 'streaming' && (
+                    <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopStreaming', ts: Date.now(), params: { sessionId } } as any)}>停止</Button>
+                )}
+            </div>
+            <Markdown text={rendered} />
+            {(status === 'done' || status === 'error' || status === 'aborted') && references.length > 0 && (
+                <div className="pt-2 border-t">
+                    <div className="text-sm font-medium mb-2">References</div>
+                    <ol className="list-decimal pl-4 space-y-1">
+                        {references.map((ref) => (
+                            <li key={ref.key} className="text-xs">
+                                <span>{formatReference({ bib: ref.bib, key: ref.key, paper: ref.paper })}</span>
+                            </li>
+                        ))}
+                    </ol>
+                </div>
+            )}
         </div>
     );
 };
