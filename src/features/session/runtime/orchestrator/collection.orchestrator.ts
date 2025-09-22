@@ -6,8 +6,8 @@ import { searchExecutor } from '../executors/search-executor';
 import { collectionExecutor } from '../executors/collection-executor';
 import { queryGeneratorExecutor } from '../executors/query-generator-executor';
 import { aiQueryGeneratorExecutor } from '../executors/ai-query-generator-executor';
-import { paperMetadataExecutor } from '../executors/paper-metadata-executor';
 import { pruneExecutor } from '../executors/prune-executor';
+import { paperMetadataExecutor } from '../executors/paper-metadata-executor';
 import { graphBuilderExecutor } from '../executors/graph-builder-executor';
 import { sessionRepository } from '../../data-access/session-repository';
 import { literatureDataAccess } from '@/features/literature/data-access';
@@ -87,13 +87,10 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 // 聚合上下文生成查询（更真实）
                 const s = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
                 const directionSpec = s?.meta?.direction?.spec as string | undefined;
-                // TODO: 可从 sessionRepository 读取 prior summaries；此处简化为使用 lastAdded/total
-                // 汇集最近简报（若有）
+                // 基于事件按需实时获取最近一轮的简报（不持久化）
                 let priorBriefs: any[] = [];
                 try {
-                    // 取最近一个 search_round_summary
-                    // 简化：不从仓库检索，留空数组；后续可实现 getLatestSummaries
-                    priorBriefs = [];
+                    priorBriefs = await paperMetadataExecutor.fetchLastRoundBrief(sessionId, 6);
                 } catch { priorBriefs = []; }
                 // 先尝试 AI 生成，失败则退回启发式
                 let ai = await aiQueryGeneratorExecutor.generate({ directionSpec, priorBriefs, round });
@@ -123,16 +120,22 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                     .map((c: any) => c?.bestIdentifier)
                     .filter((x: any) => typeof x === 'string' && x.length > 0)
                     .slice(0, roundSize);
+                try {
+                    const allCands = ((candArtifact as any).data?.candidates || []);
+                    const total = allCands.length;
+                    const best = identifiers.length;
+                    const urlOnly = allCands.filter((c: any) => typeof c?.bestIdentifier === 'string' && /^URL:/i.test(c.bestIdentifier)).length;
+                    console.debug('[orch][collection] identifiers for ingestion', { round, totalCandidates: total, withBest: best, urlOnly, preview: identifiers.slice(0, 3) });
+                } catch { /* noop */ }
                 const ingested: string[] = [];
                 try {
                     const { literatureEntry } = require('@/features/literature/data-access');
                     const collectionId = (useSessionStore as any)?.getState?.().sessions?.get(sessionId)?.linkedCollectionId;
-                    for (const idf of identifiers) {
-                        try {
-                            const created = await literatureEntry.addByIdentifier(idf, { addToCollection: collectionId });
-                            if (created?.paperId) ingested.push(created.paperId);
-                        } catch (e) { try { console.warn('[orch][collection] addByIdentifier failed', idf, e); } catch { } }
-                    }
+                    // 使用批量导入提升速度：后端批量 + 本地并发 + 批量加入集合
+                    const result = await literatureEntry.batchImport(
+                        identifiers.map((id) => ({ type: 'identifier', data: id, options: { addToCollection: collectionId } }))
+                    );
+                    ingested.push(...result.successful.map((i: any) => i.paperId));
                 } catch (err: any) {
                     await emit({ id: newId(), type: 'SearchRoundFailed', ts: Date.now(), sessionId, payload: { round, stage: 'execute', error: 'ingestion_failed' } as any });
                     return;
@@ -155,11 +158,6 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
 
                 // 入库已经同时加入集合，此处无需重复
 
-                // 简要元数据（用于后续查询生成）
-                const brief = await paperMetadataExecutor.fetchBriefs(batch.data.paperIds.slice(0, Math.min(lastAdded, 6)));
-                const summary = { id: newId(), kind: 'search_round_summary', version: 1, data: { round, query, briefList: brief }, createdAt: Date.now() } as unknown as Artifact;
-                await sessionRepository.putArtifact(summary);
-
                 await emit({ id: newId(), type: 'PapersIngested', ts: Date.now(), sessionId, payload: { batchId: batch.id, added: lastAdded, total } });
                 service.send({ type: 'EXECUTED', added: lastAdded, total });
                 await emit({ id: newId(), type: 'SearchRoundCompleted', ts: Date.now(), sessionId, payload: { round, added: lastAdded, total } });
@@ -167,21 +165,51 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 // 评估增长
                 const recentGrowth = lastAdded / Math.max(1, total);
                 await emit({ id: newId(), type: 'ExpansionEvaluated', ts: Date.now(), sessionId, payload: { lastAdded, recentGrowth } as any });
+                try {
+                    const { toast } = require('sonner');
+                    toast.message(`扩展评估：新增 ${lastAdded}，增长率 ${(recentGrowth * 100).toFixed(1)}%`);
+                } catch { /* ignore toast errors */ }
 
                 if (lastAdded === 0) {
+                    try {
+                        console.debug('[orch][collection] no new results, stopping expansion', { round, total, lastAdded });
+                    } catch { /* noop */ }
                     await emit({ id: newId(), type: 'NoNewResults', ts: Date.now(), sessionId, payload: { round } });
                     await emit({ id: newId(), type: 'ExpansionSaturated', ts: Date.now(), sessionId, payload: { round, reason: 'no_new' } as any });
+                    // 自动进入图谱阶段
+                    try {
+                        await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: 60 } } as any);
+                        const { toast } = require('sonner');
+                        toast.message('扩展结束，自动开始构建关系图');
+                    } catch { /* ignore */ }
                     return;
                 }
                 if (total > upperBound) {
                     await emit({ id: newId(), type: 'ExpansionSaturated', ts: Date.now(), sessionId, payload: { round, reason: 'max_rounds' } as any });
                     // 触发裁剪
                     await commandBus.dispatch({ id: newId(), type: 'PruneCollection', ts: Date.now(), sessionId, params: { sessionId, targetMax: 60, criterion: 'citation_low_first' } } as any);
+                    try {
+                        const { toast } = require('sonner');
+                        toast.message('已达到集合上限，正在自动裁剪到 60 篇');
+                    } catch { /* ignore toast errors */ }
+                    // 裁剪后自动进入图谱阶段
+                    try {
+                        await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: 60 } } as any);
+                        const { toast } = require('sonner');
+                        toast.message('自动开始构建关系图');
+                    } catch { /* ignore */ }
                     return;
                 }
                 // 仅在当前轮结果写入仓库并同步集合后，才进入下一轮
                 if (round < maxRounds) {
                     setTimeout(step, 800);
+                } else {
+                    // 达到最大轮数后自动进入图谱阶段
+                    try {
+                        await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: 60 } } as any);
+                        const { toast } = require('sonner');
+                        toast.message('已完成多轮扩展，开始构建关系图');
+                    } catch { /* ignore */ }
                 }
             }
             setTimeout(step, 0);
@@ -208,26 +236,45 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
             const s = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
             const collectionId = s?.linkedCollectionId;
             if (!collectionId) return;
-            // 简化：取 Literature 集合对象，构造最小 papers 列表
-            const collection = await literatureDataAccess.collections.getCollection(collectionId as any);
-            const paperIds: string[] = (collection as any)?.paperIds || [];
-            await emit({ id: newId(), type: 'GraphConstructionStarted', ts: Date.now(), sessionId, payload: { size: paperIds.length } });
-            const papers = paperIds.slice(0, (cmd.params as any).window || 60).map(id => ({ id, title: id }));
-            // 创建图并填入节点
+            // 以当前图中的节点为唯一来源；若图为空，则用集合进行一次性播种
+            const windowSize = (cmd.params as any).window || 60;
+            let papers: Array<{ id: string; title: string }>;
             try {
                 const { useGraphStore } = require('@/features/graph/data-access/graph-store');
                 const gs = useGraphStore.getState();
-                const existingGraphId = s?.meta?.graphId as string | undefined;
-                let graphId = existingGraphId;
+                let graphId: string | undefined = s?.meta?.graphId as string | undefined;
                 if (!graphId) {
                     const graph = await gs.createGraph({ name: `Session Graph ${new Date().toLocaleString()}` });
                     graphId = graph.id;
                     await emit({ id: newId(), type: 'GraphReady', ts: Date.now(), sessionId, payload: { graphId } as any });
                 }
-                for (const pid of papers.map(p => p.id)) {
-                    await gs.addNode({ id: pid, kind: 'paper' }, { graphId });
+                // 确保可读到图
+                await gs.loadGraph(graphId);
+                let graph = gs.getGraphById(graphId);
+                let graphPaperIds: string[] = graph ? Object.keys(graph.nodes || {}) : [];
+
+                if (graphPaperIds.length === 0) {
+                    // 播种：从集合取前 windowSize 个加入图
+                    const collection = await literatureDataAccess.collections.getCollection(collectionId as any);
+                    const seedIds: string[] = (collection as any)?.paperIds || [];
+                    const toSeed = seedIds.slice(0, windowSize);
+                    for (const pid of toSeed) {
+                        await gs.addNode({ id: pid, kind: 'paper' }, { graphId });
+                    }
+                    try { console.debug('[orch][collection] graph seeding', { windowSize, seedCount: toSeed.length }); } catch { /* noop */ }
+                    graphPaperIds = toSeed;
                 }
-            } catch { /* ignore graph store errors */ }
+
+                const selected = graphPaperIds.slice(0, windowSize);
+                await emit({ id: newId(), type: 'GraphConstructionStarted', ts: Date.now(), sessionId, payload: { size: selected.length } });
+                papers = selected.map(id => ({ id, title: id }));
+            } catch { /* ignore graph store errors */
+                papers = [];
+            }
+            if (!papers || papers.length === 0) {
+                try { const { toast } = require('sonner'); toast.message('当前图为空，跳过关系图构建'); } catch { /* noop */ }
+                return;
+            }
             const relText = await graphBuilderExecutor.proposeRelationsText(papers);
             await sessionRepository.putArtifact(relText as Artifact);
             await emit({ id: newId(), type: 'GraphRelationsProposed', ts: Date.now(), sessionId, payload: { textArtifactId: relText.id } });

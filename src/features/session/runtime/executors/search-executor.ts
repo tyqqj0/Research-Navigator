@@ -30,6 +30,15 @@ export const searchExecutor = {
         const includeDomains = [...(dom.predefined || []), ...(dom.custom || [])].filter(Boolean);
         const cands = await webDiscovery.searchWeb(query, { limit: size, includeDomains: includeDomains.length ? includeDomains : undefined });
         const resolved = await webDiscovery.resolveToPaperIds(cands.candidates);
+        try {
+            console.debug('[searchExecutor] resolve summary', {
+                query,
+                size,
+                candidates: cands.candidates?.length || 0,
+                nonUrlCandidates: (cands.candidates || []).filter(c => c.bestIdentifier && !/^URL:/i.test(c.bestIdentifier)).length,
+                resolved: resolved.paperIds.length
+            });
+        } catch { /* noop */ }
         return { id: crypto.randomUUID(), kind: 'search_batch', version: 1, data: { paperIds: resolved.paperIds, query }, createdAt: Date.now() };
     }
 };

@@ -209,51 +209,86 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
 
     private normalizeIdentifier(raw: string): { normalized: string; encoded: string } {
         const v = (raw || '').trim();
-        const hasPrefix = /^(S2:|CorpusId:|DOI:|ARXIV:|MAG:|ACL:|PMID:|PMCID:|URL:)/i.test(v);
-        let normalized = v;
-        if (!hasPrefix) {
+        const canonicalPrefix = (p: string): string => {
+            const key = p.toLowerCase();
+            if (key === 's2') return 'S2';
+            if (key === 'corpusid' || key === 'corpus_id') return 'CorpusId';
+            if (key === 'doi') return 'DOI';
+            if (key === 'arxiv') return 'ARXIV';
+            if (key === 'mag') return 'MAG';
+            if (key === 'acl') return 'ACL';
+            if (key === 'pmid') return 'PMID';
+            if (key === 'pmcid') return 'PMCID';
+            if (key === 'url') return 'URL';
+            return p.toUpperCase();
+        };
+
+        const coercePrefixed = (input: string): string => {
+            const m = input.match(/^(\w+):\s*(.*)$/);
+            if (!m) return input;
+            const pref = canonicalPrefix(m[1]);
+            return `${pref}:${m[2]}`;
+        };
+
+        let normalized = coercePrefixed(v);
+        const hasKnownPrefix = /^(S2:|CorpusId:|DOI:|ARXIV:|MAG:|ACL:|PMID:|PMCID:|URL:)/.test(normalized);
+
+        if (!hasKnownPrefix) {
             if (/^https?:\/\//i.test(v)) {
-                // 不再直接保留 URL。尝试从 URL 中提取 DOI 或 ARXIV
+                // 尝试从 URL 提取 DOI 或 ARXIV；否则保持 URL 供上层决策（会被拒绝）
                 try {
                     const u = new URL(v);
                     const href = u.toString();
-                    // 先尝试 DOI 识别（包含 10.x/ 部分）
                     const doi = href.match(/10\.[^\s/]+\/[\w\-\.\(\)\/:;]+/i)?.[0];
                     if (doi) {
                         normalized = `DOI:${doi}`;
-                    } else if (u.hostname.includes('arxiv.org')) {
+                    } else if (/arxiv\.org/i.test(u.hostname)) {
                         const m = u.pathname.match(/\/(\d{4}\.\d{4,5})(v\d+)?/);
-                        if (m) normalized = `ARXIV:${m[1]}${m[2] || ''}`;
-                        else normalized = v; // 回退为原始，后续上层会拒绝 URL
+                        normalized = m ? `ARXIV:${m[1]}${m[2] || ''}` : `URL:${v}`;
                     } else {
-                        normalized = v; // 回退
+                        normalized = `URL:${v}`;
                     }
                 } catch {
-                    normalized = v;
+                    normalized = `URL:${v}`;
                 }
             } else if (/^10\.\S+\/\S+/.test(v)) {
                 normalized = `DOI:${v}`;
             } else {
-                // 默认走 S2 标识
-                normalized = v
+                // 默认视为 S2 哈希
+                normalized = v;
             }
         }
+
+        // DOI 精细归一化：去除空白、全角标点、尾部 .pdf、收尾多余标点
+        if (/^DOI:/i.test(normalized)) {
+            const val = normalized.replace(/^DOI:/i, '');
+            let core = val.replace(/\s+/g, '').replace(/[\u3000-\u303F]/g, '');
+            core = core.replace(/\.pdf(?:[?#].*)?$/i, '');
+            core = core.replace(/[\.,;:!?]+$/g, '');
+            normalized = `DOI:${core}`;
+        }
+
+        // 最终统一前缀大小写到约定集合
+        normalized = coercePrefixed(normalized);
+
         return { normalized, encoded: encodeURIComponent(normalized) };
     }
 
     // 公共helper导出
     public static normalizeIdentifierHelper(raw: string): { normalized: string; encoded: string } {
         const v = (raw || '').trim();
-        const hasPrefix = /^(S2:|CorpusId:|DOI:|ARXIV:|MAG:|ACL:|PMID:|PMCID:|URL:)/i.test(v);
-        let normalized = v;
-        if (!hasPrefix) {
-            if (/^https?:\/\//i.test(v)) {
-                normalized = `URL:${v}`;
-            } else if (/^10\.\S+\/\S+/.test(v)) {
-                normalized = `DOI:${v}`;
-            } else {
-                normalized = `S2:${v}`;
-            }
+        const m = v.match(/^(\w+):\s*(.*)$/);
+        let normalized: string;
+        if (m) {
+            const pref = m[1].toLowerCase();
+            const canonical = pref === 'corpusid' || pref === 'corpus_id' ? 'CorpusId' : pref.toUpperCase();
+            normalized = `${canonical}:${m[2]}`;
+        } else if (/^https?:\/\//i.test(v)) {
+            normalized = `URL:${v}`;
+        } else if (/^10\.\S+\/\S+/.test(v)) {
+            normalized = `DOI:${v}`;
+        } else {
+            normalized = `S2:${v}`;
         }
         return { normalized, encoded: encodeURIComponent(normalized) };
     }
@@ -267,26 +302,21 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
     } = {}): Promise<LibraryItem> {
         try {
             let { normalized, encoded } = this.normalizeIdentifier(identifier);
-            // 不再接受 URL: 前缀的标识，除非在 normalize 阶段已被转成 DOI 或 ARXIV
+            // 不接受 URL: 前缀的标识，除非在 normalize 阶段已被转成 DOI 或 ARXIV
             if (/^URL:/i.test(normalized)) {
                 throw new Error('暂不支持直接通过 URL 抓取，请提供 DOI 或 arXiv 标识');
             }
-            // 进一步规范化：DOI 去除尾部 .pdf 或多余标点
-            if (/^DOI:/i.test(normalized)) {
-                const v = normalized.replace(/^DOI:/i, '');
-                let core = v.replace(/\s+/g, '').replace(/[\u3000-\u303F]/g, '');
-                core = core.replace(/\.pdf(?:[?#].*)?$/i, '');
-                core = core.replace(/[\.,;:!?]+$/g, '');
-                normalized = `DOI:${core}`;
-                encoded = encodeURIComponent(normalized);
-            }
+            // 已在 normalizeIdentifier 中完成 DOI 归一化与前缀规范化
+            encoded = encodeURIComponent(normalized);
 
             // 1) 直接使用详细信息接口（兼容更多后端实现）
             // 对于带斜杠的标识（DOI/URL），需要编码；S2/CorpusId 等可以直接使用原始形式
             // 后端 /api/v1/paper/:id 期望：
             // - 对于包含斜杠的标识（DOI、URL）必须 URL 编码
             // - 其他（S2、CorpusId、ARXIV、MAG、ACL、PMID、PMCID）保持原样
-            const idForPath = /^(DOI:)/i.test(normalized) ? encodeURIComponent(normalized) : normalized;
+            const idForPath = /^(DOI:|URL:)/.test(normalized) || /\//.test(normalized)
+                ? encodeURIComponent(normalized)
+                : normalized;
             try { console.debug('[LiteratureEntry] addByIdentifier start', { identifier, normalized, idForPath }); } catch { }
             const searchRes = await this.services.backend.getPaper(idForPath);
             const paper = searchRes;
@@ -430,8 +460,17 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
 
             return created.literature as LibraryItem;
         } catch (error) {
-            console.error('[LiteratureEntry] Failed to add by identifier:', error);
-            throw new Error(`添加失败：${identifier}。${error instanceof Error ? error.message : ''}`);
+            // 统一降噪：将底层错误转化为轻量提示文案
+            const message = error instanceof Error ? error.message : String(error);
+            const brief = /^Failed to get paper/.test(message) || /404/.test(message)
+                ? '未找到对应论文（可能是暂未收录或标识无效）'
+                : message;
+            console.error('[LiteratureEntry] Failed to add by identifier:', message);
+            try {
+                const { toast } = require('sonner');
+                toast.error(`添加失败：${brief}`);
+            } catch { /* ignore toast errors */ }
+            throw new Error(`添加失败：${identifier}。${brief}`);
         }
     }
 
@@ -449,25 +488,182 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
         const successful: LibraryItem[] = [];
         const failed: Array<{ entry: any; error: string }> = [];
 
-        for (const entry of entries) {
+        // 仅支持 identifier
+        const idEntries = entries.filter(e => e?.type === 'identifier' && typeof e?.data === 'string');
+        if (idEntries.length === 0) return { successful, failed };
+
+        // 归一化并过滤 URL 标识（提示用户提供 DOI/ARXIV）
+        const normalizedList = idEntries.map(e => {
             try {
-                let item: LibraryItem;
+                const { normalized } = this.normalizeIdentifier(String(e.data));
+                return { entry: e, normalized };
+            } catch (err: any) {
+                failed.push({ entry: e, error: err?.message || String(err) });
+                return null as any;
+            }
+        }).filter(Boolean) as Array<{ entry: { type: 'identifier'; data: string; options?: any }; normalized: string }>;
 
-                switch (entry.type) {
-                    case 'identifier': {
-                        item = await this.addByIdentifier(entry.data as string, entry.options);
-                        break;
-                    }
-                    default:
-                        throw new Error(`Unsupported entry type: ${entry.type}`);
+        const nonUrl = normalizedList.filter(x => !/^URL:/i.test(x.normalized));
+        const urlOnly = normalizedList.filter(x => /^URL:/i.test(x.normalized));
+        urlOnly.forEach(x => failed.push({ entry: x.entry, error: '暂不支持直接通过 URL 抓取，请提供 DOI 或 arXiv 标识' }));
+
+        if (nonUrl.length === 0) return { successful, failed };
+
+        // 去重（按归一化后的标识）
+        const uniqueNormalized = Array.from(new Set(nonUrl.map(x => x.normalized)));
+
+        // 先批量请求后端
+        const backend = this.services.backend as import('./services/backend-api-service').BackendApiService;
+        let batchItems: Array<LibraryItem> = [];
+        try {
+            const res = await backend.getPapersBatch(uniqueNormalized);
+            batchItems = Array.isArray(res) ? res : [];
+        } catch (e) {
+            console.warn('[LiteratureEntry] batch getPapersBatch failed, will fallback to singles', e);
+            batchItems = [];
+        }
+
+        // 快速索引
+        const paperIdToItem = new Map<string, LibraryItem>();
+        batchItems.forEach(it => { if (it?.paperId) paperIdToItem.set(it.paperId, it); });
+
+        // 建立 归一化标识 -> LibraryItem 的近似映射（优先 exact 等值）
+        const normToPaper = new Map<string, LibraryItem>();
+        for (const norm of uniqueNormalized) {
+            // 直接匹配（如果后端返回相同 paperId 字符串）
+            if (paperIdToItem.has(norm)) {
+                normToPaper.set(norm, paperIdToItem.get(norm)!);
+            }
+        }
+
+        // 对未命中的标识降级成单条调用（并发限制）
+        const missing = uniqueNormalized.filter(n => !normToPaper.has(n));
+        const concurrency = 4;
+        const executing: Promise<void>[] = [];
+        const runSingle = async (norm: string) => {
+            try {
+                const idForPath = /^(DOI:|URL:)/.test(norm) || /\//.test(norm) ? encodeURIComponent(norm) : norm;
+                const lit = await backend.getPaper(idForPath);
+                if (lit?.paperId) {
+                    normToPaper.set(norm, lit);
                 }
+            } catch (err) {
+                // ignore here; 将在后续按条目补充 failed
+            }
+        };
+        for (const n of missing) {
+            const p = runSingle(n).finally(() => {
+                const i = executing.indexOf(p);
+                if (i >= 0) executing.splice(i, 1);
+            });
+            executing.push(p);
+            if (executing.length >= concurrency) {
+                await Promise.race(executing);
+            }
+        }
+        await Promise.all(executing);
 
-                successful.push(item);
-            } catch (error) {
-                failed.push({
-                    entry,
-                    error: error instanceof Error ? error.message : String(error)
-                });
+        // 分组：按集合选项批量加入集合
+        const collectionGroups = new Map<string, string[]>(); // collectionId -> paperIds
+
+        // 依次处理每个原始条目，确保选项与条目对应
+        for (const { entry, normalized } of nonUrl) {
+            const paper = normToPaper.get(normalized);
+            if (!paper) {
+                failed.push({ entry, error: '未找到对应论文（可能是暂未收录或标识无效）' });
+                continue;
+            }
+
+            // 若已存在，则直接使用；否则创建组合文献
+            let usePaperId = paper.paperId;
+            try {
+                const existing = await this.services.literature.getLiterature(paper.paperId);
+                if (existing) {
+                    // 同步到列表（增强版）
+                    try {
+                        const enhanced = await this.composition.getEnhancedLiterature(paper.paperId);
+                        if (enhanced) {
+                            const literatureStore = require('./stores').useLiteratureStore;
+                            (literatureStore as any).getState().addLiterature(enhanced as EnhancedLibraryItem);
+                        }
+                    } catch { /* ignore */ }
+                    successful.push(existing as LibraryItem);
+                } else {
+                    // 创建组合文献
+                    const pc = paper?.parsedContent as any;
+                    const created = await this.composition.createComposedLiterature({
+                        literature: {
+                            paperId: paper.paperId,
+                            title: paper.title,
+                            authors: paper.authors || [],
+                            year: paper.year,
+                            publication: paper.publication || undefined,
+                            publicationDate: (paper as any).publicationDate || undefined,
+                            abstract: (paper as any).abstract || undefined,
+                            summary: (paper as any).summary || undefined,
+                            doi: (paper as any).doi || undefined,
+                            url: (paper as any).url || undefined,
+                            pdfPath: (paper as any).pdfPath || undefined,
+                            source: 'search',
+                            parsedContent: pc && typeof pc === 'object' ? pc : undefined,
+                        },
+                        userMeta: entry.options?.userMeta
+                            ? { ...entry.options.userMeta, tags: entry.options.userMeta.tags || entry.options.tags || [] }
+                            : (entry.options?.tags && entry.options.tags.length ? { tags: entry.options.tags } : undefined),
+                    });
+                    usePaperId = created.literature.paperId;
+                    // 同步到本地 Store
+                    try {
+                        const literatureStore = require('./stores').useLiteratureStore;
+                        (literatureStore as any).getState().addLiterature(created as EnhancedLibraryItem);
+                    } catch { /* ignore */ }
+                    successful.push(created.literature as LibraryItem);
+                }
+            } catch (err: any) {
+                failed.push({ entry, error: err?.message || String(err) });
+                continue;
+            }
+
+            // 收集集合批量写入
+            const cids = [
+                ...(entry.options?.addToCollections || []),
+                ...(entry.options?.addToCollection ? [entry.options.addToCollection] : [])
+            ].filter(Boolean);
+            for (const cid of cids) {
+                if (!collectionGroups.has(cid)) collectionGroups.set(cid, []);
+                collectionGroups.get(cid)!.push(usePaperId);
+            }
+        }
+
+        // 批量加入集合，并同步 CollectionStore + 图谱
+        if (collectionGroups.size > 0) {
+            const userId = this.authUtils.getStoreInstance().requireAuth();
+            for (const [cid, paperIds] of collectionGroups.entries()) {
+                try {
+                    // 去重，避免重复加入
+                    const unique = Array.from(new Set(paperIds));
+                    await this.services.collection.addLiteratureToCollection(cid, unique, userId);
+                    // 同步 CollectionStore
+                    try {
+                        const collectionStore = require('./stores').useCollectionStore;
+                        (collectionStore as any).getState().addLiteraturesToCollection(cid, unique);
+                    } catch { /* ignore */ }
+                    // 若当前会话绑定了该集合，尝试把节点加入现有图谱
+                    try {
+                        const { useSessionStore } = require('@/features/session/data-access/session-store');
+                        const { useGraphStore } = require('@/features/graph/data-access/graph-store');
+                        const sessions: Map<string, any> = (useSessionStore as any).getState().sessions;
+                        const bound = Array.from(sessions.values()).find((s: any) => s?.linkedCollectionId === cid);
+                        const graphId: string | undefined = bound?.meta?.graphId;
+                        if (graphId) {
+                            for (const pid of unique) {
+                                try { await (useGraphStore as any).getState().addNode({ id: pid, kind: 'paper' }, { graphId }); } catch { /* ignore */ }
+                            }
+                        }
+                    } catch { /* ignore */ }
+                } catch (e: any) {
+                    console.warn('[LiteratureEntry] Failed to add batch to collection', cid, e);
+                }
             }
         }
 

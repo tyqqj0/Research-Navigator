@@ -64,33 +64,41 @@ export class BackendApiService {
     /**
      * 📚 获取论文详情
      */
-    async getPaper(paperId: string): Promise<LibraryItem> {
-        try {
-            const cacheKey = `paper_${paperId}`;
+    async getPaper(paperIdInput: string): Promise<LibraryItem> {
+        // 统一处理传入的 ID：既兼容已编码，也兼容未编码
+        const decodeSafe = (v: string) => {
+            try { return decodeURIComponent(v); } catch { return v; }
+        };
+        const normalizedId = decodeSafe(paperIdInput);
+        const needsEncoding = /^(DOI:|URL:)/i.test(normalizedId) || /\//.test(normalizedId);
+        const idForPath = needsEncoding ? encodeURIComponent(normalizedId) : normalizedId;
 
-            // 检查缓存
-            const cached = this.cache.get(cacheKey);
-            if (cached && Date.now() - cached.timestamp < 300000) { // 5分钟缓存
-                return cached.data;
-            }
+        const cacheKey = `paper_${normalizedId}`;
 
-            console.log('[BackendAPI] Fetching paper:', paperId);
-            const response = await this.apiRequest('GET', `/api/v1/paper/${paperId}`);
-            console.log('[BackendAPI] API Response:', response);
-            const literature = this.mapBackendToFrontend(response);
-            console.log('[BackendAPI] Mapped literature:', literature);
-
-            // 更新缓存
-            this.cache.set(cacheKey, {
-                data: literature,
-                timestamp: Date.now()
-            });
-
-            return literature;
-        } catch (error) {
-            console.error('[BackendAPI] Failed to get paper:', error);
-            throw new Error('Failed to get paper');
+        // 缓存命中
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < 300000) {
+            return cached.data;
         }
+        // 简单重试：最多 3 次，不做外部兜底
+        let lastError: any;
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+            try {
+                console.log('[BackendAPI] Fetching paper:', { input: paperIdInput, normalizedId, idForPath, attempt });
+                const response = await this.apiRequest('GET', `/api/v1/paper/${idForPath}`);
+                const literature = this.mapBackendToFrontend(response);
+                this.cache.set(cacheKey, { data: literature, timestamp: Date.now() });
+                return literature;
+            } catch (error: any) {
+                lastError = error;
+                // 固定短暂等待后重试
+                if (attempt < 3) {
+                    try { await new Promise(r => setTimeout(r, 150)); } catch { /* noop */ }
+                }
+            }
+        }
+        console.error('[BackendAPI] Failed to get paper after retries:', lastError);
+        throw new Error('Failed to get paper');
     }
 
     /**
@@ -346,7 +354,11 @@ export class BackendApiService {
         }
 
         try {
-            const response = await fetch(url, config);
+            const controller = new AbortController();
+            const timeoutMs = 15000; // 15s 上限，避免卡死
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
+            const response = await fetch(url, { ...config, signal: controller.signal });
+            clearTimeout(timeout);
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -356,7 +368,10 @@ export class BackendApiService {
             // console.log('[BackendAPI] API Response:', response);
 
             return await response.json();
-        } catch (error) {
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                throw new Error('Network timeout: Backend service did not respond in time');
+            }
             if (error instanceof TypeError && error.message.includes('fetch')) {
                 throw new Error('Network error: Unable to connect to backend service');
             }
