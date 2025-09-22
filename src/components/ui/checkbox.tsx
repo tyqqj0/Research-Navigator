@@ -11,7 +11,7 @@ const Checkbox = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>
 >(({ className, ...props }, ref) => {
   // 基础样式
-  const baseStyles = "peer h-4 w-4 shrink-0 rounded-sm"
+  const baseStyles = "ui-checkbox-root peer h-4 w-4 shrink-0 rounded-sm"
 
   // 边框和背景 - 这里可以调整边框颜色深度
   const borderStyles = "border-1 border-gray-200 bg-white"

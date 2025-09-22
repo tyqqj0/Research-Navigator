@@ -77,7 +77,7 @@ export function LiteratureListPanel({
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(limit || 3);
+    const [pageSize, setPageSize] = useState(limit || 6);
     const [sourceFilter, setSourceFilter] = useState<string>('all');
     const [yearFilter, setYearFilter] = useState<string>('all');
     const [pageInput, setPageInput] = useState<string>('1');

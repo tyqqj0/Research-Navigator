@@ -95,6 +95,52 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* 紧凑模式：降低字号与间距，提升信息密度 */
+.ui-compact {
+  --compact-text-xs: 11px;
+  --compact-text-sm: 12px;
+  --compact-text-md: 13px;
+  --compact-radius: 6px;
+  --compact-gap-sm: 6px;
+  --compact-gap-md: 8px;
+}
+
+.ui-compact .text-xs { font-size: var(--compact-text-xs); }
+.ui-compact .text-sm { font-size: var(--compact-text-sm); }
+.ui-compact .text-base { font-size: var(--compact-text-md); }
+
+/* 常见 shadcn 组件在紧凑模式下的内边距与高度 */
+.ui-compact .btn, .ui-compact .shad-button, .ui-compact button:not(.icon-button):not(.bookmark-shape):not(.ui-checkbox-root) {
+  line-height: 1.15;
+  padding-top: 6px; padding-bottom: 6px; padding-left: 10px; padding-right: 10px;
+  border-radius: var(--compact-radius);
+}
+.ui-compact input, .ui-compact .input, .ui-compact textarea, .ui-compact .textarea {
+  padding-top: 6px; padding-bottom: 6px;
+  border-radius: var(--compact-radius);
+}
+.ui-compact .card .card-header, .ui-compact .card-header {
+  padding-top: 6px; padding-bottom: 6px;
+}
+.ui-compact .card .card-content, .ui-compact .card-content {
+  padding-top: 8px; padding-bottom: 8px;
+}
+
+/* 书签形状按钮（用于面板开关） */
+.bookmark-shape {
+  /* 底部中心三角缺口形状 */
+  -webkit-clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), 50% 100%, 0 calc(100% - 8px));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), 50% 100%, 0 calc(100% - 8px));
+}
+
+/* 紧凑模式：图标按钮/特殊按钮重置（避免被全局 button 规则放大） */
+.ui-compact .icon-button,
+.ui-compact [data-compact-reset],
+.ui-compact .ui-checkbox-root {
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+
 /* ========== shadcn/ui 兼容性变量 ========== */
 /* 这些变量将由 ThemeProvider 直接设置，不需要映射 */
 

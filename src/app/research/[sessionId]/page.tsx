@@ -84,7 +84,7 @@ export default function ResearchSessionPage() {
         <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
             <div className="h-full flex relative">
                 {/* 子侧边栏：会话列表 */}
-                <div className="w-64 border-r bg-background p-3">
+                <div className="w-64 border-r bg-background p-3 h-[calc(100vh-4rem)]">
                     <div className="text-xs text-muted-foreground mb-2 px-1">会话</div>
                     <div className="space-y-1">
                         {sessions.map(s => (
@@ -113,7 +113,7 @@ export default function ResearchSessionPage() {
                     </div>
                 </div>
 
-                {/* 动态布局：未进入集合阶段前，聊天全宽；进入集合后三栏 */}
+                {/* 动态布局：根据阶段和用户开关决定单列/三列，并带过渡动画 */}
                 <DynamicSessionBody sessionId={sessionId!} getPaperSummary={getPaperSummary} graphId={graphId} onOpenDetail={openDetail} />
             </div>
             {/* 右侧上层覆盖的文献详情 Overlay：保持挂载以获得过渡动画 */}
@@ -132,26 +132,71 @@ export default function ResearchSessionPage() {
 
 function DynamicSessionBody({ sessionId, getPaperSummary, graphId, onOpenDetail }: { sessionId: string; getPaperSummary: any; graphId: any; onOpenDetail: (paperId: string) => void }) {
     const s = useSessionStore(state => state.sessions.get(sessionId));
-    const inCollection = Boolean(s?.meta && (s.meta as any).stage === 'collection');
-    if (!inCollection) {
-        return (
-            <div className="h-full flex-1 p-4">
-                <div className="h-[70vh]"><ChatPanel sessionId={sessionId} /></div>
-            </div>
-        );
-    }
+    const stage = (s?.meta as any)?.stage as string | undefined;
+    const meta = (s?.meta as any) || {};
+    const defaultOpen = stage === 'collection' || stage === 'reporting';
+    const metaOpen = meta.graphPanelOpen;
+    // 固定 open 判定逻辑，确保阶段切换后也触发布局过渡
+    const open = typeof metaOpen === 'boolean' ? metaOpen : defaultOpen;
+    // 监听阶段变化的时间戳，让网格在阶段变更时也走一遍过渡
+    const stageChangedAt = meta.stageChangedAt as number | undefined;
+    // 用一个无意义的 style 变量绑定时间戳，使 React 在变更时应用 transition
+    const stageKeyStyle = { ['--stageKey' as any]: (stageChangedAt || 0) as unknown as string } as React.CSSProperties;
+
     return (
-        <div className="h-full flex-1 grid grid-cols-12 gap-4 p-4">
-            {/* 略微加宽左侧对话栏 */}
-            <div className="col-span-12 md:col-span-4 h-[70vh]"><ChatPanel sessionId={sessionId} /></div>
-            <div className="col-span-12 md:col-span-5">
-                {graphId ? (
-                    <GraphCanvas graphId={graphId} getPaperSummary={getPaperSummary} layoutMode="timeline" height={'calc(100vh - 5rem)'} onNodeOpenDetail={(pid) => onOpenDetail(pid)} />
-                ) : (
-                    <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
-                )}
+        <div className="h-full flex-1 p-4">
+            <div
+                className="h-[calc(100vh-5rem)] grid"
+                style={{
+                    gridTemplateColumns: open ? '1.2fr 1.6fr 1fr' : '1fr 0fr 0fr',
+                    gap: open ? '1rem' : '0rem',
+                    transition: 'grid-template-columns 300ms ease-in-out, gap 300ms ease-in-out',
+                    ...stageKeyStyle
+                }}
+            >
+                {/* 左：对话栏 */}
+                <div className="min-w-0">
+                    <ChatPanel sessionId={sessionId} />
+                </div>
+
+                {/* 中：图谱 */}
+                <div
+                    className={cn('min-w-0 overflow-hidden')}
+                    style={{
+                        opacity: open ? 1 : 0,
+                        transform: open ? 'none' : 'translateX(8px)',
+                        pointerEvents: open ? 'auto' : 'none',
+                        transition: 'opacity 300ms ease-in-out, transform 300ms ease-in-out'
+                    }}
+                    aria-hidden={!open}
+                >
+                    {graphId ? (
+                        <GraphCanvas
+                            graphId={graphId}
+                            getPaperSummary={getPaperSummary}
+                            layoutMode="timeline"
+                            height={'calc(100vh - 5rem)'}
+                            onNodeOpenDetail={(pid) => onOpenDetail(pid)}
+                        />
+                    ) : (
+                        <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
+                    )}
+                </div>
+
+                {/* 右：集合列表 */}
+                <div
+                    className={cn('min-w-0 overflow-hidden')}
+                    style={{
+                        opacity: open ? 1 : 0,
+                        transform: open ? 'none' : 'translateX(8px)',
+                        pointerEvents: open ? 'auto' : 'none',
+                        transition: 'opacity 300ms ease-in-out, transform 300ms ease-in-out'
+                    }}
+                    aria-hidden={!open}
+                >
+                    <SessionCollectionPanel sessionId={sessionId} onOpenDetail={onOpenDetail} />
+                </div>
             </div>
-            <div className="col-span-12 md:col-span-3 h-[70vh]"><SessionCollectionPanel sessionId={sessionId} onOpenDetail={onOpenDetail} /></div>
         </div>
     );
 }

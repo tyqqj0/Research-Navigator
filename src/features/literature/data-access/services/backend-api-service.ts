@@ -126,7 +126,7 @@ export class BackendApiService {
             let fetched: LibraryItem[] = [];
             if (needFetch.length > 0) {
                 const response = await this.apiRequest('POST', '/api/v1/paper/batch', {
-                    paper_ids: needFetch
+                    ids: needFetch
                 });
 
                 const items = Array.isArray(response) ? response : (response.papers || response.items || []);

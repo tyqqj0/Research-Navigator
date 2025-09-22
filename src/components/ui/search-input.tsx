@@ -39,6 +39,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                     <button
                         type="button"
                         aria-label="清除搜索"
+                        data-compact-reset
                         className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"
                         onClick={onClear}
                     >

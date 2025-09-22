@@ -5,16 +5,20 @@ import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
 
 import { cn } from "@/lib/utils"
 
+// 用于收放时的过渡动画
+const transitionClass =
+  "transition-all duration-300 ease-in-out"; // 你可以根据需要调整动画时长和曲线
+
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
 >(({ className, children, ...props }, ref) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
-    className={cn("relative overflow-hidden", className)}
+    className={cn("relative overflow-hidden", transitionClass, className)}
     {...props}
   >
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
+    <ScrollAreaPrimitive.Viewport className={cn("h-full w-full rounded-[inherit]", transitionClass)}>
       {children}
     </ScrollAreaPrimitive.Viewport>
     <ScrollBar />
@@ -32,6 +36,7 @@ const ScrollBar = React.forwardRef<
     orientation={orientation}
     className={cn(
       "flex touch-none select-none transition-colors",
+      transitionClass,
       orientation === "vertical" &&
       "h-full w-2.5 border-l border-l-transparent p-[1px]",
       orientation === "horizontal" &&

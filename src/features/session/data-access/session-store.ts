@@ -11,6 +11,8 @@ interface SessionProjectionState {
     getMessages(sessionId: SessionId): ChatMessage[];
 
     upsertSession(s: ChatSession): void;
+    // 绑定集合ID（在投影层维护便捷方法）
+    bindSessionCollection(sessionId: SessionId, collectionId: string): void;
     renameSession(sessionId: SessionId, title: string): void;
     removeSession(sessionId: SessionId): void;
 
@@ -21,6 +23,11 @@ interface SessionProjectionState {
     // hydration
     loadSessionProjection(sessionId: SessionId): Promise<void>;
     loadAllSessions(): Promise<void>;
+
+    // UI meta helpers
+    setSessionMeta(sessionId: SessionId, patch: Record<string, unknown>): void;
+    setGraphPanelOpen(sessionId: SessionId, open: boolean): void;
+    toggleGraphPanel(sessionId: SessionId): void;
 }
 
 export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
@@ -48,6 +55,23 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
         if (!curr) return;
         const next = { ...curr, linkedCollectionId: collectionId, updatedAt: Date.now() } as ChatSession;
         get().upsertSession(next);
+    },
+    // 通用：更新会话的 meta（浅合并）
+    setSessionMeta(sessionId, patch) {
+        const curr = get().sessions.get(sessionId);
+        if (!curr) return;
+        const next = { ...curr, meta: { ...(curr.meta || {}), ...patch }, updatedAt: Date.now() } as ChatSession;
+        get().upsertSession(next);
+    },
+    // 设置/切换右侧图谱+集合面板开关
+    setGraphPanelOpen(sessionId, open) {
+        get().setSessionMeta(sessionId, { graphPanelOpen: open, graphPanelToggledAt: Date.now() });
+    },
+    toggleGraphPanel(sessionId) {
+        const curr = get().sessions.get(sessionId);
+        if (!curr) return;
+        const prevOpen = Boolean((curr.meta as any)?.graphPanelOpen);
+        get().setGraphPanelOpen(sessionId, !prevOpen);
     },
     renameSession(sessionId, title) {
         const curr = get().sessions.get(sessionId);

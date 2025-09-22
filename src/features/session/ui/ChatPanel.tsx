@@ -16,6 +16,7 @@ import { useLiteratureStore } from '@/features/literature/data-access/stores';
 import { DirectionProposalCard } from './DirectionProposalCard';
 import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { StreamCard } from '@/components/ui';
+import { ChevronLeft, X, Search, Send } from 'lucide-react';
 
 interface ChatPanelProps {
     sessionId: SessionId;
@@ -24,6 +25,7 @@ interface ChatPanelProps {
 export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
     const messages = useSessionStore(s => s.getMessages(sessionId));
     const session = useSessionStore(s => s.sessions.get(sessionId));
+    const toggleGraphPanel = useSessionStore(s => s.toggleGraphPanel);
     const [userInput, setUserInput] = React.useState('');
     const [deep, setDeep] = React.useState<boolean>(() => {
         try {
@@ -44,11 +46,33 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ToggleDeepResearch', ts: Date.now(), params: { sessionId, enabled } } as any);
     };
 
+    const isOpen = Boolean((session as any)?.meta?.graphPanelOpen);
     return (
-        <Card className="h-[calc(100vh-5rem)] flex flex-col">
+        <Card className="relative h-[calc(100vh-5rem)] flex flex-col">
+            {/* 右上角书签形按钮：收起为向左箭头，展开为小叉 */}
+            <button
+                type="button"
+                onClick={() => toggleGraphPanel(sessionId)}
+                className={cn(
+                    'bookmark-shape icon-button absolute right-0 top-3 translate-x-1/2 z-20 flex items-center justify-center',
+                    'w-7 h-9 shadow-sm',
+                    isOpen
+                        ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                        : 'bg-blue-600 text-white'
+                )}
+                aria-label={isOpen ? '隐藏图谱/集合面板' : '显示图谱/集合面板'}
+                title={isOpen ? '隐藏图谱/集合面板' : '显示图谱/集合面板'}
+            >
+                {isOpen ? (
+                    <X className="w-4 h-4" />
+                ) : (
+                    <ChevronLeft className="w-4 h-4" />
+                )}
+            </button>
+
             <CardHeader className="py-2 flex items-center justify-between">
                 <CardTitle className="text-sm">对话{(session?.meta as any)?.stage === 'collection' ? ' · 集合阶段' : ''}</CardTitle>
-                {/* <DeepResearchPill enabled={deep} onToggle={toggleDeep} />=-0 */}
+                {/* <DeepResearchPill enabled={deep} onToggle={toggleDeep} /> */}
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
                 <div className="flex-1 overflow-auto divide-y">
@@ -227,7 +251,7 @@ const ComposerBar: React.FC<{
                         deep ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-muted text-muted-foreground border-transparent'
                     )}
                 >
-                    <span className="i-lucide-search w-3 h-3" />
+                    <Search className="w-3 h-3" />
                     <span>Deep Research</span>
                 </button>
                 <Input
@@ -238,7 +262,7 @@ const ComposerBar: React.FC<{
                     onKeyDown={onKeyDown}
                 />
                 <Button size="sm" className="absolute right-2" onClick={onSend}>
-                    <span className="i-lucide-send w-4 h-4" />
+                    <Send className="w-4 h-4" />
                 </Button>
             </div>
         </div>
@@ -260,7 +284,7 @@ const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
     };
     return (
         <Card className="border rounded-md">
-            <CardHeader className="py-2">
+            <CardHeader className="py-2" variant="blue">
                 <CardTitle className="text-sm">需要决定</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">

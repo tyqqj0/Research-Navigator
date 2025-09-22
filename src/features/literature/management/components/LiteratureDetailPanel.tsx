@@ -344,18 +344,18 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
         }, [open, onOpenChange]);
 
         return (
-            <div className="absolute inset-0 z-40 pointer-events-none">
+            <div className="fixed inset-0 z-40 pointer-events-none overflow-hidden">
                 {/* 背景蒙层：保持挂载 + 过渡 */}
                 <div
                     className={
-                        `absolute inset-0 transition-opacity duration-300 ${open ? 'opacity-100 pointer-events-auto bg-background/50 backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`
+                        `absolute inset-0 transition-opacity duration-300 ease-in-out ${open ? 'opacity-100 pointer-events-auto bg-background/50 backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`
                     }
                     onClick={() => onOpenChange(false)}
                 />
                 {/* 右侧抽屉面板：保持挂载 + 平移动画 */}
-                <div className="absolute inset-y-0 right-0 pointer-events-none">
+                <div className="absolute inset-y-0 right-0 pointer-events-none overflow-hidden">
                     <div
-                        className={`w-[38rem] max-w-[90vw] h-full transform transition-transform duration-300 shadow-xl ${open ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none'}`}
+                        className={`w-[38rem] max-w-[90vw] h-full transform-gpu will-change-transform transition-transform duration-300 ease-in-out shadow-xl ${open ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none'}`}
                     >
                         <div className="h-full w-full border-l border-border theme-background-primary flex flex-col">
                             <div className="px-4 py-3 border-b sticky top-0 z-10 theme-background-primary">

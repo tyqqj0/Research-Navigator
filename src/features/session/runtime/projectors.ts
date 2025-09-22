@@ -125,7 +125,18 @@ export function applyEventToProjection(e: SessionEvent) {
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
             if (s) {
-                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), confirmed: true, version: e.payload.version, spec: e.payload.directionSpec }, stage: 'collection' }, updatedAt: e.ts } as any;
+                const next = {
+                    ...s,
+                    meta: {
+                        ...s.meta,
+                        direction: { ...(s.meta?.direction || {}), confirmed: true, version: e.payload.version, spec: e.payload.directionSpec },
+                        stage: 'collection',
+                        // 阶段切换为集合时：默认展开右侧面板
+                        graphPanelOpen: true,
+                        stageChangedAt: e.ts
+                    },
+                    updatedAt: e.ts
+                } as any;
                 store.upsertSession(next);
             }
         } catch { /* ignore */ }
@@ -301,7 +312,19 @@ export function applyEventToProjection(e: SessionEvent) {
             if (s) {
                 const prevReport = ((s.meta as any)?.report) || {};
                 const reportMeta = { ...prevReport, [e.payload.messageId]: { citeKeys: e.payload.citeKeys, bibtexByKey: e.payload.bibtexByKey } };
-                const next = { ...s, meta: { ...s.meta, report: reportMeta, stage: 'reporting', graphDecision: { ...((s.meta as any)?.graphDecision || {}), awaiting: false, locked: true } }, updatedAt: e.ts } as any;
+                const next = {
+                    ...s,
+                    meta: {
+                        ...s.meta,
+                        report: reportMeta,
+                        stage: 'reporting',
+                        graphDecision: { ...((s.meta as any)?.graphDecision || {}), awaiting: false, locked: true },
+                        // 报告阶段：保持展开，确保图谱/列表可见
+                        graphPanelOpen: true,
+                        stageChangedAt: e.ts
+                    },
+                    updatedAt: e.ts
+                } as any;
                 store.upsertSession(next);
             }
         } catch { /* ignore */ }
