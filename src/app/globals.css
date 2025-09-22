@@ -130,11 +130,9 @@ body {
 }
 
 /* ========== 动画和过渡 ========== */
-* {
-  transition-property: color, background-color, border-color, box-shadow;
-  transition-duration: 0.2s;
-  transition-timing-function: ease-in-out;
-}
+/* 注意：不要在全局设置 transition-property/duration，避免覆盖局部的
+   transition-opacity / transition-transform 等类，导致动画不生效。 */
+/* 如需默认过渡，请在具体元素/组件上使用 Tailwind 的 transition-* 类。 */
 
 /* ========== 滚动条主题 ========== */
 ::-webkit-scrollbar {

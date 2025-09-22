@@ -8,7 +8,7 @@ import { useCollectionStore, useLiteratureStore } from '@/features/literature/da
 import { useCollectionOperations } from '@/features/literature/hooks/use-collection-operations';
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
 
-export const SessionCollectionPanel: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
+export const SessionCollectionPanel: React.FC<{ sessionId: SessionId; onOpenDetail?: (paperId: string) => void }> = ({ sessionId, onOpenDetail }) => {
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const cid = session?.linkedCollectionId || null;
 
@@ -44,7 +44,15 @@ export const SessionCollectionPanel: React.FC<{ sessionId: SessionId }> = ({ ses
     const loading = !collection && !!cid;
 
     return (
-        <LiteratureListPanel showControls={true} showPagination={true} literatures={items as any} isLoading={loading} />
+        <LiteratureListPanel
+            showControls={true}
+            showPagination={true}
+            literatures={items as any}
+            isLoading={loading}
+            onItemClick={(item) => {
+                try { onOpenDetail?.(item.literature.paperId); } catch { /* noop */ }
+            }}
+        />
     );
 };
 

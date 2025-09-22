@@ -8,6 +8,7 @@ import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMe
 import { ChatPanel } from '@/features/session/ui/ChatPanel';
 import { SessionCollectionPanel } from '@/features/session/ui/SessionCollectionPanel';
 import { GraphCanvas } from '@/features/graph/editor/canvas/GraphCanvas';
+import { LiteratureDetailPanel } from '@/features/literature/management/components/LiteratureDetailPanel';
 import { usePaperCatalog } from '@/features/graph/editor/paper-catalog';
 // 激活 orchestrators
 import '@/features/session/runtime/orchestrator/chat.orchestrator';
@@ -63,9 +64,25 @@ export default function ResearchSessionPage() {
     const current = useSessionStore(state => state.sessions.get(sessionId!));
     const graphId = (current?.meta as any)?.graphId;
 
+    const [detailOpen, setDetailOpen] = React.useState(false);
+    const [activePaperId, setActivePaperId] = React.useState<string | undefined>(undefined);
+
+    const openDetail = React.useCallback((paperId?: string) => {
+        if (!paperId) return;
+        setActivePaperId(paperId);
+        setDetailOpen(true);
+    }, []);
+
+    React.useEffect(() => {
+        if (!detailOpen) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetailOpen(false); };
+        window.addEventListener('keydown', onKey);
+        return () => { window.removeEventListener('keydown', onKey); };
+    }, [detailOpen]);
+
     return (
         <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
-            <div className="h-full flex">
+            <div className="h-full flex relative">
                 {/* 子侧边栏：会话列表 */}
                 <div className="w-64 border-r bg-background p-3">
                     <div className="text-xs text-muted-foreground mb-2 px-1">会话</div>
@@ -97,13 +114,23 @@ export default function ResearchSessionPage() {
                 </div>
 
                 {/* 动态布局：未进入集合阶段前，聊天全宽；进入集合后三栏 */}
-                <DynamicSessionBody sessionId={sessionId!} getPaperSummary={getPaperSummary} graphId={graphId} />
+                <DynamicSessionBody sessionId={sessionId!} getPaperSummary={getPaperSummary} graphId={graphId} onOpenDetail={openDetail} />
             </div>
+            {/* 右侧上层覆盖的文献详情 Overlay：保持挂载以获得过渡动画 */}
+            <LiteratureDetailPanel
+                open={detailOpen}
+                onOpenChange={setDetailOpen}
+                paperId={activePaperId}
+                onUpdated={() => { }}
+                variant="overlay"
+                defaultCollectionId={current?.linkedCollectionId || undefined}
+            />
+
         </MainLayout>
     );
 }
 
-function DynamicSessionBody({ sessionId, getPaperSummary, graphId }: { sessionId: string; getPaperSummary: any; graphId: any }) {
+function DynamicSessionBody({ sessionId, getPaperSummary, graphId, onOpenDetail }: { sessionId: string; getPaperSummary: any; graphId: any; onOpenDetail: (paperId: string) => void }) {
     const s = useSessionStore(state => state.sessions.get(sessionId));
     const inCollection = Boolean(s?.meta && (s.meta as any).stage === 'collection');
     if (!inCollection) {
@@ -119,12 +146,12 @@ function DynamicSessionBody({ sessionId, getPaperSummary, graphId }: { sessionId
             <div className="col-span-12 md:col-span-4 h-[70vh]"><ChatPanel sessionId={sessionId} /></div>
             <div className="col-span-12 md:col-span-5">
                 {graphId ? (
-                    <GraphCanvas graphId={graphId} getPaperSummary={getPaperSummary} layoutMode="timeline" height={'calc(100vh - 5rem)'} />
+                    <GraphCanvas graphId={graphId} getPaperSummary={getPaperSummary} layoutMode="timeline" height={'calc(100vh - 5rem)'} onNodeOpenDetail={(pid) => onOpenDetail(pid)} />
                 ) : (
                     <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
                 )}
             </div>
-            <div className="col-span-12 md:col-span-3 h-[70vh]"><SessionCollectionPanel sessionId={sessionId} /></div>
+            <div className="col-span-12 md:col-span-3 h-[70vh]"><SessionCollectionPanel sessionId={sessionId} onOpenDetail={onOpenDetail} /></div>
         </div>
     );
 }

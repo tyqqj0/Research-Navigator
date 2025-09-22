@@ -20,7 +20,7 @@ interface LiteratureDetailPanelProps {
     paperId?: string;
     item?: EnhancedLibraryItem;
     onUpdated?: (updated: boolean) => void;
-    variant?: 'modal' | 'side';
+    variant?: 'modal' | 'side' | 'overlay';
     /** 默认添加到的集合ID（从页面/上下文传入） */
     defaultCollectionId?: string;
 }
@@ -333,6 +333,47 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
         </div>
     );
 
+    // Overlay 变体：在组件内部处理蒙层与进出场动画（保持挂载以获得过渡效果）
+    if (variant === 'overlay') {
+        // Esc 关闭（仅 overlay 变体需要在内部处理）
+        useEffect(() => {
+            if (!open) return;
+            const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onOpenChange(false); };
+            window.addEventListener('keydown', onKey);
+            return () => { window.removeEventListener('keydown', onKey); };
+        }, [open, onOpenChange]);
+
+        return (
+            <div className="absolute inset-0 z-40 pointer-events-none">
+                {/* 背景蒙层：保持挂载 + 过渡 */}
+                <div
+                    className={
+                        `absolute inset-0 transition-opacity duration-300 ${open ? 'opacity-100 pointer-events-auto bg-background/50 backdrop-blur-sm' : 'opacity-0 pointer-events-none'}`
+                    }
+                    onClick={() => onOpenChange(false)}
+                />
+                {/* 右侧抽屉面板：保持挂载 + 平移动画 */}
+                <div className="absolute inset-y-0 right-0 pointer-events-none">
+                    <div
+                        className={`w-[38rem] max-w-[90vw] h-full transform transition-transform duration-300 shadow-xl ${open ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none'}`}
+                    >
+                        <div className="h-full w-full border-l border-border theme-background-primary flex flex-col">
+                            <div className="px-4 py-3 border-b sticky top-0 z-10 theme-background-primary">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-base font-semibold">文献详情</div>
+                                    <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} aria-label="关闭">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </Button>
+                                </div>
+                            </div>
+                            <div className="flex-1 min-h-0">{Body}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (!currentItem) {
         return variant === 'modal' ? (
             <Dialog open={open} onOpenChange={onOpenChange}>
@@ -350,8 +391,8 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
 
     if (variant === 'side') {
         return (
-            <div className="h-full w-full border-l border-border bg-background flex flex-col">
-                <div className="px-4 py-3 border-b sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+            <div className="h-full w-full border-l border-border theme-background-primary flex flex-col">
+                <div className="px-4 py-3 border-b sticky top-0 z-10 theme-background-primary">
                     <div className="flex items-center justify-between">
                         <div className="text-base font-semibold">文献详情</div>
                         <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} aria-label="关闭">

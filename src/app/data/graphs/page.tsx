@@ -35,6 +35,14 @@ export default function GraphPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Esc 关闭 overlay
+    useEffect(() => {
+        if (!detailOpen) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetailOpen(false); };
+        window.addEventListener('keydown', onKey);
+        return () => { window.removeEventListener('keydown', onKey); };
+    }, [detailOpen]);
+
     // load selected graph explicitly to avoid No target graph after refresh
     useEffect(() => {
         let cancelled = false;
@@ -65,7 +73,7 @@ export default function GraphPage() {
                 <div className="p-4 h-full relative">
                     {/* 使用 grid 并通过自定义比例分配三栏宽度 */}
                     <div
-                        className={`grid gap-4 transition-all duration-300 ${detailOpen ? 'pr-[38rem]' : ''}`}
+                        className={`grid gap-4 transition-all duration-300`}
                         style={{
                             display: 'grid',
                             gridTemplateColumns: '1fr 2.5fr 1.5fr', // 左:中:右 = 1:2.5:1.5
@@ -119,25 +127,15 @@ export default function GraphPage() {
                             />
                         </div>
                     </div>
-                    {/* 右侧详情面板，依然绝对定位避免遮挡 header */}
-                    <div className="absolute inset-y-0 right-0 z-20 pointer-events-none">
-                        <div className="h-full">
-                            {detailOpen && (
-                                <div className="w-[38rem] max-w-[90vw] h-full transform transition-transform duration-300 shadow-xl pointer-events-auto"
-                                    style={{ transform: detailOpen ? 'translateX(0)' : 'translateX(100%)' }}>
-                                    <LiteratureDetailPanel
-                                        open={detailOpen}
-                                        onOpenChange={setDetailOpen}
-                                        paperId={activePaperId}
-                                        onUpdated={() => { }}
-                                        variant="side"
-                                        // 图谱页右侧通常配合集合树使用：此处暂无选中集合上下文，传 undefined
-                                        defaultCollectionId={undefined}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    {/* 右侧详情 Overlay：保持挂载以获得过渡动画 */}
+                    <LiteratureDetailPanel
+                        open={detailOpen}
+                        onOpenChange={setDetailOpen}
+                        paperId={activePaperId}
+                        onUpdated={() => { }}
+                        variant="overlay"
+                        defaultCollectionId={undefined}
+                    />
                 </div>
             </MainLayout>
         </RequireAuth>

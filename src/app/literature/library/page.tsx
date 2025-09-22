@@ -147,6 +147,14 @@ export default function LibraryPage() {
         setDetailOpen(true);
     }, []);
 
+    // Esc 关闭
+    useEffect(() => {
+        if (!detailOpen) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetailOpen(false); };
+        window.addEventListener('keydown', onKey);
+        return () => { window.removeEventListener('keydown', onKey); };
+    }, [detailOpen]);
+
     // 稳定的可见ID变更处理，避免父组件每次渲染导致子组件effect重复触发
     const handleVisibleIdsChange = useCallback((ids: string[]) => {
         setVisiblePaperIds(prev => {
@@ -253,7 +261,7 @@ export default function LibraryPage() {
         <RequireAuth>
             <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
                 <div className="p-0 h-full relative">
-                    <div className={`grid grid-cols-1 xl:grid-cols-6 gap-0 h-full transition-all duration-300 ${detailOpen ? 'pr-[38rem]' : ''}`}>
+                    <div className={`grid grid-cols-1 xl:grid-cols-6 gap-0 h-full transition-all duration-300`}>
                         {/* 左侧：集合树 */}
                         <div className="hidden xl:block xl:col-span-1 border-r border-border h-full">
                             <div className="p-6 h-full overflow-y-auto">
@@ -394,24 +402,15 @@ export default function LibraryPage() {
                             </div>
                         </div>
                     </div>
-                    {/* 侧边详情面板：限制在内容区域内，不覆盖顶端页头（关闭后卸载，保留进/退场动画） */}
-                    <div className="absolute inset-y-0 right-0 z-30 pointer-events-none">
-                        <div className="h-full">
-                            {detailOpen && (
-                                <div className="w-[38rem] max-w-[90vw] h-full transform transition-transform duration-300 shadow-xl pointer-events-auto"
-                                    style={{ transform: detailOpen ? 'translateX(0)' : 'translateX(100%)' }}>
-                                    <LiteratureDetailPanel
-                                        open={detailOpen}
-                                        onOpenChange={setDetailOpen}
-                                        paperId={activePaperId}
-                                        onUpdated={() => { }}
-                                        variant="side"
-                                        defaultCollectionId={selectedCollectionId || undefined}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    {/* 右侧上层覆盖的文献详情 Overlay：保持挂载以获得过渡动画 */}
+                    <LiteratureDetailPanel
+                        open={detailOpen}
+                        onOpenChange={setDetailOpen}
+                        paperId={activePaperId}
+                        onUpdated={() => { }}
+                        variant="overlay"
+                        defaultCollectionId={selectedCollectionId || undefined}
+                    />
                 </div>
             </MainLayout>
             {/* 删除确认框（全库上下文） */}
