@@ -152,32 +152,40 @@ const SearchCandidatesCard: React.FC<{ sessionId: SessionId; artifactId: string 
     }
     return (
         <Card className="border rounded-md ">
-            <CardHeader className="py-2">
+            <CardHeader className="py-2" variant="purple">
                 <div className="flex items-center justify-between cursor-pointer" onClick={() => setOpen(o => !o)}>
                     <CardTitle className="text-sm">搜索：{data.query}</CardTitle>
                     <div className="text-xs text-muted-foreground">{open ? '收起' : '展开'}</div>
                 </div>
             </CardHeader>
-            {open && (
-                <CardContent className="space-y-2 ">
-                    {data.candidates.map((c: any) => (
-                        <div key={c.id} className="p-2 border rounded flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                                <div className="text-sm font-medium truncate">{c.title || c.sourceUrl}</div>
-                                <div className="text-[11px] text-muted-foreground truncate">{c.site}</div>
-                                {/* <div className="text-[12px] line-clamp-2 mt-1">{c.snippet}</div> */}
-                                <div className="text-[11px] mt-1 flex items-center gap-2 flex-wrap">
-                                    {c.bestIdentifier && (
-                                        <span className="px-1.5 py-0.5 rounded bg-muted">{c.bestIdentifier}</span>
-                                    )}
-                                    <a className="text-blue-600 hover:underline" href={c.sourceUrl} target="_blank" rel="noreferrer">来源</a>
+            <div
+                className={cn(
+                    'grid transition-all duration-300 ease-in-out',
+                    open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                )}
+                aria-hidden={!open}
+            >
+                <div className="overflow-hidden">
+                    <CardContent className="space-y-2 ">
+                        {data.candidates.map((c: any) => (
+                            <div key={c.id} className="p-2 border rounded flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-medium truncate">{c.title || c.sourceUrl}</div>
+                                    <div className="text-[11px] text-muted-foreground truncate">{c.site}</div>
+                                    {/* <div className="text-[12px] line-clamp-2 mt-1">{c.snippet}</div> */}
+                                    <div className="text-[11px] mt-1 flex items-center gap-2 flex-wrap">
+                                        {c.bestIdentifier && (
+                                            <span className="px-1.5 py-0.5 rounded bg-muted">{c.bestIdentifier}</span>
+                                        )}
+                                        <a className="text-blue-600 hover:underline" href={c.sourceUrl} target="_blank" rel="noreferrer">来源</a>
+                                    </div>
                                 </div>
+                                {/* Chat 中不提供入库按钮，自动入库由 orchestrator 负责 */}
                             </div>
-                            {/* Chat 中不提供入库按钮，自动入库由 orchestrator 负责 */}
-                        </div>
-                    ))}
-                </CardContent>
-            )}
+                        ))}
+                    </CardContent>
+                </div>
+            </div>
         </Card>
     );
 };
@@ -286,8 +294,8 @@ const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) =>
                 <CardTitle className="text-sm">需要确认</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-                <div className="text-sm">是否接受当前图谱？（节点 {info.nodes ?? '-'}，边 {info.edges ?? '-'}）</div>
-                <div className="text-xs text-muted-foreground">可随时手动修改/添加节点</div>
+                <div className="text-md mb-2">是否接受当前图谱？（节点 {info.nodes ?? '-'}，边 {info.edges ?? '-'}）</div>
+                <div className="text-xs text-muted-foreground mb-3">可随时手动修改/添加节点</div>
                 <div className="flex gap-2">
                     <Button size="sm" onClick={onGenerate} disabled={locked}>生成报告</Button>
                     <Input className="max-w-sm" placeholder="输入补充/扩展建议（可选）" value={suggestion} onChange={(e) => setSuggestion(e.target.value)} disabled={locked} />

@@ -56,7 +56,7 @@ const cardHeaderVariants = cva(
 
 // CardContent 变体样式配置，比 CardHeader 整体浅一点，并多一个 rounded 变体
 const cardContentVariants = cva(
-  "p-6 pt-0", 
+  "p-6 pt-0 mt-4",
   {
     variants: {
       variant: {
@@ -131,7 +131,7 @@ CardDescription.displayName = "CardDescription"
 const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof cardContentVariants>
->(({ className, variant, rounded, ...props  }, ref) => (
+>(({ className, variant, rounded, ...props }, ref) => (
   <div ref={ref} className={cn(cardContentVariants({ variant, rounded }), className)} {...props} />
 ))
 CardContent.displayName = "CardContent"
