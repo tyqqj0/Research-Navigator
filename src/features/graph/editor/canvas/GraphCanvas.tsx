@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-// physics extracted
-import { useTimelinePhysics } from './physics/useTimelinePhysics';
+import * as d3 from 'd3-force';
+import { getTimelinePhysicsSettings } from './physics/settings';
 import TimelineAxis from './TimelineAxis';
 import { useGraphStore } from '@/features/graph/data-access/graph-store';
 import type { GraphDataSource, GraphSnapshot } from '@/features/graph/data-access';
@@ -39,7 +39,7 @@ export interface GraphCanvasRef {
 
 type Pos = { x: number; y: number };
 
-// SimNode type moved into physics module
+type SimNode = { id: string; x: number; y: number; vx?: number; vy?: number; fx?: number | null; fy?: number | null };
 
 export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((props, ref) => {
     const { graphId, getPaperSummary, onNodeOpenDetail, layoutMode = 'free', dataSource, className, style, height, axisWidth, densityWidth, edgeHitbox, handleBaseSize, nodeRenderer, onNodeSelect, onEdgeSelect, onEdgeCreate, onViewportChange } = props;
@@ -91,7 +91,11 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     const userScrolledRef = useRef<boolean>(false);
     const programmaticScrollRef = useRef<boolean>(false);
 
-    // physics handled by useTimelinePhysics
+    // physics simulation refs
+    const simRef = useRef<d3.Simulation<SimNode, any> | null>(null);
+    const simNodesRef = useRef<SimNode[]>([]);
+    const rafRef = useRef<number | null>(null);
+    const draggingRef = useRef<{ id: string } | null>(null);
 
     // edge context menu / editor state
     const [edgeMenu, setEdgeMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null);
@@ -335,22 +339,113 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
         });
     }, [nodes, layoutMode, getPaperSummary, timeline]);
 
-    // ----- physics simulation (timeline mode) moved to hook -----
-    const physics = useTimelinePhysics({
-        enabled: internalLayoutMode === 'timeline',
-        nodes,
-        edges,
-        nodeUiMode: nodeUi.mode,
-        containerRef,
-        leftAxisWidth: LEFT_AXIS_WIDTH,
-        nodeStartOffsetX: NODE_START_OFFSET_X,
-        getTargetY: (id: string) => {
-            const s = getPaperSummary?.(id);
-            return s ? timeline.yFromSummary(s) : timeline.paddingTop + timeline.trackHeight / 2;
-        },
-        initialPositions: nodePos,
-        onPositions: (latest) => setNodePos(latest),
-    });
+    // ----- physics simulation (timeline mode) -----
+    React.useEffect(() => {
+        if (internalLayoutMode !== 'timeline' || !nodes.length) {
+            if (simRef.current) { simRef.current.stop(); simRef.current = null; simNodesRef.current = []; }
+            return;
+        }
+        const cw = containerRef.current?.clientWidth ?? 1000;
+        const centerX = Math.max(LEFT_AXIS_WIDTH + NODE_START_OFFSET_X + 140, cw * 0.52);
+        const simNodes: SimNode[] = nodes.map((n, idx) => {
+            const pos = nodePos[n.id];
+            const summary = getPaperSummary?.(n.id);
+            const y = summary ? timeline.yFromSummary(summary) : (60 + idx * 20);
+            const x = pos?.x ?? (LEFT_AXIS_WIDTH + NODE_START_OFFSET_X + (idx % 6) * 160);
+            return { id: n.id, x, y };
+        });
+        const links = edges.map(e => ({ source: e.from, target: e.to }));
+
+        // stop previous
+        if (simRef.current) { simRef.current.stop(); simRef.current = null; }
+        simNodesRef.current = simNodes;
+
+        // settings from shared module
+        const SETTINGS = getTimelinePhysicsSettings(nodeUi.mode);
+
+        const sim = d3.forceSimulation(simNodes as any)
+            .force('link', d3.forceLink(simNodes as any)
+                .id((d: any) => (d as SimNode).id)
+                .links(links as any)
+                .distance(SETTINGS.link.distance)
+                .strength(SETTINGS.link.strength)
+            )
+            .force('charge', d3.forceManyBody().strength(SETTINGS.charge))
+            .force('collision', d3.forceCollide().radius(SETTINGS.collisionRadius))
+            .force('x', d3.forceX(centerX).strength(SETTINGS.centerXStrength))
+            // Y is handled manually in tick to keep node-node interactions X-only
+            // 左右边界斥力：靠近边缘时推回（仅影响 X）
+            .force('left-bound', d3.forceX((d: any) => {
+                const x = (d as SimNode).x || 0;
+                const bound = LEFT_AXIS_WIDTH + 8;
+                return x < bound ? bound : x;
+            }).strength(0.1))
+            .force('right-bound', d3.forceX((d: any) => {
+                const w = containerRef.current?.clientWidth ?? 1200;
+                const margin = 14;
+                const x = (d as SimNode).x || 0;
+                const target = w - margin;
+                return x > target ? target : x;
+            }).strength(0.1))
+            .alpha(1)
+            .alphaDecay(0.05)
+            .velocityDecay(0.4)
+            .on('tick', () => {
+                if (rafRef.current != null) return;
+                rafRef.current = requestAnimationFrame(() => {
+                    rafRef.current = null;
+                    // clamp to horizontal bounds to avoid nodes running outside the canvas
+                    const el = containerRef.current;
+                    const w = el?.clientWidth ?? 1200;
+                    const minX = LEFT_AXIS_WIDTH + 16;
+                    const maxX = Math.max(minX + 80, w - 16);
+                    for (const sn of simNodesRef.current) {
+                        if (sn.x < minX) { sn.x = minX; if (typeof sn.vx === 'number') sn.vx = Math.max(0, sn.vx) * 0.1; }
+                        if (sn.x > maxX) { sn.x = maxX; if (typeof sn.vx === 'number') sn.vx = Math.min(0, sn.vx) * 0.1; }
+                    }
+                    // Manual Y dynamics per desired behavior
+                    const dragging = draggingRef.current;
+                    const draggedNode = dragging ? simNodesRef.current.find(n => n.id === dragging.id) : null;
+                    const xr = SETTINGS.dragYRepel.xRadius;
+                    const yr = SETTINGS.dragYRepel.yRadius;
+                    const pushBase = SETTINGS.dragYRepelPush;
+                    const ySpring = dragging ? SETTINGS.ySpringDragging : SETTINGS.ySpringRelease;
+                    for (const sn of simNodesRef.current) {
+                        if (draggedNode && sn.id === draggedNode.id) continue; // dragged node's y is controlled by mouse (fy)
+                        const sum = getPaperSummary?.(sn.id);
+                        const targetY = sum ? timeline.yFromSummary(sum) : timeline.paddingTop + timeline.trackHeight / 2;
+                        let newY = sn.y + ySpring * (targetY - sn.y);
+                        if (draggedNode) {
+                            const dx = Math.abs(sn.x - draggedNode.x);
+                            if (dx <= xr) {
+                                const dy = sn.y - draggedNode.y;
+                                const ady = Math.abs(dy);
+                                if (ady <= yr && ady > 0.001) {
+                                    const wx = 1 - dx / xr;
+                                    const wy = 1 - ady / yr;
+                                    newY += pushBase * wx * wy * (dy >= 0 ? 1 : -1);
+                                }
+                            }
+                        }
+                        sn.y = newY;
+                        sn.vy = 0; // ensure other forces do not create Y motion
+                    }
+                    const latest = Object.fromEntries(simNodesRef.current.map(n => [n.id, { x: n.x, y: n.y } as Pos]));
+                    setNodePos(latest);
+                });
+            });
+        simRef.current = sim as any;
+
+        // 初始化：清零 Y 速度，交由手动 Y 动力学驱动
+        for (const sn of simNodesRef.current) { sn.vy = 0; }
+        sim.alpha(0.9).restart();
+
+        return () => {
+            sim.stop();
+            if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [layoutMode, nodes, edges, timeline.minDate, timeline.maxDate, timelineScale]);
 
     const handleDrop = useCallback(async (e: React.DragEvent) => {
         e.preventDefault();
@@ -398,15 +493,17 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
         const pos: Pos = { x: e.clientX - rect.left + container.scrollLeft, y: e.clientY - rect.top + container.scrollTop };
         const current = nodePos[id] || { x: pos.x, y: pos.y };
         setDrag({ id, offset: { x: pos.x - current.x, y: pos.y - current.y } });
-        // inform physics
-        if (internalLayoutMode === 'timeline') {
-            const startAt = { x: current.x, y: current.y };
-            physics.startDrag(id, startAt);
-        }
+        draggingRef.current = { id };
         setSelectedNodeId(id);
         setSelectedEdgeId(null);
 
-        // physics hook handles internals
+        // 拖动开始：解锁其他节点的显式 Y 锁，允许纵向排斥生效；被拖动节点跟随指针
+        if (internalLayoutMode === 'timeline' && simRef.current) {
+            const sn = simNodesRef.current.find(n => n.id === id);
+            if (sn) { sn.fx = current.x; sn.fy = current.y; }
+            for (const n of simNodesRef.current) { if (n.id !== id) { n.fy = null; } n.vy = 0; }
+            simRef.current.alpha(0.3).restart();
+        }
     };
 
     const onMouseMove = (e: React.MouseEvent) => {
@@ -422,8 +519,15 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
             container.scrollTop = panning.scrollTop - dy;
         }
         if (drag) {
-            if (internalLayoutMode === 'timeline') {
-                physics.moveDragTo({ x: contentPos.x - drag.offset.x, y: contentPos.y - drag.offset.y });
+            if (internalLayoutMode === 'timeline' && simRef.current) {
+                const sim = simRef.current;
+                const sn = simNodesRef.current.find(n => n.id === drag.id);
+                if (sn) {
+                    sn.fx = contentPos.x - drag.offset.x;
+                    // 允许拖动节点自由上下移动（不贴合发表时间线）
+                    sn.fy = contentPos.y - drag.offset.y;
+                    sim.alpha(0.3).restart();
+                }
             } else {
                 setNodePos((prev) => ({ ...prev, [drag.id]: { x: contentPos.x - drag.offset.x, y: contentPos.y - drag.offset.y } }));
             }
@@ -434,10 +538,15 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     };
 
     const onMouseUp = () => {
-        if (drag && internalLayoutMode === 'timeline') {
-            physics.endDrag();
+        if (drag && simRef.current) {
+            const sn = simNodesRef.current.find(n => n.id === drag.id);
+            if (sn) { sn.fx = null; sn.fy = null; }
+            // 释放所有节点的 fy；清空纵向速度，接下来由手动 Y 动力学生效
+            for (const n of simNodesRef.current) { n.fy = null; n.vy = 0; }
+            simRef.current.alpha(0.25).restart();
         }
         setDrag(null);
+        draggingRef.current = null;
         setLinking((l) => l ? { ...l, current: l.current } : null);
         setPanning(null);
     };
