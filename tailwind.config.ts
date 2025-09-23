@@ -40,7 +40,8 @@ const config: Config = {
             },
         },
     },
-    plugins: [require("tailwindcss-animate")],
+    // Tailwind v4: use `@plugin "tailwindcss-animate";` in CSS instead of config plugins
+    plugins: [],
 }
 
 export default config

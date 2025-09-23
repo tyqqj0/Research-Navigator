@@ -105,12 +105,7 @@ export function applyEventToProjection(e: SessionEvent) {
         return;
     }
     if (e.type === 'DirectionDecisionRecorded') {
-        // append a small system note
-        const sid = e.sessionId!;
-        const msgId = `decision_${e.payload.version}_${e.id}`;
-        const text = e.payload.action === 'confirm' ? '已确认方向。' : e.payload.action === 'refine' ? `请求细化：${e.payload.feedback || ''}` : '已取消方向。';
-        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: text, status: 'done', createdAt: e.ts });
-        // clear awaiting flag
+        // clear awaiting flag only (suppress system message)
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
             if (s) {
@@ -123,9 +118,7 @@ export function applyEventToProjection(e: SessionEvent) {
     }
     if (e.type === 'DirectionConfirmed') {
         const sid = e.sessionId!;
-        const msgId = `direction_${e.payload.version}`;
-        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `方向确定：\n${e.payload.directionSpec}`, status: 'done', createdAt: e.ts });
-        // update session stage/meta
+        // update session stage/meta (suppress system message)
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
             if (s) {
@@ -150,8 +143,14 @@ export function applyEventToProjection(e: SessionEvent) {
 
     // Collection projections (minimal counters; session meta 可后续扩展)
     if (e.type === 'ExpansionStarted') {
-        const sid = e.sessionId!; const msgId = `expansion_start_${e.ts}`;
-        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: '开始扩展…', status: 'done', createdAt: e.ts });
+        // reflect running state in meta
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, expansion: { ...(s.meta?.expansion || {}), running: true, state: 'running' } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
     if (e.type === 'SearchExecuted') {
@@ -160,8 +159,13 @@ export function applyEventToProjection(e: SessionEvent) {
         return;
     }
     if (e.type === 'SearchRoundStarted') {
-        const sid = e.sessionId!; const msgId = `round_start_${e.payload.round}`;
-        // store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `第 ${e.payload.round} 轮开始：${e.payload.query}`, status: 'done', createdAt: e.ts });
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, expansion: { ...(s.meta?.expansion || {}), running: true, round: e.payload.round } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
     if (e.type === 'SearchRoundPlanned') {
@@ -173,7 +177,14 @@ export function applyEventToProjection(e: SessionEvent) {
     }
     if (e.type === 'SearchRoundCompleted') {
         const sid = e.sessionId!; const msgId = `round_done_${e.payload.round}`;
-        // store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `第 ${e.payload.round} 轮完成：新增 ${e.payload.added}，总计 ${e.payload.total}`, status: 'done', createdAt: e.ts });
+        // update expansion counters in meta
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, expansion: { ...(s.meta?.expansion || {}), lastAdded: e.payload.added, total: e.payload.total } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         try {
             const { toast } = require('sonner');
             const added = (e as any)?.payload?.added ?? 0;
@@ -203,18 +214,34 @@ export function applyEventToProjection(e: SessionEvent) {
         return;
     }
     if (e.type === 'NoNewResults') {
-        const sid = e.sessionId!; const msgId = `round_none_${e.payload.round}`;
-        // store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `第 ${e.payload.round} 轮没有新结果`, status: 'done', createdAt: e.ts });
+        // reflect in meta but keep running state until orchestrator stops
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, expansion: { ...(s.meta?.expansion || {}), lastAdded: 0 } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
     if (e.type === 'ExpansionSaturated') {
-        const sid = e.sessionId!; const msgId = `saturated_${e.payload.round}`;
-        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `扩展已停止（原因：${e.payload.reason}）`, status: 'done', createdAt: e.ts });
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, expansion: { ...(s.meta?.expansion || {}), running: false, state: 'saturated' } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
     if (e.type === 'ExpansionStopped') {
-        const sid = e.sessionId!; const msgId = `expansion_stopped_${e.ts}`;
-        store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: '已停止扩展', status: 'done', createdAt: e.ts });
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, expansion: { ...(s.meta?.expansion || {}), running: false, state: 'stopped' } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         return;
     }
     if (e.type === 'PapersIngested') {
@@ -253,8 +280,13 @@ export function applyEventToProjection(e: SessionEvent) {
         return;
     }
     if (e.type === 'GraphConstructionStarted') {
-        const sid = e.sessionId!; const msgId = `graph_start_${e.ts}`;
-        // store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `开始构建关系图（候选 ${e.payload.size} 篇）`, status: 'done', createdAt: e.ts });
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, graph: { ...(s.meta?.graph || {}), building: true } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         console.log(`[Session] Graph construction started: ${e.payload.size} candidates`);
         return;
     }
@@ -272,7 +304,14 @@ export function applyEventToProjection(e: SessionEvent) {
     }
     if (e.type === 'GraphConstructionCompleted') {
         const sid = e.sessionId!; const msgId = `graph_done_${e.ts}`;
-        // store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `关系图构建完成：节点 ${e.payload.nodes}，边 ${e.payload.edges}`, status: 'done', createdAt: e.ts });
+        // record nodes/edges and mark not building
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, graph: { ...(s.meta?.graph || {}), building: false, nodes: e.payload.nodes, edges: e.payload.edges } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
         console.log(`[Session] Graph construction completed: ${e.payload.nodes} nodes, ${e.payload.edges} edges`);
         try {
             const { toast } = require('sonner');

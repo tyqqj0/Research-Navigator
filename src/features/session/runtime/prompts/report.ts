@@ -81,7 +81,7 @@ export async function buildReportMessages(sessionId: SessionId, graphId?: string
         '写作要求：',
         '- 使用学术语气与精炼表达，输出 Markdown。',
         '- 先给出关键发现的要点摘要（3-6 条），随后展开论述。',
-        '- 正文里的所有引文仅使用每个节点提供的 cite（形如 [@key]），可直接复制该字段到正文。',
+        '- 正文里的所有引文仅使用每个节点提供的 cite（形如 [@vaswani2017attention]），可直接复制该字段到正文。',
         '- 不要输出“References/参考文献”章节，不要在输出中粘贴任何 BibTeX；参考文献将由系统自动渲染。',
         '- 仅可引用数据集中给出的文献（区分大小写，不得自造或修改 key）。',
         '- 注意不要捏造不存在的文献或事实，必要时说明不确定性。'

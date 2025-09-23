@@ -91,6 +91,18 @@ if (!g.__chatOrchestratorRegistered) {
             handledCmdIds.add(cmd.id);
             const userMid = newId();
             await emit({ id: newId(), type: 'UserMessageAdded', ts: Date.now(), sessionId, payload: { messageId: userMid, text: cmd.params.text } });
+            // 当 Deep Research 开启且方向未确认时：仅记录用户消息，不启动普通对话，避免与方案生成并发
+            try {
+                const { useSessionStore } = await import('../../data-access/session-store');
+                const s = (useSessionStore.getState() as any).sessions.get(sessionId) as any;
+                const deep = Boolean(s?.meta?.deepResearchEnabled);
+                const confirmed = Boolean(s?.meta?.direction?.confirmed);
+                const awaiting = Boolean(s?.meta?.direction?.awaitingDecision);
+                if (deep && (!confirmed || awaiting)) {
+                    try { console.debug('[orch][chat][skip_normal_chat_due_to_direction_phase]', ORCH_ID, { sessionId, awaiting }); } catch { }
+                    return;
+                }
+            } catch { /* ignore store check errors */ }
             const asMid = newId();
             const contextMessages = await buildAssistantMessages(sessionId, cmd.params.text, 6);
             if (running.has(sessionId)) { try { console.warn('[orch][chat][running_exists_skip]', ORCH_ID, sessionId); } catch { } return; }

@@ -14,9 +14,11 @@ import { Markdown } from '@/components/ui/markdown';
 import { sessionRepository } from '../data-access/session-repository';
 import { useLiteratureStore } from '@/features/literature/data-access/stores';
 import { DirectionProposalCard } from './DirectionProposalCard';
-import { runtimeConfig } from '@/features/session/runtime/runtime-config';
+// import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { StreamCard } from '@/components/ui';
 import { ChevronLeft, X, Search, Send } from 'lucide-react';
+// import { SessionStatusStrip } from './SessionStatusStrip';
+import { SessionStageIndicator } from './SessionStageIndicator';
 
 interface ChatPanelProps {
     sessionId: SessionId;
@@ -70,8 +72,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                 )}
             </button>
 
-            <CardHeader className="py-2 flex items-center justify-between">
-                <CardTitle className="text-sm">对话{(session?.meta as any)?.stage === 'collection' ? ' · 集合阶段' : ''}</CardTitle>
+            <CardHeader className="py-2 space-y-2">
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">对话</CardTitle>
+                    <SessionStageIndicator sessionId={sessionId} />
+                </div>
+                {/* <SessionStatusStrip sessionId={sessionId} /> */}
                 {/* <DeepResearchPill enabled={deep} onToggle={toggleDeep} /> */}
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
@@ -94,14 +100,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                             )}
                         </div>
                     ))}
-                    {!!session?.linkedCollectionId && (
-                        <div className="p-3 flex gap-2">
-                            <Button size="sm" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StartExpansion', ts: Date.now(), params: { sessionId } } as any)}>开始扩展</Button>
-                            <Button size="sm" variant="secondary" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopExpansion', ts: Date.now(), params: { sessionId } } as any)}>停止扩展</Button>
-                            <Button size="sm" variant="outline" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'PruneCollection', ts: Date.now(), params: { sessionId, targetMax: runtimeConfig.PRUNE_TARGET_MAX } } as any)}>裁剪集合</Button>
-                            <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'BuildGraph', ts: Date.now(), params: { sessionId, window: runtimeConfig.GRAPH_WINDOW_SIZE } } as any)}>构建关系图</Button>
-                        </div>
-                    )}
+                    {/* 操作按钮已上移到头部 */}
                     {/* 决策任务卡：当等待决定时渲染卡片 */}
                     {!!(session as any)?.meta?.direction?.awaitingDecision && (
                         <div className="p-3">

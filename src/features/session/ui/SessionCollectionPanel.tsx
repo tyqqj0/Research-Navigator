@@ -7,6 +7,7 @@ import { LiteratureListPanel } from '@/features/literature/management/components
 import { useCollectionStore, useLiteratureStore } from '@/features/literature/data-access';
 import { useCollectionOperations } from '@/features/literature/hooks/use-collection-operations';
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
+import { Badge } from '@/components/ui/badge';
 
 export const SessionCollectionPanel: React.FC<{ sessionId: SessionId; onOpenDetail?: (paperId: string) => void }> = ({ sessionId, onOpenDetail }) => {
     const session = useSessionStore(s => s.sessions.get(sessionId));
@@ -44,15 +45,29 @@ export const SessionCollectionPanel: React.FC<{ sessionId: SessionId; onOpenDeta
     const loading = !collection && !!cid;
 
     return (
-        <LiteratureListPanel
-            showControls={true}
-            showPagination={true}
-            literatures={items as any}
-            isLoading={loading}
-            onItemClick={(item) => {
-                try { onOpenDetail?.(item.literature.paperId); } catch { /* noop */ }
-            }}
-        />
+        <div className="h-full flex flex-col">
+            <div className="px-2 pb-2 flex items-center gap-2 text-xs">
+                {cid ? (
+                    <>
+                        <Badge variant="outline">集合：{cid.slice(0, 6)}…</Badge>
+                        <Badge variant="info">共 {Array.isArray(collection?.paperIds) ? collection!.paperIds.length : '-'} 篇</Badge>
+                    </>
+                ) : (
+                    <Badge variant="secondary">未绑定集合</Badge>
+                )}
+            </div>
+            <div className="min-h-0 flex-1">
+                <LiteratureListPanel
+                    showControls={true}
+                    showPagination={true}
+                    literatures={items as any}
+                    isLoading={loading}
+                    onItemClick={(item) => {
+                        try { onOpenDetail?.(item.literature.paperId); } catch { /* noop */ }
+                    }}
+                />
+            </div>
+        </div>
     );
 };
 
