@@ -6,8 +6,10 @@ import { sessionRepository } from './session-repository';
 interface SessionProjectionState {
     sessions: Map<SessionId, ChatSession>;
     messagesBySession: Map<SessionId, ChatMessage[]>;
+    orderedSessionIds?: string[];
 
     getSessions(): ChatSession[];
+    getOrderedIds(): string[];
     getMessages(sessionId: SessionId): ChatMessage[];
 
     upsertSession(s: ChatSession): void;
@@ -19,6 +21,11 @@ interface SessionProjectionState {
     addMessage(m: ChatMessage): void;
     appendToMessage(messageId: MessageId, sessionId: SessionId, delta: string): void;
     markMessage(messageId: MessageId, sessionId: SessionId, patch: Partial<ChatMessage>): void;
+
+    // ordering
+    setSessionsOrder(ids: string[]): Promise<void>;
+    moveAfter(sessionId: string, afterId?: string): Promise<void>;
+    moveBefore(sessionId: string, beforeId?: string): Promise<void>;
 
     // hydration
     loadSessionProjection(sessionId: SessionId): Promise<void>;
@@ -33,10 +40,17 @@ interface SessionProjectionState {
 export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
     sessions: new Map(),
     messagesBySession: new Map(),
+    orderedSessionIds: undefined,
 
     getSessions() {
+        const ids = get().orderedSessionIds;
+        if (ids && ids.length > 0) {
+            const all = get().sessions;
+            return ids.map(id => all.get(id)).filter(Boolean) as ChatSession[];
+        }
         return Array.from(get().sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
     },
+    getOrderedIds() { return get().orderedSessionIds || get().getSessions().map(s => s.id); },
     getMessages(sessionId) {
         return get().messagesBySession.get(sessionId) ?? EMPTY_MESSAGES;
     },
@@ -45,7 +59,9 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
         set((state) => {
             const sessions = new Map(state.sessions);
             sessions.set(s.id, s);
-            return { sessions } as Partial<SessionProjectionState>;
+            // keep orderedSessionIds in sync if present
+            const orderedSessionIds = state.orderedSessionIds && (state.orderedSessionIds.includes(s.id) ? state.orderedSessionIds : [s.id, ...state.orderedSessionIds]);
+            return { sessions, orderedSessionIds } as Partial<SessionProjectionState>;
         });
         void sessionRepository.putSession(s);
     },
@@ -151,12 +167,40 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
             return { sessions, messagesBySession } as Partial<SessionProjectionState>;
         });
     },
+    async setSessionsOrder(ids) {
+        const viewId = 'default';
+        const curr = get().getOrderedIds();
+        set({ orderedSessionIds: ids });
+        // compute minimal moves from curr -> ids
+        const moves: Array<{ sessionId: string; beforeId?: string; afterId?: string }> = [];
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
+            const afterId = i > 0 ? ids[i - 1] : undefined;
+            moves.push({ sessionId: id, afterId });
+        }
+        try { await sessionRepository.reorderSessions(viewId, moves); } catch { /* optimistic only */ }
+    },
+    async moveAfter(sessionId, afterId) {
+        const ids = get().getOrderedIds();
+        const filtered = ids.filter(id => id !== sessionId);
+        const idx = afterId ? filtered.indexOf(afterId) + 1 : 0;
+        const next = [...filtered.slice(0, idx), sessionId, ...filtered.slice(idx)];
+        await get().setSessionsOrder(next);
+    },
+    async moveBefore(sessionId, beforeId) {
+        const ids = get().getOrderedIds();
+        const filtered = ids.filter(id => id !== sessionId);
+        const idx = beforeId ? Math.max(0, filtered.indexOf(beforeId)) : 0;
+        const next = [...filtered.slice(0, idx), sessionId, ...filtered.slice(idx)];
+        await get().setSessionsOrder(next);
+    },
+
     async loadAllSessions() {
         const sessions = await sessionRepository.listSessions();
-        set((state) => {
-            const map = new Map(state.sessions);
-            for (const s of sessions) map.set(s.id, s);
-            return { sessions: map } as Partial<SessionProjectionState>;
+        set(() => {
+            const map = new Map(sessions.map(s => [s.id, s] as const));
+            const orderedSessionIds = sessions.map(s => s.id);
+            return { sessions: map, orderedSessionIds } as Partial<SessionProjectionState>;
         });
     }
 }));

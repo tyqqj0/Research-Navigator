@@ -1,4 +1,5 @@
 import { useSessionStore } from '../data-access/session-store';
+import { sessionRepository } from '../data-access/session-repository';
 import { extractDirectionText } from './prompts/direction';
 import type { SessionEvent } from '../data-access/types';
 
@@ -6,7 +7,10 @@ export function applyEventToProjection(e: SessionEvent) {
     const store = useSessionStore.getState();
     if (e.type === 'SessionCreated') {
         const now = e.ts;
-        store.upsertSession({ id: e.sessionId!, title: e.payload.title, createdAt: now, updatedAt: now });
+        const id = e.sessionId!;
+        store.upsertSession({ id, title: e.payload.title, createdAt: now, updatedAt: now });
+        // ensure new session is pinned at the top of default layout
+        void sessionRepository.ensureLayoutTop('default', id);
         return;
     }
     if (e.type === 'SessionRenamed') {

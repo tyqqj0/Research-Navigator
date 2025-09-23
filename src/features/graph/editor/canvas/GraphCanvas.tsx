@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import * as d3 from 'd3-force';
+// physics extracted
+import { useTimelinePhysics } from './physics/useTimelinePhysics';
 import TimelineAxis from './TimelineAxis';
 import { useGraphStore } from '@/features/graph/data-access/graph-store';
 import type { GraphDataSource, GraphSnapshot } from '@/features/graph/data-access';
@@ -38,7 +39,7 @@ export interface GraphCanvasRef {
 
 type Pos = { x: number; y: number };
 
-type SimNode = { id: string; x: number; y: number; vx?: number; vy?: number; fx?: number | null; fy?: number | null };
+// SimNode type moved into physics module
 
 export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((props, ref) => {
     const { graphId, getPaperSummary, onNodeOpenDetail, layoutMode = 'free', dataSource, className, style, height, axisWidth, densityWidth, edgeHitbox, handleBaseSize, nodeRenderer, onNodeSelect, onEdgeSelect, onEdgeCreate, onViewportChange } = props;
@@ -90,10 +91,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     const userScrolledRef = useRef<boolean>(false);
     const programmaticScrollRef = useRef<boolean>(false);
 
-    // physics simulation refs
-    const simRef = useRef<d3.Simulation<SimNode, any> | null>(null);
-    const simNodesRef = useRef<SimNode[]>([]);
-    const rafRef = useRef<number | null>(null);
+    // physics handled by useTimelinePhysics
 
     // edge context menu / editor state
     const [edgeMenu, setEdgeMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null);
@@ -337,90 +335,22 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
         });
     }, [nodes, layoutMode, getPaperSummary, timeline]);
 
-    // ----- physics simulation (timeline mode) -----
-    React.useEffect(() => {
-        if (internalLayoutMode !== 'timeline' || !nodes.length) {
-            if (simRef.current) { simRef.current.stop(); simRef.current = null; simNodesRef.current = []; }
-            return;
-        }
-        const cw = containerRef.current?.clientWidth ?? 1000;
-        const centerX = Math.max(LEFT_AXIS_WIDTH + NODE_START_OFFSET_X + 140, cw * 0.52);
-        const simNodes: SimNode[] = nodes.map((n, idx) => {
-            const pos = nodePos[n.id];
-            const summary = getPaperSummary?.(n.id);
-            const y = summary ? timeline.yFromSummary(summary) : (60 + idx * 20);
-            const x = pos?.x ?? (LEFT_AXIS_WIDTH + NODE_START_OFFSET_X + (idx % 6) * 160);
-            return { id: n.id, x, y };
-        });
-        const links = edges.map(e => ({ source: e.from, target: e.to }));
-
-        // stop previous
-        if (simRef.current) { simRef.current.stop(); simRef.current = null; }
-        simNodesRef.current = simNodes;
-
-        // 参数基于缩放调整：级别越小，横向力更强、碰撞半径更小
-        const level = nodeUi.mode; // 'nano' | 'micro' | 'compact' | 'full'
-        const collideR = level === 'nano' ? 42 : level === 'micro' ? 68 : level === 'compact' ? 84 : 90;
-        const xStrength = level === 'nano' ? 0.08 : level === 'micro' ? 0.05 : 0.02;
-        const yStrength = level === 'nano' ? 0.9 : level === 'micro' ? 0.8 : 0.7;
-        const linkDist = level === 'nano' ? 140 : 180;
-
-        const sim = d3.forceSimulation(simNodes as any)
-            .force('link', d3.forceLink(simNodes as any)
-                .id((d: any) => (d as SimNode).id)
-                .links(links as any)
-                .distance(linkDist)
-                .strength(0.25)
-            )
-            .force('charge', d3.forceManyBody().strength(-160))
-            .force('collision', d3.forceCollide().radius(collideR))
-            .force('x', d3.forceX(centerX).strength(xStrength))
-            .force('y', d3.forceY((d: any) => {
-                const id = (d as SimNode).id;
-                const s = getPaperSummary?.(id);
-                return s ? timeline.yFromSummary(s) : timeline.paddingTop + timeline.trackHeight / 2;
-            }).strength(yStrength))
-            // 左右边界斥力：靠近边缘时推回
-            .force('left-bound', d3.forceX((d: any) => {
-                const x = (d as SimNode).x || 0;
-                const bound = LEFT_AXIS_WIDTH + 8;
-                return x < bound ? bound : x;
-            }).strength(0.1))
-            .force('right-bound', d3.forceX((d: any) => {
-                const w = containerRef.current?.clientWidth ?? 1200;
-                const margin = 14;
-                const x = (d as SimNode).x || 0;
-                const target = w - margin;
-                return x > target ? target : x;
-            }).strength(0.1))
-            .alpha(1)
-            .alphaDecay(0.05)
-            .velocityDecay(0.4)
-            .on('tick', () => {
-                if (rafRef.current != null) return;
-                rafRef.current = requestAnimationFrame(() => {
-                    rafRef.current = null;
-                    // clamp to horizontal bounds to avoid nodes running outside the canvas
-                    const el = containerRef.current;
-                    const w = el?.clientWidth ?? 1200;
-                    const minX = LEFT_AXIS_WIDTH + 16;
-                    const maxX = Math.max(minX + 80, w - 16);
-                    for (const sn of simNodesRef.current) {
-                        if (sn.x < minX) { sn.x = minX; if (typeof sn.vx === 'number') sn.vx = Math.max(0, sn.vx) * 0.1; }
-                        if (sn.x > maxX) { sn.x = maxX; if (typeof sn.vx === 'number') sn.vx = Math.min(0, sn.vx) * 0.1; }
-                    }
-                    const latest = Object.fromEntries(simNodesRef.current.map(n => [n.id, { x: n.x, y: n.y } as Pos]));
-                    setNodePos(latest);
-                });
-            });
-        simRef.current = sim as any;
-
-        return () => {
-            sim.stop();
-            if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [layoutMode, nodes, edges, timeline.minDate, timeline.maxDate, timelineScale]);
+    // ----- physics simulation (timeline mode) moved to hook -----
+    const physics = useTimelinePhysics({
+        enabled: internalLayoutMode === 'timeline',
+        nodes,
+        edges,
+        nodeUiMode: nodeUi.mode,
+        containerRef,
+        leftAxisWidth: LEFT_AXIS_WIDTH,
+        nodeStartOffsetX: NODE_START_OFFSET_X,
+        getTargetY: (id: string) => {
+            const s = getPaperSummary?.(id);
+            return s ? timeline.yFromSummary(s) : timeline.paddingTop + timeline.trackHeight / 2;
+        },
+        initialPositions: nodePos,
+        onPositions: (latest) => setNodePos(latest),
+    });
 
     const handleDrop = useCallback(async (e: React.DragEvent) => {
         e.preventDefault();
@@ -468,8 +398,15 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
         const pos: Pos = { x: e.clientX - rect.left + container.scrollLeft, y: e.clientY - rect.top + container.scrollTop };
         const current = nodePos[id] || { x: pos.x, y: pos.y };
         setDrag({ id, offset: { x: pos.x - current.x, y: pos.y - current.y } });
+        // inform physics
+        if (internalLayoutMode === 'timeline') {
+            const startAt = { x: current.x, y: current.y };
+            physics.startDrag(id, startAt);
+        }
         setSelectedNodeId(id);
         setSelectedEdgeId(null);
+
+        // physics hook handles internals
     };
 
     const onMouseMove = (e: React.MouseEvent) => {
@@ -485,15 +422,8 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
             container.scrollTop = panning.scrollTop - dy;
         }
         if (drag) {
-            if (internalLayoutMode === 'timeline' && simRef.current) {
-                const sim = simRef.current;
-                const sn = simNodesRef.current.find(n => n.id === drag.id);
-                if (sn) {
-                    sn.fx = contentPos.x - drag.offset.x;
-                    const s = getPaperSummary?.(drag.id);
-                    sn.fy = s ? timeline.yFromSummary(s) : (contentPos.y - drag.offset.y);
-                    sim.alpha(0.3).restart();
-                }
+            if (internalLayoutMode === 'timeline') {
+                physics.moveDragTo({ x: contentPos.x - drag.offset.x, y: contentPos.y - drag.offset.y });
             } else {
                 setNodePos((prev) => ({ ...prev, [drag.id]: { x: contentPos.x - drag.offset.x, y: contentPos.y - drag.offset.y } }));
             }
@@ -504,9 +434,8 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     };
 
     const onMouseUp = () => {
-        if (drag && simRef.current) {
-            const sn = simNodesRef.current.find(n => n.id === drag.id);
-            if (sn) { sn.fx = null; sn.fy = null; simRef.current.alpha(0.2).restart(); }
+        if (drag && internalLayoutMode === 'timeline') {
+            physics.endDrag();
         }
         setDrag(null);
         setLinking((l) => l ? { ...l, current: l.current } : null);
