@@ -84,7 +84,7 @@ export class BackendApiService {
         let lastError: any;
         for (let attempt = 1; attempt <= 3; attempt += 1) {
             try {
-                console.log('[BackendAPI] Fetching paper:', { input: paperIdInput, normalizedId, idForPath, attempt });
+                // console.log('[BackendAPI] Fetching paper:', { input: paperIdInput, normalizedId, idForPath, attempt });
                 const response = await this.apiRequest('GET', `/api/v1/paper/${idForPath}`);
                 const literature = this.mapBackendToFrontend(response);
                 this.cache.set(cacheKey, { data: literature, timestamp: Date.now() });
