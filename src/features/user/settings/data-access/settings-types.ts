@@ -15,7 +15,7 @@ export interface AIProviderConfig {
     apiKey: string;
     apiProxy: string;
     thinkingModel: string;
-    networkingModel: string;
+    taskModel: string;
 }
 
 export interface AzureConfig extends AIProviderConfig {
@@ -30,7 +30,7 @@ export interface AISettings {
     apiKey: string;
     apiProxy: string;
     thinkingModel: string;
-    networkingModel: string;
+    taskModel: string;
 
     // 各个 Provider 配置
     openRouter: AIProviderConfig;
@@ -216,7 +216,7 @@ export interface LegacySettingStore {
     ollamaNetworkingModel: string;
     accessPassword: string;
     thinkingModel: string;
-    networkingModel: string;
+    taskModel: string;
     enableSearch: string;
     searchProvider: string;
     tavilyApiKey: string;

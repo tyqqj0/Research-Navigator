@@ -215,10 +215,10 @@ export function AISettingsTab() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="networkingModel">任务模型</Label>
+                                    <Label htmlFor="taskModel">任务模型</Label>
                                     <Input
-                                        value={settings.networkingModel}
-                                        onChange={(e) => updateSettings({ networkingModel: e.target.value })}
+                                        value={settings.taskModel}
+                                        onChange={(e) => updateSettings({ taskModel: e.target.value })}
                                         placeholder="选择任务模型"
                                     />
                                 </div>

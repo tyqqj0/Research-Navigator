@@ -22,49 +22,49 @@ const defaultAISettings: AISettings = {
     apiKey: '',
     apiProxy: '',
     thinkingModel: 'Gemini-2.5-Pro-Preview-06-05',
-    networkingModel: 'Gemini-2.5-Flash-Preview-05-20',
+    taskModel: 'Gemini-2.5-Flash-Preview-05-20',
 
     openRouter: {
         apiKey: '',
         apiProxy: '',
         thinkingModel: '',
-        networkingModel: ''
+        taskModel: ''
     },
     openAI: {
         apiKey: '',
         apiProxy: '',
         thinkingModel: 'gpt-4o',
-        networkingModel: 'gpt-4o-mini'
+        taskModel: 'gpt-4o-mini'
     },
     anthropic: {
         apiKey: '',
         apiProxy: '',
         thinkingModel: '',
-        networkingModel: ''
+        taskModel: ''
     },
     deepseek: {
         apiKey: '',
         apiProxy: '',
         thinkingModel: 'deepseek-reasoner',
-        networkingModel: 'deepseek-chat'
+        taskModel: 'deepseek-chat'
     },
     xAI: {
         apiKey: '',
         apiProxy: '',
         thinkingModel: '',
-        networkingModel: ''
+        taskModel: ''
     },
     mistral: {
         apiKey: '',
         apiProxy: '',
         thinkingModel: 'mistral-large-latest',
-        networkingModel: 'mistral-medium-latest'
+        taskModel: 'mistral-medium-latest'
     },
     azure: {
         apiKey: '',
         apiProxy: '',
         thinkingModel: '',
-        networkingModel: '',
+        taskModel: '',
         resourceName: '',
         apiVersion: ''
     },
@@ -72,17 +72,17 @@ const defaultAISettings: AISettings = {
         apiKey: '',
         apiProxy: '',
         thinkingModel: '',
-        networkingModel: ''
+        taskModel: ''
     },
     pollinations: {
         apiProxy: '',
         thinkingModel: '',
-        networkingModel: ''
+        taskModel: ''
     },
     ollama: {
         apiProxy: '',
         thinkingModel: '',
-        networkingModel: ''
+        taskModel: ''
     },
 
     accessPassword: ''
@@ -267,49 +267,49 @@ export function migrateLegacySettings(legacySettings: LegacySettingStore): UserS
             apiKey: legacySettings.apiKey,
             apiProxy: legacySettings.apiProxy,
             thinkingModel: legacySettings.thinkingModel,
-            networkingModel: legacySettings.networkingModel,
+            taskModel: legacySettings.taskModel,
 
             openRouter: {
                 apiKey: legacySettings.openRouterApiKey,
                 apiProxy: legacySettings.openRouterApiProxy,
                 thinkingModel: legacySettings.openRouterThinkingModel,
-                networkingModel: legacySettings.openRouterNetworkingModel
+                taskModel: legacySettings.openRouterNetworkingModel
             },
             openAI: {
                 apiKey: legacySettings.openAIApiKey,
                 apiProxy: legacySettings.openAIApiProxy,
                 thinkingModel: legacySettings.openAIThinkingModel,
-                networkingModel: legacySettings.openAINetworkingModel
+                taskModel: legacySettings.openAINetworkingModel
             },
             anthropic: {
                 apiKey: legacySettings.anthropicApiKey,
                 apiProxy: legacySettings.anthropicApiProxy,
                 thinkingModel: legacySettings.anthropicThinkingModel,
-                networkingModel: legacySettings.anthropicNetworkingModel
+                taskModel: legacySettings.anthropicNetworkingModel
             },
             deepseek: {
                 apiKey: legacySettings.deepseekApiKey,
                 apiProxy: legacySettings.deepseekApiProxy,
                 thinkingModel: legacySettings.deepseekThinkingModel,
-                networkingModel: legacySettings.deepseekNetworkingModel
+                taskModel: legacySettings.deepseekNetworkingModel
             },
             xAI: {
                 apiKey: legacySettings.xAIApiKey,
                 apiProxy: legacySettings.xAIApiProxy,
                 thinkingModel: legacySettings.xAIThinkingModel,
-                networkingModel: legacySettings.xAINetworkingModel
+                taskModel: legacySettings.xAINetworkingModel
             },
             mistral: {
                 apiKey: legacySettings.mistralApiKey,
                 apiProxy: legacySettings.mistralApiProxy,
                 thinkingModel: legacySettings.mistralThinkingModel,
-                networkingModel: legacySettings.mistralNetworkingModel
+                taskModel: legacySettings.mistralNetworkingModel
             },
             azure: {
                 apiKey: legacySettings.azureApiKey,
                 apiProxy: '',
                 thinkingModel: legacySettings.azureThinkingModel,
-                networkingModel: legacySettings.azureNetworkingModel,
+                taskModel: legacySettings.azureNetworkingModel,
                 resourceName: legacySettings.azureResourceName,
                 apiVersion: legacySettings.azureApiVersion
             },
@@ -317,17 +317,17 @@ export function migrateLegacySettings(legacySettings: LegacySettingStore): UserS
                 apiKey: legacySettings.openAICompatibleApiKey,
                 apiProxy: legacySettings.openAICompatibleApiProxy,
                 thinkingModel: legacySettings.openAICompatibleThinkingModel,
-                networkingModel: legacySettings.openAICompatibleNetworkingModel
+                taskModel: legacySettings.openAICompatibleNetworkingModel
             },
             pollinations: {
                 apiProxy: legacySettings.pollinationsApiProxy,
                 thinkingModel: legacySettings.pollinationsThinkingModel,
-                networkingModel: legacySettings.pollinationsNetworkingModel
+                taskModel: legacySettings.pollinationsNetworkingModel
             },
             ollama: {
                 apiProxy: legacySettings.ollamaApiProxy,
                 thinkingModel: legacySettings.ollamaThinkingModel,
-                networkingModel: legacySettings.ollamaNetworkingModel
+                taskModel: legacySettings.ollamaNetworkingModel
             },
 
             accessPassword: legacySettings.accessPassword

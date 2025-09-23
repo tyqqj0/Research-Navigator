@@ -48,11 +48,11 @@ export function resolveModelForPurpose(purpose: AIPurpose): string {
     const providerConf = (ai as any)?.[providerKey] || {};
 
     const topLevelThinking = (ai as any).thinkingModel;
-    const topLevelTask = (ai as any).taskModel || (ai as any).networkingModel;
+    const topLevelTask = (ai as any).taskModel;
     const providerThinking = (providerConf as any).thinkingModel;
-    const providerTask = (providerConf as any).taskModel || (providerConf as any).networkingModel;
+    const providerTask = (providerConf as any).taskModel;
 
-    // Fallback chain keeps backward compatibility with existing `networkingModel` naming
+    // Fallback chain keeps backward compatibility with existing `taskModel` naming
     if (purpose === 'thinking') {
         return providerThinking || topLevelThinking || (ai as any).model || 'gpt-4o-mini';
     }
