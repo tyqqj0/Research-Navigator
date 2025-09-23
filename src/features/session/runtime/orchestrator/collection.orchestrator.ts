@@ -201,7 +201,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                     await emit({ id: newId(), type: 'ExpansionSaturated', ts: Date.now(), sessionId, payload: { round, reason: 'no_new' } as any });
                     // 自动进入图谱阶段
                     try {
-                        await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: 60 } } as any);
+                        await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: runtimeConfig.GRAPH_WINDOW_SIZE } } as any);
                         const { toast } = require('sonner');
                         toast.message('扩展结束，自动开始构建关系图');
                     } catch { /* ignore */ }

@@ -15,6 +15,7 @@ import '@/features/session/runtime/orchestrator/chat.orchestrator';
 import '@/features/session/runtime/orchestrator/direction.orchestrator';
 import '@/features/session/runtime/orchestrator/collection.orchestrator';
 import { startDirectionSupervisor } from '@/features/session/runtime/orchestrator/direction.supervisor';
+import { startCollectionSupervisor } from '@/features/session/runtime/orchestrator/collection.supervisor';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SessionList } from '@/features/session/ui/SessionList';
@@ -32,8 +33,8 @@ export default function ResearchSessionPage() {
     useEffect(() => { if (sessionId) void Promise.all([store.loadAllSessions(), store.loadSessionProjection(sessionId)]); }, [sessionId]);
 
     const sessions = store.getSessions();
-    // Ensure Deep Research supervisor started once on client
-    useEffect(() => { startDirectionSupervisor(); }, []);
+    // Ensure supervisors started once on client
+    useEffect(() => { startDirectionSupervisor(); startCollectionSupervisor(); }, []);
 
     const createSession = async () => {
         const id = crypto.randomUUID();
