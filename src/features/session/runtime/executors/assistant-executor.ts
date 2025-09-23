@@ -1,4 +1,5 @@
 import { startTextStream } from '@/lib/ai/streaming/start';
+import { resolveModelForPurpose } from '@/lib/settings/ai';
 
 export interface AssistantRun {
     abort(): void;
@@ -10,7 +11,8 @@ export const assistantExecutor = {
         (async () => {
             try {
                 opts.onStart();
-                const stream = startTextStream({ messages: opts.messages }, { signal: ctr.signal });
+                const model = resolveModelForPurpose('thinking');
+                const stream = startTextStream({ messages: opts.messages }, { signal: ctr.signal, modelOverride: model, temperature: 0.6 });
                 for await (const ev of stream) {
                     if (ev.type === 'delta') opts.onDelta(ev.text);
                     else if (ev.type === 'done') opts.onDone();

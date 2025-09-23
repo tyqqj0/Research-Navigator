@@ -1,4 +1,5 @@
 import { startTextStream } from '@/lib/ai/streaming/start';
+import { resolveModelForPurpose } from '@/lib/settings/ai';
 import { buildQueryPrompt } from '../prompts/query-generator';
 
 export interface AIQueryGenInput {
@@ -14,7 +15,8 @@ export const aiQueryGeneratorExecutor = {
         let query = '';
         const controller = new AbortController();
         try {
-            const stream = startTextStream({ prompt }, { signal: controller.signal });
+            const model = resolveModelForPurpose('task');
+            const stream = startTextStream({ prompt }, { signal: controller.signal, modelOverride: model, temperature: 0.2 });
             let buf = '';
             for await (const ev of stream) {
                 if (ev.type === 'delta') buf += ev.text;

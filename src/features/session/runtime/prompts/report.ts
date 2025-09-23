@@ -22,13 +22,13 @@ function generateCiteKeyBase(node: { id: string; title?: string; firstAuthor?: s
     return `${firstAuthor}${titleToken}${yearStr}`.slice(0, 24);
 }
 
-export interface ReportPrompt {
-    messages: string[];
+export interface ReportPromptOutline {
+    outlineMessages: string[];
     citeMap: Array<{ paperId: string; key: string }>;
     bibtexByKey: Record<string, string>;
 }
 
-export async function buildReportMessages(sessionId: SessionId, graphId?: string): Promise<ReportPrompt> {
+export async function buildReportOutlineMessages(sessionId: SessionId, graphId?: string): Promise<ReportPromptOutline> {
     const session = (useSessionStore.getState() as any).sessions.get(sessionId) as any;
     const gid: string | undefined = graphId || session?.meta?.graphId;
     if (!gid) throw new Error('No graph available for report generation');
@@ -110,7 +110,7 @@ export async function buildReportMessages(sessionId: SessionId, graphId?: string
     ].join('\n');
 
     const final = [header, '', dataset, '', instruction].join('\n\n');
-    return { messages: [final], citeMap, bibtexByKey };
+    return { outlineMessages: [final], citeMap, bibtexByKey };
 }
 
 

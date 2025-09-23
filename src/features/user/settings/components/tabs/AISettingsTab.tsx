@@ -107,7 +107,7 @@ export function AISettingsTab() {
                                         <SelectItem key={provider.value} value={provider.value}>
                                             <div className="flex items-center justify-between w-full">
                                                 <span>{provider.label}</span>
-                                                
+
                                                 <Badge className={getStatusColor(provider.status)}>
                                                     {provider.status}
                                                 </Badge>
@@ -215,11 +215,11 @@ export function AISettingsTab() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="networkingModel">网络模型</Label>
+                                    <Label htmlFor="networkingModel">任务模型</Label>
                                     <Input
                                         value={settings.networkingModel}
                                         onChange={(e) => updateSettings({ networkingModel: e.target.value })}
-                                        placeholder="选择网络模型"
+                                        placeholder="选择任务模型"
                                     />
                                 </div>
                             </div>

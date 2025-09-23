@@ -1,4 +1,5 @@
 import { startTextStream } from '@/lib/ai/streaming/start';
+import { resolveModelForPurpose } from '@/lib/settings/ai';
 import { buildDirectionPrompt, parseDirectionXml } from '../prompts/direction';
 
 export interface DirectionRun { abort(): void }
@@ -19,7 +20,8 @@ export const directionExecutor = {
             try {
                 const prompt = buildPrompt({ userQuery: opts.userQuery, version: opts.version, feedback: opts.feedback });
                 try { console.debug('[exec][direction][prompt]', { version: opts.version, hasFeedback: Boolean(opts.feedback), preview: String(prompt).slice(0, 160) }); } catch { }
-                const stream = startTextStream({ prompt }, { signal: controller.signal });
+                const model = resolveModelForPurpose('thinking');
+                const stream = startTextStream({ prompt }, { signal: controller.signal, modelOverride: model, temperature: 0.6 });
                 for await (const ev of stream) {
                     if (ev.type === 'start') { try { console.debug('[exec][direction][stream][start]'); } catch { } }
                     if (ev.type === 'delta') { buf += ev.text; try { opts.onDelta?.(ev.text); } catch { } }

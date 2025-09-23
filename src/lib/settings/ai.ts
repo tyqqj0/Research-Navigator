@@ -27,4 +27,36 @@ export function resolveAIConfig(overrides?: { modelOverride?: string }): Resolve
     } as ResolvedAIConfig;
 }
 
+// Purpose-based model resolver (Phase 1)
+export type AIPurpose = 'thinking' | 'task';
+
+export function resolveModelForPurpose(purpose: AIPurpose): string {
+    const s = useSettingsStore.getState() as any;
+    const ai = (s?.ai) || (s?.settings?.ai) || {};
+
+    const provider: string = String(ai.provider || '').toLowerCase();
+    const providerKey = provider === 'openrouter'
+        ? 'openRouter'
+        : provider === 'openai'
+            ? 'openAI'
+            : provider === 'xai'
+                ? 'xAI'
+                : provider === 'openaicompatible'
+                    ? 'openAICompatible'
+                    : provider;
+
+    const providerConf = (ai as any)?.[providerKey] || {};
+
+    const topLevelThinking = (ai as any).thinkingModel;
+    const topLevelTask = (ai as any).taskModel || (ai as any).networkingModel;
+    const providerThinking = (providerConf as any).thinkingModel;
+    const providerTask = (providerConf as any).taskModel || (providerConf as any).networkingModel;
+
+    // Fallback chain keeps backward compatibility with existing `networkingModel` naming
+    if (purpose === 'thinking') {
+        return providerThinking || topLevelThinking || (ai as any).model || 'gpt-4o-mini';
+    }
+    return providerTask || topLevelTask || (ai as any).model || 'gpt-4o-mini';
+}
+
 
