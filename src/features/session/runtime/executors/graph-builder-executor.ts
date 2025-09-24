@@ -133,7 +133,7 @@ export const graphBuilderExecutor = {
             '{"sourceId":"...","targetId":"...","relation":"citation|extends|contrasts|same_topic|applies|influences|related","rationale":"一句中文理由","confidence":0.0-1.0,"tags":["..."],"evidence":["..."]}',
             titles && titles.length ? `仅允许使用以下“标题”来标识论文（必须逐字匹配）：\n${titles.map(t => `- ${t}`).join('\n')}` : `仅允许使用以下节点：${idsOrTitles.join(', ')}`,
             'sourceId/targetId 可以填写“上面的标题”或“对应的 ID”（若你知道）。若无法唯一确定，请跳过该条。',
-            '只输出 JSON（不加注释或多余文本）。',
+            '严格只输出纯 JSON 数组，不要使用任何 Markdown 代码块（如 ```json），不要输出反引号、语言标签或多余文本。',
             '',
             '候选说明：',
             text
@@ -144,11 +144,27 @@ export const graphBuilderExecutor = {
             if (ev.type === 'delta') buf += ev.text;
         }
         let parsed: any[] = [];
+        // 先进行清洗：去除 Markdown 代码块围栏与零宽字符
+        const stripFence = (s: string): string => {
+            const fence = s.match(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)\s*```/);
+            if (fence && fence[1]) return fence[1];
+            return s;
+        };
+        const stripZW = (s: string): string => s.replace(/[\u200B-\u200D\uFEFF]/g, '');
+        const cleaned = stripZW(stripFence(buf.trim()));
+        // 平衡提取顶层 JSON 数组，避免 lastIndexOf 截断
+        const extractTopArray = (s: string): string | null => {
+            let start = -1, depth = 0;
+            for (let i = 0; i < s.length; i++) {
+                const ch = s[i];
+                if (ch === '[') { if (start === -1) start = i; depth++; }
+                else if (ch === ']') { depth--; if (depth === 0 && start !== -1) return s.slice(start, i + 1); }
+            }
+            return null;
+        };
         try {
-            // 尝试提取第一个 JSON 数组
-            const m = buf.match(/\[([\s\S]*?)\]/);
-            const json = m ? `[${m[1]}]` : buf;
-            parsed = JSON.parse(json);
+            const arr = extractTopArray(cleaned) || cleaned;
+            parsed = JSON.parse(arr);
         } catch {
             parsed = [];
         }
@@ -164,13 +180,18 @@ export const graphBuilderExecutor = {
             const nk = normalizeTitle(k);
             if (nk) normalizedMap[nk] = idMap[k];
         }
+        // diagnostics counters (declared before use)
+        const unmatchedSamples: string[] = [];
+        let droppedMissingMapping = 0;
+        let droppedSelfLoop = 0;
+        let droppedInvalidRel = 0;
         const toId = (v: any): string | undefined => {
             if (!v || typeof v !== 'string') return undefined;
-            // exact key (id or exact title)
             if (exactMap[v]) return exactMap[v];
-            // normalized title key
             const n = normalizeTitle(v);
             if (normalizedMap[n]) return normalizedMap[n];
+            if (unmatchedSamples.length < 6) unmatchedSamples.push(v);
+            droppedMissingMapping++;
             return undefined;
         };
         const maxEdges = Math.max(0, Number(opts?.maxEdges ?? 300));
@@ -178,10 +199,11 @@ export const graphBuilderExecutor = {
         for (const e of (Array.isArray(parsed) ? parsed : [])) {
             const src = toId(e.sourceId);
             const dst = toId(e.targetId);
-            if (!src || !dst || src === dst) continue;
+            if (!src || !dst) { continue; }
+            if (src === dst) { droppedSelfLoop++; continue; }
             let rel = String(e.relation || 'related').toLowerCase().trim();
             if (cnMap[rel]) rel = cnMap[rel];
-            if (!allow.has(rel)) rel = 'related';
+            if (!allow.has(rel)) { droppedInvalidRel++; rel = 'related'; }
             const conf = Math.max(0, Math.min(1, Number(e.confidence ?? 0.5)));
             const tags: string[] | undefined = Array.isArray(e.tags) ? e.tags.filter((t: any) => typeof t === 'string').slice(0, 4) as string[] : undefined;
             const rationale: string | undefined = typeof e.rationale === 'string' ? e.rationale : undefined;
@@ -192,6 +214,48 @@ export const graphBuilderExecutor = {
             if (out.length >= maxEdges) break;
         }
         const edges: Edge[] = out;
+
+        // 调试
+        // 在流式拼完 buf 后立刻打印（长度与预览）
+        const preview = buf.length > 1200 ? `${buf.slice(0, 600)} … ${buf.slice(-500)}` : buf;
+        console.debug('[exec][graph] step3 raw', {
+            size: buf.length,
+            hasBracket: /\[/.test(buf) && /\]/.test(buf),
+            firstBracket: buf.indexOf('['),
+            lastBracket: buf.lastIndexOf(']'),
+            preview
+        });
+
+
+        try {
+            console.debug('[exec][graph] step3 parsed', {
+                isArray: Array.isArray(parsed),
+                len: Array.isArray(parsed) ? parsed.length : 0
+            });
+        } catch { /* noop */ }
+
+        const normalizedMapSize = Object.keys(normalizedMap).length;
+
+        // const toId = (v: any): string | undefined => {
+        //     if (!v || typeof v !== 'string') return undefined;
+        //     if (idMap[v]) return idMap[v];
+        //     const n = normalizeTitle(v);
+        //     if (normalizedMap[n]) return normalizedMap[n];
+        //     if (unmatchedSamples.length < 6) unmatchedSamples.push(v);
+        //     droppedMissingMapping++;
+        //     return undefined;
+        // };
+
+        // ... 循环结束后：
+        console.debug('[exec][graph] step3 map_summary', {
+            normalizedMapSize,
+            droppedMissingMapping,
+            droppedSelfLoop,
+            droppedInvalidRel,
+            unmatchedSamples
+        });
+
+        console.debug('[exec][graph] step3 emit', { emitted: out.length });
         return { id: crypto.randomUUID(), kind: 'graph_edges', version: 1, data: edges, createdAt: Date.now() };
     },
     structureEdgesFromJsonl(jsonl: string, idMap: Record<string, string>, limits?: { maxLines?: number; maxEdges?: number; maxTagsPerEdge?: number }): Artifact<Edge[]> {
@@ -225,6 +289,7 @@ export const graphBuilderExecutor = {
             out.push({ sourceId: src, targetId: dst, relation: rel, confidence: confNum, rationale, evidence, tags });
             if (out.length >= maxEdges) break;
         }
+        console.debug('[exec][graph] step3 emit', { emitted: out.length });
         return { id: crypto.randomUUID(), kind: 'graph_edges', version: 1, data: out, createdAt: Date.now() };
     }
 };

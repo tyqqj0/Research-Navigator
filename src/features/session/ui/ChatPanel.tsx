@@ -161,7 +161,8 @@ const SearchThinkingCard: React.FC<{ status: any; content: string }> = ({ status
 const GraphThinkingCard: React.FC<{ status: any; content: string }> = ({ status, content }) => {
     return (
         <StreamCard
-            title="关系图·思考"
+            // title="关系图·思考"
+            title="思考"
             status={status}
             headerVariant="purple"
             className="mb-2"

@@ -377,31 +377,36 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                             yearById[pid] = item?.literature?.year || undefined;
                         }
                     } catch { /* ignore */ }
-                    let attempted = 0, added = 0, skippedYear = 0, skippedMissingNode = 0, errors = 0;
+                    let attempted = 0, added = 0, reorderedDirection = 0, skippedMissingNode = 0, errors = 0;
                     for (const e of (edges as any).data) {
                         attempted++;
-                        if ((e.relation === 'citation' || e.relation === 'extends') &&
-                            (yearById[e.sourceId] && yearById[e.targetId] && (yearById[e.sourceId]! > yearById[e.targetId]!))) {
-                            skippedYear++;
-                            continue; // violate ordering, skip
+                        // Enforce timeline direction: from older (smaller year) to newer (larger year)
+                        let fromId = e.sourceId;
+                        let toId = e.targetId;
+                        const sy = yearById[fromId];
+                        const ty = yearById[toId];
+                        if (typeof sy === 'number' && typeof ty === 'number' && sy > ty) {
+                            const tmp = fromId; fromId = toId; toId = tmp;
+                            reorderedDirection++;
                         }
                         try {
                             // validate nodes exist in current graph snapshot
                             const g = useGraphStore.getState().graphs.get(graphId);
-                            if (!g?.nodes?.[e.sourceId] || !g?.nodes?.[e.targetId]) {
+                            if (!g?.nodes?.[fromId] || !g?.nodes?.[toId]) {
                                 skippedMissingNode++;
                                 continue;
                             }
-                            await gs.addEdge({ from: e.sourceId, to: e.targetId, relation: e.relation, tags: e.tags, meta: e.rationale || e.evidence ? { rationale: e.rationale, evidence: e.evidence } : undefined }, { graphId });
+                            await gs.addEdge({ from: fromId, to: toId, relation: e.relation, tags: e.tags, meta: e.rationale || e.evidence ? { rationale: e.rationale, evidence: e.evidence } : undefined }, { graphId });
                             added++;
                         } catch (err) {
                             errors++;
                         }
                     }
-                    try { console.debug('[orch][collection] edges apply summary', { attempted, added, skippedYear, skippedMissingNode, errors }); } catch { /* noop */ }
+                    try { console.debug('[orch][collection] edges apply summary', { attempted, added, reorderedDirection, skippedMissingNode, errors }); } catch { /* noop */ }
                 }
             } catch { /* ignore */ }
             try {
+                const { useGraphStore } = require('@/features/graph/data-access/graph-store');
                 const gsState = (useGraphStore as any)?.getState?.();
                 const sess = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
                 const gid = sess?.meta?.graphId;
