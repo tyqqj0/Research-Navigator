@@ -9,6 +9,7 @@ import type { GraphDataSource, GraphSnapshot } from '@/features/graph/data-acces
 import { graphStoreDataSource } from '@/features/graph/data-access/graph-store';
 import type { PaperSummary } from '../paper-catalog';
 import { useLiteratureStore } from '@/features/literature/data-access';
+import { ALLOWED_RELATIONS, RELATION_LABELS } from '@/features/graph/config/relations';
 
 interface GraphCanvasProps {
     graphId: string;
@@ -100,6 +101,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     // edge context menu / editor state
     const [edgeMenu, setEdgeMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null);
     const [edgeEdit, setEdgeEdit] = useState<{ edgeId: string; relation: string; x: number; y: number } | null>(null);
+    const [edgeHover, setEdgeHover] = useState<{ edgeId: string; x: number; y: number } | null>(null);
 
     // background panning state
     const [panning, setPanning] = useState<{ start: Pos; scrollLeft: number; scrollTop: number } | null>(null);
@@ -831,6 +833,17 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                                     className="cursor-pointer"
                                     onMouseDown={(evt) => { onMouseDownEdge(e.id, evt); onEdgeSelect?.(e.id); }}
                                     onContextMenu={(evt) => { onContextMenuEdge(e.id, evt); onEdgeSelect?.(e.id); }}
+                                    onMouseEnter={(evt) => {
+                                        if (!containerRef.current) return;
+                                        const rect = containerRef.current.getBoundingClientRect();
+                                        setEdgeHover({ edgeId: e.id, x: evt.clientX - rect.left + containerRef.current.scrollLeft, y: evt.clientY - rect.top + containerRef.current.scrollTop });
+                                    }}
+                                    onMouseMove={(evt) => {
+                                        if (!containerRef.current) return;
+                                        const rect = containerRef.current.getBoundingClientRect();
+                                        setEdgeHover({ edgeId: e.id, x: evt.clientX - rect.left + containerRef.current.scrollLeft, y: evt.clientY - rect.top + containerRef.current.scrollTop });
+                                    }}
+                                    onMouseLeave={() => setEdgeHover(null)}
                                 />
                             </g>
                         );
@@ -883,6 +896,30 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                     );
                 })}
 
+                {/* edge hover tooltip */}
+                {edgeHover && (() => {
+                    const e = edges.find(x => x.id === edgeHover.edgeId);
+                    if (!e) return null;
+                    const meta = (e.meta || {}) as any;
+                    const rationale = typeof meta.rationale === 'string' ? meta.rationale : undefined;
+                    const evidence: string[] | undefined = Array.isArray(meta.evidence) ? meta.evidence as string[] : undefined;
+                    const relationText = RELATION_LABELS[e.relation as keyof typeof RELATION_LABELS] || e.relation;
+                    const left = edgeHover.x + 8;
+                    const top = edgeHover.y + 8;
+                    return (
+                        <div className="absolute z-40 max-w-sm bg-white/95 backdrop-blur border shadow-md rounded px-3 py-2 text-xs" style={{ left, top }} onMouseEnter={() => { /* keep visible while hovering tooltip */ }} onMouseLeave={() => setEdgeHover(null)}>
+                            <div className="font-medium mb-1">{relationText}</div>
+                            {rationale && (<div className="mb-1"><span className="text-muted-foreground">理由：</span>{rationale}</div>)}
+                            {Array.isArray(e.tags) && e.tags.length > 0 && (
+                                <div className="mb-1"><span className="text-muted-foreground">标签：</span>{e.tags.slice(0, 8).join(', ')}</div>
+                            )}
+                            {evidence && evidence.length > 0 && (
+                                <div className=""><span className="text-muted-foreground">证据：</span>{evidence.slice(0, 6).join(' · ')}</div>
+                            )}
+                        </div>
+                    );
+                })()}
+
                 {/* edge context menu / editor */}
                 {(edgeMenu || edgeEdit) && (
                     <div className="absolute inset-0 z-50" onMouseDown={() => { closeMenus(); onNodeSelect?.(null); onEdgeSelect?.(null); }}>
@@ -904,7 +941,11 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                             return (
                                 <div className="absolute bg-white shadow-xl border rounded-md p-3 w-64" style={{ left, top }} onMouseDown={(e) => e.stopPropagation()}>
                                     <div className="text-xs mb-2">关系类型</div>
-                                    <input className="w-full border rounded px-2 py-1 text-sm" value={edgeEdit.relation} onChange={(e) => setEdgeEdit({ ...edgeEdit, relation: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') saveEdgeEdit(); }} />
+                                    <select className="w-full border rounded px-2 py-1 text-sm bg-white" value={edgeEdit.relation} onChange={(e) => setEdgeEdit({ ...edgeEdit, relation: e.target.value })}>
+                                        {ALLOWED_RELATIONS.map(r => (
+                                            <option key={r} value={r}>{RELATION_LABELS[r]}</option>
+                                        ))}
+                                    </select>
                                     <div className="flex justify-end gap-2 mt-2">
                                         <button className="px-2 py-1 text-sm" onClick={closeMenus}>取消</button>
                                         <button className="px-2 py-1 text-sm bg-blue-600 text-white rounded" onClick={saveEdgeEdit}>保存</button>

@@ -1,4 +1,5 @@
 import type { Artifact } from '../../data-access/types';
+import { ALLOWED_RELATIONS, RELATION_CN_SYNONYMS, RELATION_PROMPT_LIST, RELATION_UNION_FOR_JSON, normalizeRelation } from '@/features/graph/config/relations';
 import { startTextStream } from '@/lib/ai/streaming/start';
 import { resolveModelForPurpose } from '@/lib/settings/ai';
 
@@ -35,7 +36,7 @@ export const graphBuilderExecutor = {
         const minEdges = Math.max(sorted.length - 1, 12);
         const prompt = [
             '在上一步“语义分群与主线”的基础上，请以自然语言产出候选关系，使用论文标题而不是 ID。',
-            '要求：\n  - 使用下方提供的标题，逐字复用，避免同义改写；\n  - 先产出能够自前至后贯穿主线的关系（mainline），再补充支线（sideline）；\n  - 尽量提高覆盖度，覆盖≥80% 节点；不少于指定最少条数；\n  - 关系可取：citation, extends, contrasts, same_topic, applies, influences, related；\n  - 每条关系给出一句中文理由（rationale），可附少量 evidence 关键词；\n  - 严禁捏造未出现的论文；若不确定，跳过。',
+            `要求：\n  - 使用下方提供的标题，逐字复用，避免同义改写；\n  - 先产出能够自前至后贯穿主线的关系（mainline），再补充支线（sideline）；\n  - 尽量提高覆盖度，覆盖≥80% 节点；不少于指定最少条数；\n  - 关系可取：${RELATION_PROMPT_LIST}；\n  - 每条关系给出一句中文理由（rationale），可附少量 evidence 关键词；\n  - 严禁捏造未出现的论文；若不确定，跳过。`,
             '',
             `最少关系数：${minEdges}`,
             '允许使用的标题列表（请逐字使用）：',
@@ -63,7 +64,7 @@ export const graphBuilderExecutor = {
         const prompt = [
             '在上一步语义分群与主线的基础上，产出候选关系说明的 JSON Lines（JSONL）。',
             '严格只输出 JSONL，每行一个对象，字段：{"sourceId","targetId","relation","confidence","rationale","evidence","tags"}。',
-            '约束：\n  - relation 取值（英文）：citation, extends, contrasts, same_topic, applies, influences, related；\n  - tags 可包含："mainline","sideline","important","weak_evidence" 及主题词；\n  - confidence∈[0,1]；evidence 为字符串数组（可为证据摘要、术语、短引片段）。\n  - 仅使用已给 id，不能捏造；不确定就跳过。',
+            `约束：\n  - relation 取值（英文）：${RELATION_PROMPT_LIST}；\n  - tags 可包含："mainline","sideline","important","weak_evidence" 及主题词；\n  - confidence∈[0,1]；evidence 为字符串数组（可为证据摘要、术语、短引片段）。\n  - 仅使用已给 id，不能捏造；不确定就跳过。`,
             '',
             `允许的节点ID：${ids}`,
             '节点（id｜title｜year｜abstract≤160）：',
@@ -122,15 +123,10 @@ export const graphBuilderExecutor = {
         const model = resolveModelForPurpose('task');
         const idsOrTitles = Object.keys(idMap);
         const titles = Array.isArray(opts?.titles) ? opts!.titles! : undefined;
-        const allow = new Set(['citation', 'extends', 'contrasts', 'same_topic', 'applies', 'influences', 'related']);
-        const cnMap: Record<string, string> = {
-            '引用': 'citation', '被引用': 'citation', '改进': 'extends', '扩展': 'extends',
-            '对比': 'contrasts', '反驳': 'contrasts', '同一主题': 'same_topic', '同主题': 'same_topic',
-            '应用': 'applies', '影响': 'influences', '相关': 'related'
-        };
+        const allow = new Set(ALLOWED_RELATIONS);
         const instruction = [
             '请从以下候选关系说明文本中抽取结构化边，输出 JSON 数组。每个元素字段：',
-            '{"sourceId":"...","targetId":"...","relation":"citation|extends|contrasts|same_topic|applies|influences|related","rationale":"一句中文理由","confidence":0.0-1.0,"tags":["..."],"evidence":["..."]}',
+            `{"sourceId":"...","targetId":"...","relation":"${RELATION_UNION_FOR_JSON}","rationale":"一句中文理由","confidence":0.0-1.0,"tags":["..."],"evidence":["..."]}`,
             titles && titles.length ? `仅允许使用以下“标题”来标识论文（必须逐字匹配）：\n${titles.map(t => `- ${t}`).join('\n')}` : `仅允许使用以下节点：${idsOrTitles.join(', ')}`,
             'sourceId/targetId 可以填写“上面的标题”或“对应的 ID”（若你知道）。若无法唯一确定，请跳过该条。',
             '严格只输出纯 JSON 数组，不要使用任何 Markdown 代码块（如 ```json），不要输出反引号、语言标签或多余文本。',
@@ -201,8 +197,7 @@ export const graphBuilderExecutor = {
             const dst = toId(e.targetId);
             if (!src || !dst) { continue; }
             if (src === dst) { droppedSelfLoop++; continue; }
-            let rel = String(e.relation || 'related').toLowerCase().trim();
-            if (cnMap[rel]) rel = cnMap[rel];
+            let rel = normalizeRelation(e.relation);
             if (!allow.has(rel)) { droppedInvalidRel++; rel = 'related'; }
             const conf = Math.max(0, Math.min(1, Number(e.confidence ?? 0.5)));
             const tags: string[] | undefined = Array.isArray(e.tags) ? e.tags.filter((t: any) => typeof t === 'string').slice(0, 4) as string[] : undefined;
@@ -262,12 +257,7 @@ export const graphBuilderExecutor = {
         const maxLines = limits?.maxLines ?? 200;
         const maxEdges = limits?.maxEdges ?? 300;
         const maxTags = limits?.maxTagsPerEdge ?? 4;
-        const allow = new Set(['citation', 'extends', 'contrasts', 'same_topic', 'applies', 'influences', 'related']);
-        const cnMap: Record<string, string> = {
-            '引用': 'citation', '被引用': 'citation', '改进': 'extends', '扩展': 'extends',
-            '对比': 'contrasts', '反驳': 'contrasts', '同一主题': 'same_topic', '同主题': 'same_topic',
-            '应用': 'applies', '影响': 'influences', '相关': 'related'
-        };
+        const allow = new Set(ALLOWED_RELATIONS);
         const lines = jsonl.split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, maxLines);
         const out: Edge[] = [];
         for (const line of lines) {
@@ -277,8 +267,7 @@ export const graphBuilderExecutor = {
             const dst = idMap[obj.targetId] || obj.targetId;
             if (!idMap[src] || !idMap[dst]) continue;
             if (src === dst) continue;
-            let rel = String(obj.relation || 'related').toLowerCase().trim();
-            if (cnMap[rel]) rel = cnMap[rel];
+            let rel = normalizeRelation(obj.relation);
             if (!allow.has(rel)) rel = 'related';
             const confNum = Math.max(0, Math.min(1, Number(obj.confidence ?? 0.5)));
             const tags = Array.isArray(obj.tags) ? obj.tags.filter((t: any) => typeof t === 'string').slice(0, maxTags) as string[] : undefined;

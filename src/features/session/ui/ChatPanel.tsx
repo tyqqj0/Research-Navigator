@@ -16,6 +16,7 @@ import { useLiteratureStore } from '@/features/literature/data-access/stores';
 import { DirectionProposalCard } from './DirectionProposalCard';
 // import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { StreamCard } from '@/components/ui';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronLeft, X, Search, Send } from 'lucide-react';
 // import { SessionStatusStrip } from './SessionStatusStrip';
 import { SessionStageIndicator } from './SessionStageIndicator';
@@ -159,6 +160,23 @@ const SearchThinkingCard: React.FC<{ status: any; content: string }> = ({ status
 };
 
 const GraphThinkingCard: React.FC<{ status: any; content: string }> = ({ status, content }) => {
+    const sections = React.useMemo(() => {
+        const parts: Array<{ title: string; body: string }> = [];
+        const regex = /\n##\s*Thinking\s*(\d+)[^\n]*\n/gi;
+        let match: RegExpExecArray | null;
+        const indices: Array<{ idx: number; title: string }> = [];
+        while ((match = regex.exec(content)) !== null) {
+            indices.push({ idx: match.index, title: `Thinking ${match[1]}` });
+        }
+        if (indices.length === 0) return [{ title: 'Thinking', body: content }];
+        indices.forEach((ent, i) => {
+            const start = ent.idx;
+            const end = i + 1 < indices.length ? indices[i + 1].idx : content.length;
+            const body = content.slice(start, end).trim();
+            parts.push({ title: ent.title, body });
+        });
+        return parts;
+    }, [content]);
     return (
         <StreamCard
             // title="关系图·思考"
@@ -166,9 +184,20 @@ const GraphThinkingCard: React.FC<{ status: any; content: string }> = ({ status,
             status={status}
             headerVariant="purple"
             className="mb-2"
-            contentClassName="space-y-3"
+            contentClassName="space-y-2"
         >
-            <Markdown text={content} />
+            <div className="space-y-2">
+                {sections.map((sec, i) => (
+                    <Collapsible key={i}>
+                        <CollapsibleTrigger className="w-full text-left px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 text-xs font-medium">
+                            {sec.title}
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-2 pl-2 border-l">
+                            <Markdown text={sec.body} />
+                        </CollapsibleContent>
+                    </Collapsible>
+                ))}
+            </div>
         </StreamCard>
     );
 };
