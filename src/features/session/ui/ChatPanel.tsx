@@ -407,6 +407,7 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
     const outlineText = reportMeta.outlineText as string | undefined;
     const draftText = reportMeta.draftText as string | undefined;
     const abstractText = reportMeta.abstractText as string | undefined;
+    const finalOutlineText = reportMeta.finalOutlineText as string | undefined;
     const outlineStatus = reportMeta.outlineStatus as string | undefined;
     const expandStatus = reportMeta.expandStatus as string | undefined;
     const abstractStatus = reportMeta.abstractStatus as string | undefined;
@@ -602,6 +603,16 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
             >
                 <Markdown text={rendered} />
             </StreamCard>
+
+            {/* {(finalOutlineText && status === 'done') ? (
+                <StreamCard
+                    title="报告 · 大纲（最终拼接）"
+                    status={'done' as any}
+                    headerVariant="purple"
+                >
+                    <Markdown text={finalOutlineText} />
+                </StreamCard>
+            ) : null} */}
         </div>
     );
 };

@@ -333,6 +333,11 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
             const p1 = await graphBuilderExecutor.thinkingPhase1(briefs, { onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 1, delta: d } as any }) });
             await sessionRepository.putArtifact(p1 as Artifact);
             // Phase 2: Title-based natural language relations with rationale/tags/evidence
+            // Optionally prime with Phase 1 storyline by sending a short intro delta before streaming
+            try {
+                const intro = '\n\n（以下基于上一阶段的语义分群与主线，产出候选关系）\n';
+                await emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 2, delta: intro } as any });
+            } catch { /* noop */ }
             const p2 = await graphBuilderExecutor.thinkingPhase2TextTitles(briefs, { onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 2, delta: d } as any }) });
             await sessionRepository.putArtifact(p2 as Artifact);
             await emit({ id: newId(), type: 'GraphThinkingCompleted', ts: Date.now(), sessionId, payload: { version, phase1ArtifactId: p1.id, phase2ArtifactId: p2.id } as any });

@@ -16,8 +16,8 @@ export const graphBuilderExecutor = {
             '你是一个图谱关系分析专家。请对给定论文（按时间从早到晚）进行安静思考，输出“语义分群 + 主线脉络”的分析文本。',
             '要求：\n  - 按主题聚类（如 预训练、对比学习、多模态 等）；\n  - 给出主线脉络（关键里程碑从旧到新）；\n  - 仅使用已给信息，不要捏造；\n  - 输出中文、用分点与小标题，避免过长。',
             '',
-            '节点（id｜title｜firstAuthor｜year｜abstract≤160）：',
-            sorted.map(p => `- ${p.id}｜${p.title}${p.firstAuthor ? `｜${p.firstAuthor}` : ''}${p.year ? `｜${p.year}` : ''}${p.abstract ? `｜摘要：${String(p.abstract).slice(0, 160)}` : ''}`).join('\n')
+            '节点（title｜firstAuthor｜year｜abstract≤160）：',
+            sorted.map(p => `- ${p.title}${p.firstAuthor ? `｜${p.firstAuthor}` : ''}${p.year ? `｜${p.year}` : ''}${p.abstract ? `｜摘要：${String(p.abstract).slice(0, 160)}` : ''}`).join('\n')
         ].join('\n');
         const stream = startTextStream({ prompt }, { modelOverride: model, temperature: 0.4 });
         let buf = '';

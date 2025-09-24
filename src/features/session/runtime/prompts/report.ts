@@ -26,6 +26,7 @@ export interface ReportPromptOutline {
     outlineMessages: string[];
     citeMap: Array<{ paperId: string; key: string }>;
     bibtexByKey: Record<string, string>;
+    datasetBlock: string;
 }
 
 export async function buildReportOutlineMessages(sessionId: SessionId, graphId?: string): Promise<ReportPromptOutline> {
@@ -76,41 +77,43 @@ export async function buildReportOutlineMessages(sessionId: SessionId, graphId?:
         .join('\n');
 
     const header = [
-        '你是一个严谨的学术研究助理。请根据给定的图谱数据，详细分析并参考图谱的内容结构，设计并撰写一篇结构清晰的中文研究报告。',
+        '你是一个严谨的学术研究助理。首先请深度理解下面的图谱数据（节点+边），据此产出“仅包含结构化大纲”的 Markdown。',
         spec ? `已确认研究方向：${spec}` : '当前尚未确认具体研究方向（可根据图谱结构总结主题）。',
-        '写作要求：',
-        '- 使用学术语气与精炼表达，输出 Markdown。',
-        '- 先给出关键发现的要点摘要（3-6 条），随后展开论述。',
-        '- 正文里的所有引文仅使用每个节点提供的 cite（形如 [@vaswani2017attention]），可直接复制该字段到正文。',
-        '- 不要输出“References/参考文献”章节，不要在输出中粘贴任何 BibTeX；参考文献将由系统自动渲染。',
-        '- 仅可引用数据集中给出的文献（区分大小写，不得自造或修改 key）。',
-        '- 注意不要捏造不存在的文献或事实，必要时说明不确定性。'
+        '大纲要求：',
+        '- 只输出大纲：包括 H1 标题（# 标题）与层级清晰的章节/小节（##、###）。',
+        '- 不要输出正文段落，不要输出任何“摘要/Abstract”。',
+        '- 不要在大纲中出现任何引文或 [@key]。',
+        '- 尽量按图谱结构组织主题（分组、因果、对比、演化等）。',
+        '- 仅用于构思结构，留出可扩写的空间。'
     ].join('\n');
 
-    const dataset = [
+    const datasetBlock = [
         '以下为研究图谱的文本化摘要：',
-        '```json\n{"nodes": [',
+        '```json',
+        '{"nodes": [',
         nodesBlock,
         '],',
         '"edges": [',
         edgesBlock,
-        ']}\n```'
+        ']}',
+        '```'
     ].join('\n');
-
-    // No separate refs context; keys are embedded in nodes
 
     const instruction = [
-        '请据此使用md语法生成一篇“结构化综述/报告”，建议包含：',
-        '1. 摘要',
-        '2. 引言（问题背景与动机）',
-        '3. 相关工作/主题分组（结合图谱结构，分主题阐述）',
-        '4. 方法/证据整合（如适用）',
-        '5. 讨论（局限、分歧、未来方向）',
-        '6. 结论'
+        '请仅输出结构化大纲的 Markdown：',
+        '示例结构（仅示意）：',
+        '# <报告标题>',
+        '## 1. 引言',
+        '### 1.1 背景与动机（占位说明，不写正文）',
+        '## 2. 主题分组A',
+        '### 2.1 关键问题与证据（占位说明）',
+        '## 3. 主题分组B',
+        '## 4. 讨论',
+        '## 5. 结论'
     ].join('\n');
 
-    const final = [header, '', dataset, '', instruction].join('\n\n');
-    return { outlineMessages: [final], citeMap, bibtexByKey };
+    const final = [header, '', datasetBlock, '', instruction].join('\n\n');
+    return { outlineMessages: [final], citeMap, bibtexByKey, datasetBlock };
 }
 
 

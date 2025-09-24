@@ -37,11 +37,13 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             let messages: string[] = [];
             let citeKeys: Array<{ paperId: string; key: string }> = [];
             let bibtexByKey: Record<string, string> = {};
+            let datasetBlock: string = '';
             try {
                 const prompt = await buildReportOutlineMessages(sessionId, (cmd.params as any).graphId);
                 messages = prompt.outlineMessages;
                 citeKeys = prompt.citeMap;
                 bibtexByKey = prompt.bibtexByKey;
+                datasetBlock = prompt.datasetBlock;
             } catch (err) {
                 try { const { toast } = require('sonner'); toast.error('生成报告失败：缺少图谱或数据'); } catch { }
                 return;
@@ -82,7 +84,13 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             // Expansion stage
             await emit({ id: newId(), type: 'ReportExpandStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
             const expandPrompt = [
-                '基于以下大纲，请逐节扩写成完整中文报告（Markdown）。保留 cite 键（形如 [@key]），不要输出引用清单。',
+                '基于以下大纲与图谱数据，请逐节扩写成完整中文报告（Markdown）。要求：',
+                '- 保留并充分使用 cite 键（形如 [@key]），覆盖尽可能多的相关节点。',
+                '- 不要输出引用清单（References），系统会自动渲染。',
+                '- 仅可引用提供的数据集中给出的 cite 键，不得自造。',
+                '',
+                '【图谱数据】',
+                datasetBlock,
                 '',
                 '【大纲】',
                 outline
@@ -109,9 +117,9 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             // Abstract stage
             await emit({ id: newId(), type: 'ReportAbstractStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
             const abstractPrompt = [
-                '请为以下报告生成精炼的中文摘要（150-250字），然后在报告开头以“摘要”小节替换：',
+                '请基于以下完整报告生成“单段落”中文学术摘要（150-220字）。只输出摘要正文一段，不要标题，不要列点：',
                 '',
-                draft.slice(0, 6000)
+                draft.slice(0, 8000)
             ].join('\n');
             currentController = new AbortController();
             const abstractStream = startTextStream({ prompt: abstractPrompt }, { modelOverride: thinkingModel, temperature: 0.5, signal: currentController.signal });
@@ -127,10 +135,13 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             await emit({ id: newId(), type: 'ReportAbstractCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, abstractArtifactId: abstractArtifact.id } as any });
 
             // Assemble final
-            const finalText = `# 摘要\n\n${abstract.trim()}\n\n${draft}`;
+            const finalText = `# 摘要\n\n${abstract.trim()}\n\n${draft.replace(/^#\s*摘要[\s\S]*?(?:\n{2,}|$)/i, '').trim()}`;
             const finalArtifact: Artifact<string> = { id: newId(), kind: 'report_final', version: 1, data: finalText, meta: { sessionId }, createdAt: Date.now() } as any;
             await sessionRepository.putArtifact(finalArtifact);
             await emit({ id: newId(), type: 'ReportFinalAssembled', ts: Date.now(), sessionId, payload: { messageId: reportMid, finalArtifactId: finalArtifact.id, citeKeys, bibtexByKey } as any });
+
+            // Emit final outline rendering for UI (derived from outline text)
+            await emit({ id: newId(), type: 'ReportOutlineRendered', ts: Date.now(), sessionId, payload: { messageId: reportMid, outlineText: outline.trim() } as any });
 
             // 将最终报告一次性写入主消息内容
             emit({ id: newId(), type: 'AssistantMessageDelta', ts: Date.now(), sessionId, payload: { messageId: reportMid, delta: finalText } });

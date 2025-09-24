@@ -567,6 +567,22 @@ export function applyEventToProjection(e: SessionEvent) {
         } catch { /* ignore */ }
         return;
     }
+    if (e.type === 'ReportOutlineRendered') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[e.payload.messageId] || {};
+                const next = {
+                    ...s,
+                    meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, finalOutlineText: e.payload.outlineText } } },
+                    updatedAt: e.ts
+                } as any;
+                useSessionStore.getState().upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
     if (e.type === 'ReportGenerationCompleted') {
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);

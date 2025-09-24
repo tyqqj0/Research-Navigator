@@ -204,10 +204,10 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     const nodeUi = useMemo(() => {
         const ppy = timeline.pxPerYear;
         // 新增第四级（nano）：更小，仅显示首字母圆点
-        if (ppy < 120) return { scale: 0.55, mode: 'nano' as const, handleSize: 8, showDate: false };
-        if (ppy < 200) return { scale: 0.78, mode: 'micro' as const, handleSize: 10, showDate: false };
-        if (ppy < 410) return { scale: 0.9, mode: 'compact' as const, handleSize: 14, showDate: true };
-        return { scale: 1.0, mode: 'full' as const, handleSize: 16, showDate: true };
+        if (ppy < 120) return { scale: 0.55, mode: 'nano' as const, handleSize: 4, showDate: false };
+        if (ppy < 200) return { scale: 0.78, mode: 'micro' as const, handleSize: 6, showDate: false };
+        if (ppy < 410) return { scale: 0.9, mode: 'compact' as const, handleSize: 8, showDate: true };
+        return { scale: 1.0, mode: 'full' as const, handleSize: 10, showDate: true };
     }, [timeline.pxPerYear]);
 
     // density curve data for axis (minimal version)

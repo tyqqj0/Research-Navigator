@@ -19,13 +19,23 @@ export async function exportGraphBriefDataset(graphId: string): Promise<{ nodes:
     const graph: ResearchGraph | null = await graphRepository.getGraph(graphId);
     if (!graph) throw new Error('Graph not found');
     const nodeIds: string[] = Object.keys(graph.nodes);
+    const extractFirstAuthor = (authors: any): string | undefined => {
+        if (!authors || !Array.isArray(authors) || authors.length === 0) return undefined;
+        const first = authors[0];
+        if (typeof first === 'string') return first || undefined;
+        if (first && typeof first === 'object') {
+            const name = first.name || first.fullName || first.display_name || first.displayName || first.author_name;
+            return name || undefined;
+        }
+        return undefined;
+    };
     const briefs = await Promise.all(nodeIds.map(async (id: string) => {
         try {
             const item = await literatureDataAccess.literatures.getEnhanced(id as any);
             return {
                 id,
                 title: item?.literature?.title || id,
-                firstAuthor: item?.literature?.authors?.[0]?.name,
+                firstAuthor: extractFirstAuthor(item?.literature?.authors),
                 year: item?.literature?.year,
                 abstract: item?.literature?.abstract
             } as GraphBriefNode;
