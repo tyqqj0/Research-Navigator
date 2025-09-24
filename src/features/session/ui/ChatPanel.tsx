@@ -94,7 +94,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                             plan: 'Step 2.1 · 思考',
                             cands: 'Step 2.1 · 搜索',
                             graph: 'Step 2.2 · 关系图',
-                            report: 'Step 4 · 报告',
+                            report: 'Step 3 · 报告',
                         };
                         const label = labelMap[type] || undefined;
                         return (
@@ -404,6 +404,12 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
     const citeKeys: Array<{ paperId: string; key: string }> = reportMeta.citeKeys || [];
     const bibtexByKey: Record<string, string> = reportMeta.bibtexByKey || {};
     const getLiterature = useLiteratureStore(s => s.getLiterature);
+    const outlineText = reportMeta.outlineText as string | undefined;
+    const draftText = reportMeta.draftText as string | undefined;
+    const abstractText = reportMeta.abstractText as string | undefined;
+    const outlineStatus = reportMeta.outlineStatus as string | undefined;
+    const expandStatus = reportMeta.expandStatus as string | undefined;
+    const abstractStatus = reportMeta.abstractStatus as string | undefined;
 
     // key -> paperId 快速映射
     const keyToPaperId = React.useMemo(() => {
@@ -547,29 +553,56 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
     }, [formatAuthorsIEEE]);
 
     return (
-        <StreamCard
-            title="报告"
-            status={status}
-            headerVariant="blue"
-            headerRight={status === 'streaming' ? (
-                <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopStreaming', ts: Date.now(), params: { sessionId } } as any)}>停止</Button>
-            ) : undefined}
-            contentClassName="space-y-3"
-            footer={(status === 'done' || status === 'error' || status === 'aborted') && references.length > 0 ? (
-                <div>
-                    <div className="text-sm font-medium mb-2">References</div>
-                    <ol className="list-decimal pl-4 space-y-1">
-                        {references.map((ref) => (
-                            <li key={ref.key} className="text-xs">
-                                <span>{formatReference({ bib: ref.bib, key: ref.key, paper: ref.paper })}</span>
-                            </li>
-                        ))}
-                    </ol>
-                </div>
-            ) : undefined}
-        >
-            <Markdown text={rendered} />
-        </StreamCard>
+        <div className="space-y-3">
+            <StreamCard
+                title="报告 · 大纲"
+                status={(outlineStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
+                headerVariant="purple"
+            >
+                <Markdown text={outlineText || (status !== 'done' ? '⏳ 正在生成大纲…' : '')} />
+            </StreamCard>
+            <StreamCard
+                title="报告 · 扩写"
+                status={(expandStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
+                headerVariant="purple"
+            >
+                <Markdown text={draftText || (status !== 'done' ? '⏳ 正在扩写…' : '')} />
+            </StreamCard>
+            <StreamCard
+                title="报告 · 摘要"
+                status={(abstractStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
+                headerVariant="purple"
+            >
+                <Markdown text={abstractText || (status !== 'done' ? '⏳ 正在生成摘要…' : '')} />
+            </StreamCard>
+
+            <StreamCard
+                title="报告"
+                status={status}
+                headerVariant="blue"
+                headerRight={status === 'streaming' ? (
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">大纲 / 扩写 / 摘要</span>
+                        <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopReport', ts: Date.now(), params: { sessionId } } as any)}>停止</Button>
+                    </div>
+                ) : undefined}
+                contentClassName="space-y-3"
+                footer={(status === 'done' || status === 'error' || status === 'aborted') && references.length > 0 ? (
+                    <div>
+                        <div className="text-sm font-medium mb-2">References</div>
+                        <ol className="list-decimal pl-4 space-y-1">
+                            {references.map((ref) => (
+                                <li key={ref.key} className="text-xs">
+                                    <span>{formatReference({ bib: ref.bib, key: ref.key, paper: ref.paper })}</span>
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+                ) : undefined}
+            >
+                <Markdown text={rendered} />
+            </StreamCard>
+        </div>
     );
 };
 

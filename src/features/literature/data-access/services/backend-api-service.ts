@@ -130,7 +130,17 @@ export class BackendApiService {
                 });
 
                 const items = Array.isArray(response) ? response : (response.papers || response.items || []);
-                fetched = items.map((item: any) => this.mapBackendToFrontend(item));
+                const valid: LibraryItem[] = [];
+                (items || []).forEach((item: any, idx: number) => {
+                    if (!item) return; // 后端可能返回 null 占位，直接跳过
+                    try {
+                        const mapped = this.mapBackendToFrontend(item);
+                        if (mapped && mapped.paperId) valid.push(mapped);
+                    } catch (err) {
+                        console.warn(`[BackendAPI] Skip invalid batch item at index ${idx}:`, err);
+                    }
+                });
+                fetched = valid;
 
                 // 更新缓存
                 fetched.forEach(item => {
@@ -383,6 +393,9 @@ export class BackendApiService {
      * 🔄 后端数据到前端数据的映射（兼容 S2 字段）
      */
     private mapBackendToFrontend(backendData: any): ExtendedLibraryItem {
+        if (!backendData || typeof backendData !== 'object') {
+            throw new Error('Invalid backend paper data');
+        }
         const authorsArr = Array.isArray(backendData.authors)
             ? backendData.authors.map((a: any) => a?.name || a).filter(Boolean)
             : [];

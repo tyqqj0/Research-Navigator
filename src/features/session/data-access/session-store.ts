@@ -109,7 +109,10 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
     addMessage(m) {
         set((state) => {
             const list = state.messagesBySession.get(m.sessionId) || [];
-            const nextList = [...list, m];
+            const existingIdx = list.findIndex(x => x.id === m.id);
+            const nextList = existingIdx >= 0
+                ? (() => { const arr = [...list]; arr[existingIdx] = { ...list[existingIdx], ...m }; return arr; })()
+                : [...list, m];
             const messagesBySession = new Map(state.messagesBySession);
             messagesBySession.set(m.sessionId, nextList);
 
@@ -155,7 +158,7 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
     },
 
     async loadSessionProjection(sessionId) {
-        const [s, msgs] = await Promise.all([
+        const [s, msgsRaw] = await Promise.all([
             sessionRepository.getSession(sessionId),
             sessionRepository.listMessages(sessionId)
         ]);
@@ -163,6 +166,13 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
             const sessions = new Map(state.sessions);
             if (s) sessions.set(sessionId, s);
             const messagesBySession = new Map(state.messagesBySession);
+            // Deduplicate by id while preserving order (first occurrence kept)
+            const seen = new Set<string>();
+            const msgs = (msgsRaw || []).filter(m => {
+                if (seen.has(m.id)) return false;
+                seen.add(m.id);
+                return true;
+            });
             messagesBySession.set(sessionId, msgs);
             return { sessions, messagesBySession } as Partial<SessionProjectionState>;
         });

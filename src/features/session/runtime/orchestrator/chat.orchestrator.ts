@@ -4,9 +4,7 @@ import { applyEventToProjection } from '../projectors';
 import { assistantExecutor } from '../executors/assistant-executor';
 import type { SessionCommand, SessionEvent } from '../../data-access/types';
 import { buildAssistantMessages } from '../prompts/assistant';
-import { buildReportOutlineMessages } from '@/features/session/runtime/prompts/report';
-import { startTextStream } from '@/lib/ai/streaming/start';
-import { resolveModelForPurpose } from '@/lib/settings/ai';
+// report generation moved to dedicated report orchestrator
 
 function newId() { return crypto.randomUUID(); }
 async function emit(e: SessionEvent) { await eventBus.publish(e); applyEventToProjection(e); }
@@ -16,81 +14,7 @@ if (!(globalThis as any).__chatOrchestratorGraphExtRegistered) {
     (globalThis as any).__chatOrchestratorGraphExtRegistered = true;
     commandBus.register(async (cmd: SessionCommand) => {
         if (cmd.type === 'GenerateReport') {
-            const sessionId = cmd.params.sessionId;
-            // 避免并发生成
-            const g: any = globalThis as any;
-            if (!g.__chatOrchestratorRunning) g.__chatOrchestratorRunning = new Map<string, { abort(): void }>();
-            const running: Map<string, { abort(): void }> = g.__chatOrchestratorRunning;
-            if (running.has(sessionId)) { try { console.warn('[orch][report][running_exists_skip]', sessionId); } catch { } return; }
-
-            // 构建报告提示词并启动流式生成
-            let messages: string[] = [];
-            let citeKeys: Array<{ paperId: string; key: string }> = [];
-            let bibtexByKey: Record<string, string> = {};
-            try {
-                const prompt = await buildReportOutlineMessages(sessionId, (cmd.params as any).graphId);
-                messages = prompt.outlineMessages;
-                citeKeys = prompt.citeMap;
-                bibtexByKey = prompt.bibtexByKey;
-            } catch (err) {
-                try { const { toast } = require('sonner'); toast.error('生成报告失败：缺少图谱或数据'); } catch { }
-                return;
-            }
-            const reportMid = `report_${cmd.id}`;
-            await emit({ id: newId(), type: 'ReportGenerationStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid, citeKeys, bibtexByKey } as any });
-            console.log('[orch][report][outline]', messages);
-            // Phase A: Outline (thinking)
-            const thinkingModel = resolveModelForPurpose('thinking');
-            const outlineStream = startTextStream({ messages }, { modelOverride: thinkingModel, temperature: 0.6 });
-            let outline = '';
-            for await (const ev of outlineStream) {
-                if (ev.type === 'start') emit({ id: newId(), type: 'AssistantMessageStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } });
-                if (ev.type === 'delta') {
-                    outline += ev.text;
-                    emit({ id: newId(), type: 'AssistantMessageDelta', ts: Date.now(), sessionId, payload: { messageId: reportMid, delta: ev.text } });
-                }
-                if (ev.type === 'error') {
-                    emit({ id: newId(), type: 'AssistantMessageFailed', ts: Date.now(), sessionId, payload: { messageId: reportMid, error: ev.message } });
-                    running.delete(sessionId);
-                    return;
-                }
-            }
-            // Phase B: Section expansion (thinking) - simple single pass for now using outline as context
-            const expandPrompt = [
-                '基于以下大纲，请逐节扩写成完整中文报告（Markdown）。保留 cite 键（形如 [@key]），不要输出引用清单。',
-                '',
-                '【大纲】',
-                outline,
-            ].join('\n');
-            const expandStream = startTextStream({ prompt: expandPrompt }, { modelOverride: thinkingModel, temperature: 0.55 });
-            let fullText = '';
-            for await (const ev of expandStream) {
-                if (ev.type === 'delta') {
-                    fullText += ev.text;
-                    emit({ id: newId(), type: 'AssistantMessageDelta', ts: Date.now(), sessionId, payload: { messageId: reportMid, delta: ev.text } });
-                }
-                if (ev.type === 'error') {
-                    emit({ id: newId(), type: 'AssistantMessageFailed', ts: Date.now(), sessionId, payload: { messageId: reportMid, error: ev.message } });
-                    running.delete(sessionId);
-                    return;
-                }
-            }
-            // Phase C: Abstract rewrite (thinking)
-            const abstractPrompt = [
-                '请为以下报告生成精炼的中文摘要（150-250字），然后在报告开头以“摘要”小节替换：',
-                '',
-                fullText.slice(0, 6000)
-            ].join('\n');
-            const abstractStream = startTextStream({ prompt: abstractPrompt }, { modelOverride: thinkingModel, temperature: 0.5 });
-            let abstract = '';
-            for await (const ev of abstractStream) {
-                if (ev.type === 'delta') abstract += ev.text;
-            }
-            const finalReport = `# 摘要\n\n${abstract.trim()}\n\n${fullText}`;
-            emit({ id: newId(), type: 'AssistantMessageCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid } });
-            emit({ id: newId(), type: 'ReportGenerationCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, text: finalReport, citeKeys, bibtexByKey } } as any);
-            running.delete(sessionId);
-            try { const { toast } = require('sonner'); toast.message('开始生成报告…'); } catch { }
+            // Delegated to report.orchestrator (kept here to avoid duplicate handling)
             return;
         }
         if (cmd.type === 'SupplementGraph') {

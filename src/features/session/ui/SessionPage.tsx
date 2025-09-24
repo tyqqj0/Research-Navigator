@@ -11,6 +11,7 @@ import { useSessionStore } from '../data-access/session-store';
 import '../runtime/orchestrator/chat.orchestrator';
 import '../runtime/orchestrator/direction.orchestrator';
 import '../runtime/orchestrator/collection.orchestrator';
+import '../runtime/orchestrator/report.orchestrator';
 import { startDirectionSupervisor } from '@/features/session/runtime/orchestrator/direction.supervisor';
 import { startCollectionSupervisor } from '@/features/session/runtime/orchestrator/collection.supervisor';
 

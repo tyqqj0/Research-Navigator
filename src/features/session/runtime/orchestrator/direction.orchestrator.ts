@@ -19,7 +19,7 @@ const ORCH_ID: string = g_any.__directionOrchId;
 function newId() { return crypto.randomUUID(); }
 
 async function emit(e: SessionEvent) {
-    try { console.debug('[orch][direction][publish]', ORCH_ID, e.type, e.id); } catch { }
+    // try { console.debug('[orch][direction][publish]', ORCH_ID, e.type, e.id); } catch { }
     await eventBus.publish(e);
     applyEventToProjection(e);
 }

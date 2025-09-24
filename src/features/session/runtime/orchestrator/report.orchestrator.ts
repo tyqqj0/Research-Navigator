@@ -1,0 +1,149 @@
+import { commandBus } from '../command-bus';
+import { eventBus } from '../event-bus';
+import { applyEventToProjection } from '../projectors';
+import type { Artifact, SessionCommand, SessionEvent } from '../../data-access/types';
+import { startTextStream } from '@/lib/ai/streaming/start';
+import { resolveModelForPurpose } from '@/lib/settings/ai';
+import { buildReportOutlineMessages } from '@/features/session/runtime/prompts/report';
+import { sessionRepository } from '../../data-access/session-repository';
+
+function newId() { return crypto.randomUUID(); }
+async function emit(e: SessionEvent) { await eventBus.publish(e); applyEventToProjection(e); }
+
+declare const globalThis: any;
+
+// Ensure singleton for report orchestrator (handles staged report generation)
+if (!(globalThis as any).__reportOrchestratorRegistered) {
+    (globalThis as any).__reportOrchestratorRegistered = true;
+
+    // Per-session run guard
+    if (!(globalThis as any).__reportRunning) (globalThis as any).__reportRunning = new Map<string, { abort(): void }>();
+    const running: Map<string, { abort(): void }> = (globalThis as any).__reportRunning;
+
+    commandBus.register(async (cmd: SessionCommand) => {
+        if (cmd.type !== 'GenerateReport' && cmd.type !== 'StopReport' && cmd.type !== 'ResumeReport' && cmd.type !== 'RegenerateReportStage') return;
+
+        if (cmd.type === 'StopReport') {
+            const run = running.get(cmd.params.sessionId);
+            if (run) { try { run.abort(); } catch { } }
+            return;
+        }
+
+        if (cmd.type === 'GenerateReport') {
+            const sessionId = cmd.params.sessionId;
+            if (running.has(sessionId)) { try { console.warn('[report][running_exists_skip]', sessionId); } catch { } return; }
+
+            // Prepare prompt (includes cite map and bibtex)
+            let messages: string[] = [];
+            let citeKeys: Array<{ paperId: string; key: string }> = [];
+            let bibtexByKey: Record<string, string> = {};
+            try {
+                const prompt = await buildReportOutlineMessages(sessionId, (cmd.params as any).graphId);
+                messages = prompt.outlineMessages;
+                citeKeys = prompt.citeMap;
+                bibtexByKey = prompt.bibtexByKey;
+            } catch (err) {
+                try { const { toast } = require('sonner'); toast.error('生成报告失败：缺少图谱或数据'); } catch { }
+                return;
+            }
+
+            const reportMid = `report_${cmd.id}`;
+            await emit({ id: newId(), type: 'ReportGenerationStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid, citeKeys, bibtexByKey } as any });
+
+            const thinkingModel = resolveModelForPurpose('thinking');
+
+            // install abort handle for this session
+            let currentController: AbortController | null = null;
+            const run = { abort: () => { try { currentController?.abort(); } catch { } } };
+            running.set(sessionId, run);
+
+            // Outline stage
+            await emit({ id: newId(), type: 'ReportOutlineStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
+            currentController = new AbortController();
+            const outlineStream = startTextStream({ messages }, { modelOverride: thinkingModel, temperature: 0.6, signal: currentController.signal });
+            let outline = '';
+            for await (const ev of outlineStream) {
+                if (ev.type === 'start') emit({ id: newId(), type: 'AssistantMessageStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } });
+                if (ev.type === 'delta') {
+                    outline += ev.text;
+                    // 仅写入大纲阶段事件，不再写入主消息内容
+                    emit({ id: newId(), type: 'ReportOutlineDelta', ts: Date.now(), sessionId, payload: { messageId: reportMid, delta: ev.text } as any });
+                }
+                if (ev.type === 'error') {
+                    emit({ id: newId(), type: 'AssistantMessageFailed', ts: Date.now(), sessionId, payload: { messageId: reportMid, error: ev.message } });
+                    running.delete(sessionId);
+                    return;
+                }
+            }
+            const outlineArtifact: Artifact<string> = { id: newId(), kind: 'report_outline', version: 1, data: outline.trim(), meta: { sessionId }, createdAt: Date.now() } as any;
+            await sessionRepository.putArtifact(outlineArtifact);
+            await emit({ id: newId(), type: 'ReportOutlineCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, outlineArtifactId: outlineArtifact.id } as any });
+
+            // Expansion stage
+            await emit({ id: newId(), type: 'ReportExpandStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
+            const expandPrompt = [
+                '基于以下大纲，请逐节扩写成完整中文报告（Markdown）。保留 cite 键（形如 [@key]），不要输出引用清单。',
+                '',
+                '【大纲】',
+                outline
+            ].join('\n');
+            currentController = new AbortController();
+            const expandStream = startTextStream({ prompt: expandPrompt }, { modelOverride: thinkingModel, temperature: 0.55, signal: currentController.signal });
+            let draft = '';
+            for await (const ev of expandStream) {
+                if (ev.type === 'delta') {
+                    draft += ev.text;
+                    // 仅写入扩写阶段事件，不再写入主消息内容
+                    emit({ id: newId(), type: 'ReportExpandDelta', ts: Date.now(), sessionId, payload: { messageId: reportMid, delta: ev.text } as any });
+                }
+                if (ev.type === 'error') {
+                    emit({ id: newId(), type: 'AssistantMessageFailed', ts: Date.now(), sessionId, payload: { messageId: reportMid, error: ev.message } });
+                    running.delete(sessionId);
+                    return;
+                }
+            }
+            const draftArtifact: Artifact<string> = { id: newId(), kind: 'report_draft', version: 1, data: draft.trim(), meta: { sessionId }, createdAt: Date.now() } as any;
+            await sessionRepository.putArtifact(draftArtifact);
+            await emit({ id: newId(), type: 'ReportExpandCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, draftArtifactId: draftArtifact.id } as any });
+
+            // Abstract stage
+            await emit({ id: newId(), type: 'ReportAbstractStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
+            const abstractPrompt = [
+                '请为以下报告生成精炼的中文摘要（150-250字），然后在报告开头以“摘要”小节替换：',
+                '',
+                draft.slice(0, 6000)
+            ].join('\n');
+            currentController = new AbortController();
+            const abstractStream = startTextStream({ prompt: abstractPrompt }, { modelOverride: thinkingModel, temperature: 0.5, signal: currentController.signal });
+            let abstract = '';
+            for await (const ev of abstractStream) {
+                if (ev.type === 'delta') {
+                    abstract += ev.text;
+                    emit({ id: newId(), type: 'ReportAbstractDelta', ts: Date.now(), sessionId, payload: { messageId: reportMid, delta: ev.text } as any });
+                }
+            }
+            const abstractArtifact: Artifact<string> = { id: newId(), kind: 'report_abstract', version: 1, data: abstract.trim(), meta: { sessionId }, createdAt: Date.now() } as any;
+            await sessionRepository.putArtifact(abstractArtifact);
+            await emit({ id: newId(), type: 'ReportAbstractCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, abstractArtifactId: abstractArtifact.id } as any });
+
+            // Assemble final
+            const finalText = `# 摘要\n\n${abstract.trim()}\n\n${draft}`;
+            const finalArtifact: Artifact<string> = { id: newId(), kind: 'report_final', version: 1, data: finalText, meta: { sessionId }, createdAt: Date.now() } as any;
+            await sessionRepository.putArtifact(finalArtifact);
+            await emit({ id: newId(), type: 'ReportFinalAssembled', ts: Date.now(), sessionId, payload: { messageId: reportMid, finalArtifactId: finalArtifact.id, citeKeys, bibtexByKey } as any });
+
+            // 将最终报告一次性写入主消息内容
+            emit({ id: newId(), type: 'AssistantMessageDelta', ts: Date.now(), sessionId, payload: { messageId: reportMid, delta: finalText } });
+
+            // Back-compat events for existing UI behavior
+            emit({ id: newId(), type: 'AssistantMessageCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid } });
+            emit({ id: newId(), type: 'ReportGenerationCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid } } as any);
+
+            try { const { toast } = require('sonner'); toast.message('开始生成报告…'); } catch { }
+            running.delete(sessionId);
+            return;
+        }
+    });
+}
+
+

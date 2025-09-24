@@ -14,6 +14,7 @@ import { usePaperCatalog } from '@/features/graph/editor/paper-catalog';
 import '@/features/session/runtime/orchestrator/chat.orchestrator';
 import '@/features/session/runtime/orchestrator/direction.orchestrator';
 import '@/features/session/runtime/orchestrator/collection.orchestrator';
+import '@/features/session/runtime/orchestrator/report.orchestrator';
 import { startDirectionSupervisor } from '@/features/session/runtime/orchestrator/direction.supervisor';
 import { startCollectionSupervisor } from '@/features/session/runtime/orchestrator/collection.supervisor';
 import { Plus } from 'lucide-react';

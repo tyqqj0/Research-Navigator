@@ -22,7 +22,19 @@ export function applyEventToProjection(e: SessionEvent) {
         return;
     }
     if (e.type === 'AssistantMessageStarted') {
-        store.addMessage({ id: e.payload.messageId, sessionId: e.sessionId!, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+        // Ensure idempotency in case of duplicate start events
+        try {
+            const sid = e.sessionId!; const mid = e.payload.messageId;
+            const list = (useSessionStore.getState() as any).messagesBySession.get(sid) || [];
+            const exists = list.find((m: any) => m.id === mid);
+            if (!exists) {
+                store.addMessage({ id: mid, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+            } else {
+                store.markMessage(mid, sid, { status: 'streaming' } as any);
+            }
+        } catch {
+            store.addMessage({ id: e.payload.messageId, sessionId: e.sessionId!, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+        }
         return;
     }
     if (e.type === 'AssistantMessageDelta') {
@@ -62,7 +74,11 @@ export function applyEventToProjection(e: SessionEvent) {
     // Direction phase projection additions (minimal):
     if (e.type === 'DirectionProposalStarted') {
         const sid = e.sessionId!; const msgId = `proposal_${e.payload.version}`;
-        store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+        try {
+            const list = (useSessionStore.getState() as any).messagesBySession.get(sid) || [];
+            const exists = list.find((m: any) => m.id === msgId);
+            if (!exists) store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+        } catch { store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts }); }
         return;
     }
     if (e.type === 'DirectionProposalDelta') {
@@ -292,8 +308,11 @@ export function applyEventToProjection(e: SessionEvent) {
     }
     if (e.type === 'GraphThinkingStarted') {
         const sid = e.sessionId!; const msgId = `graph_thinking_${e.payload.version}`;
-        // 新增一条 streaming 消息用于显示两阶段思考
-        (useSessionStore.getState() as any).addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+        try {
+            const list = (useSessionStore.getState() as any).messagesBySession.get(sid) || [];
+            const exists = list.find((m: any) => m.id === msgId);
+            if (!exists) (useSessionStore.getState() as any).addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+        } catch { (useSessionStore.getState() as any).addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts }); }
         return;
     }
     if (e.type === 'GraphThinkingDelta') {
@@ -394,6 +413,156 @@ export function applyEventToProjection(e: SessionEvent) {
                     updatedAt: e.ts
                 } as any;
                 store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    // Report stage projections (persist artifact ids and allow UI to track stage)
+    if (e.type === 'ReportOutlineStarted') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[e.payload.messageId] || {};
+                const next = {
+                    ...s,
+                    meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, outlineStatus: 'streaming', outlineText: '' } } },
+                    updatedAt: e.ts
+                } as any;
+                useSessionStore.getState().upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportOutlineDelta') {
+        try {
+            const sid = e.sessionId!; const mid = e.payload.messageId; const delta = e.payload.delta || '';
+            const storeApi: any = useSessionStore.getState();
+            const s = storeApi.sessions.get(sid);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[mid] || {};
+                const outlineText = (prevEntry.outlineText || '') + delta;
+                const next = { ...s, meta: { ...s.meta, report: { ...prevReport, [mid]: { ...prevEntry, outlineText, outlineStatus: 'streaming' } } }, updatedAt: e.ts } as any;
+                storeApi.upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportOutlineCompleted') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[e.payload.messageId] || {};
+                const next = {
+                    ...s,
+                    meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, outlineArtifactId: e.payload.outlineArtifactId, outlineStatus: 'done' } } },
+                    updatedAt: e.ts
+                } as any;
+                useSessionStore.getState().upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportExpandStarted') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[e.payload.messageId] || {};
+                const next = { ...s, meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, expandStatus: 'streaming', draftText: '' } } }, updatedAt: e.ts } as any;
+                useSessionStore.getState().upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportExpandDelta') {
+        try {
+            const sid = e.sessionId!; const mid = e.payload.messageId; const delta = e.payload.delta || '';
+            const storeApi: any = useSessionStore.getState();
+            const s = storeApi.sessions.get(sid);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[mid] || {};
+                const draftText = (prevEntry.draftText || '') + delta;
+                const next = { ...s, meta: { ...s.meta, report: { ...prevReport, [mid]: { ...prevEntry, draftText, expandStatus: 'streaming' } } }, updatedAt: e.ts } as any;
+                storeApi.upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportExpandCompleted') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[e.payload.messageId] || {};
+                const next = {
+                    ...s,
+                    meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, draftArtifactId: e.payload.draftArtifactId, expandStatus: 'done' } } },
+                    updatedAt: e.ts
+                } as any;
+                useSessionStore.getState().upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportAbstractStarted') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[e.payload.messageId] || {};
+                const next = { ...s, meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, abstractStatus: 'streaming', abstractText: '' } } }, updatedAt: e.ts } as any;
+                useSessionStore.getState().upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportAbstractDelta') {
+        try {
+            const sid = e.sessionId!; const mid = e.payload.messageId; const delta = e.payload.delta || '';
+            const storeApi: any = useSessionStore.getState();
+            const s = storeApi.sessions.get(sid);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[mid] || {};
+                const abstractText = (prevEntry.abstractText || '') + delta;
+                const next = { ...s, meta: { ...s.meta, report: { ...prevReport, [mid]: { ...prevEntry, abstractText, abstractStatus: 'streaming' } } }, updatedAt: e.ts } as any;
+                storeApi.upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportAbstractCompleted') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[e.payload.messageId] || {};
+                const next = {
+                    ...s,
+                    meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, abstractArtifactId: e.payload.abstractArtifactId, abstractStatus: 'done' } } },
+                    updatedAt: e.ts
+                } as any;
+                useSessionStore.getState().upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
+    if (e.type === 'ReportFinalAssembled') {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
+            if (s) {
+                const prevReport = ((s.meta as any)?.report) || {};
+                const prevEntry = prevReport[e.payload.messageId] || {};
+                const next = {
+                    ...s,
+                    meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, finalArtifactId: e.payload.finalArtifactId, citeKeys: e.payload.citeKeys, bibtexByKey: e.payload.bibtexByKey } }, stage: 'report_done' },
+                    updatedAt: e.ts
+                } as any;
+                useSessionStore.getState().upsertSession(next);
             }
         } catch { /* ignore */ }
         return;
