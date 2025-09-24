@@ -908,13 +908,21 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                     const top = edgeHover.y + 8;
                     return (
                         <div className="absolute z-40 max-w-sm bg-white/95 backdrop-blur border shadow-md rounded px-3 py-2 text-xs" style={{ left, top }} onMouseEnter={() => { /* keep visible while hovering tooltip */ }} onMouseLeave={() => setEdgeHover(null)}>
-                            <div className="font-medium mb-1">{relationText}</div>
-                            {rationale && (<div className="mb-1"><span className="text-muted-foreground">理由：</span>{rationale}</div>)}
+                            <div className="font-medium mb-1 text-sm font-bold">{relationText}</div>
+                            {rationale && (
+                                <div className="mb-1">
+                                    <span className="text-muted-foreground font-bold">理由：</span>{rationale}
+                                </div>
+                            )}
                             {Array.isArray(e.tags) && e.tags.length > 0 && (
-                                <div className="mb-1"><span className="text-muted-foreground">标签：</span>{e.tags.slice(0, 8).join(', ')}</div>
+                                <div className="mb-1">
+                                    <span className="text-muted-foreground font-bold">标签：</span>{e.tags.slice(0, 8).join(', ')}
+                                </div>
                             )}
                             {evidence && evidence.length > 0 && (
-                                <div className=""><span className="text-muted-foreground">证据：</span>{evidence.slice(0, 6).join(' · ')}</div>
+                                <div className="">
+                                    <span className="text-muted-foreground font-bold">证据：</span>{evidence.slice(0, 6).join(' · ')}
+                                </div>
                             )}
                         </div>
                     );

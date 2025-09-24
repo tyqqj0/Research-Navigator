@@ -82,7 +82,7 @@ export const SessionStageIndicator: React.FC<{ sessionId: string }> = ({ session
                     title={`阶段：${style.label}`}
                 >
                     <div className="relative h-4 w-4">
-                        <div key={stage} className="absolute inset-0 flex items-center justify-center animate-in fade-in-0 zoom-in-95">
+                        <div key={stage} className="inset-0.2 flex items-center justify-center animate-in fade-in-0 zoom-in-95">
                             {style.icon}
                         </div>
                     </div>
