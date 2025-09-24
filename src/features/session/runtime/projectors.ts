@@ -290,6 +290,31 @@ export function applyEventToProjection(e: SessionEvent) {
         console.log(`[Session] Graph construction started: ${e.payload.size} candidates`);
         return;
     }
+    if (e.type === 'GraphThinkingStarted') {
+        const sid = e.sessionId!; const msgId = `graph_thinking_${e.payload.version}`;
+        // 新增一条 streaming 消息用于显示两阶段思考
+        (useSessionStore.getState() as any).addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+        return;
+    }
+    if (e.type === 'GraphThinkingDelta') {
+        const sid = e.sessionId!; const msgId = `graph_thinking_${e.payload.version}`;
+        // 在消息内容中插入阶段分隔符并追加 delta
+        const header = e.payload.phase === 1 ? '\n\n## Thinking 1（语义分群/主线）\n' : '\n\n## Thinking 2（候选关系说明）\n';
+        const storeApi: any = useSessionStore.getState();
+        const messages: any[] = (storeApi as any).messagesBySession.get(sid) || [];
+        const exists = messages.find((m: any) => m.id === msgId);
+        if (!exists || !exists.content?.includes(`Thinking ${e.payload.phase}`)) {
+            store.appendToMessage(msgId, sid, header + (e.payload.delta || ''));
+        } else {
+            store.appendToMessage(msgId, sid, e.payload.delta || '');
+        }
+        return;
+    }
+    if (e.type === 'GraphThinkingCompleted') {
+        const sid = e.sessionId!; const msgId = `graph_thinking_${e.payload.version}`;
+        try { store.markMessage(msgId, sid, { status: 'done' }); } catch { }
+        return;
+    }
     if (e.type === 'GraphRelationsProposed') {
         const sid = e.sessionId!; const msgId = `graph_rel_${e.payload.textArtifactId}`;
         // store.addMessage({ id: msgId, sessionId: sid, role: 'system', content: `已生成关系文本（Artifact: ${e.payload.textArtifactId}）`, status: 'done', createdAt: e.ts });

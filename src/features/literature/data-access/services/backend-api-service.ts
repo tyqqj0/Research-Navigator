@@ -339,7 +339,7 @@ export class BackendApiService {
     ): Promise<any> {
         const url = `${this.baseUrl}${endpoint}`;
 
-        console.log('[BackendAPI] API Request:', url, method, data);
+        // console.log('[BackendAPI] API Request:', url, method, data);
 
         const config: RequestInit = {
             method,
@@ -389,7 +389,39 @@ export class BackendApiService {
 
         const publication = backendData.publication || backendData.venue || backendData.publicationVenue?.name || null;
         // 尝试从后端字段提取精确发表日期
-        const publicationDate = backendData.publicationDate || backendData.publication_date || backendData.publishedAt || backendData.published_at || backendData.datePublished || backendData.firstOnline || backendData.first_online || null;
+        const publicationDateRaw = backendData.publicationDate || backendData.publication_date || backendData.publishedAt || backendData.published_at || backendData.datePublished || backendData.firstOnline || backendData.first_online || null;
+        const normalizeDateString = (v: any, fallbackYear?: number): string | undefined => {
+            if (!v && typeof fallbackYear === 'number') {
+                const y = Math.max(1000, Math.min(9999, fallbackYear));
+                return `${y}-01-01`;
+            }
+            if (!v) return undefined;
+            const s = String(v).trim();
+            if (!s) return undefined;
+            // replace slashes, remove trailing time
+            let t = s.replace(/\//g, '-').replace(/T.*$/, '');
+            // pure year
+            const mYear = t.match(/^(\d{4})$/);
+            if (mYear) return `${mYear[1]}-01-01`;
+            // year-month
+            const mYm = t.match(/^(\d{4})-(\d{1,2})$/);
+            if (mYm) {
+                const mm = mYm[2].padStart(2, '0');
+                return `${mYm[1]}-${mm}-01`;
+            }
+            // year-month-day
+            const mYmd = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (mYmd) {
+                const mm = mYmd[2].padStart(2, '0');
+                const dd = mYmd[3].padStart(2, '0');
+                return `${mYmd[1]}-${mm}-${dd}`;
+            }
+            // fallback to Date parsing
+            const d = new Date(s);
+            if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+            return undefined;
+        };
+        const publicationDate = normalizeDateString(publicationDateRaw, backendData.year || undefined);
         const doi = backendData.doi || backendData.externalIds?.DOI || backendData.externalIds?.ArXiv || null;
         const url = backendData.url || backendData.s2Url || backendData.openAccessPdf?.url || null;
         const pdfPath = backendData.openAccessPdf?.url || backendData.pdf_url || backendData.pdf_path || null;
@@ -469,7 +501,7 @@ export class BackendApiService {
         })();
 
         return {
-            // 优先使用后端的原生文献ID（S2哈希/CorpusId/DOI/URL前缀等），确保跨端一致
+            // spread the same fields again to avoid mutating previous object inline
             paperId: backendData.paperId || backendData.paper_id || backendData.id,
             title: backendData.title,
             authors: authorsArr,
@@ -486,7 +518,7 @@ export class BackendApiService {
             backendTask: backendData.backend_task || undefined,
             createdAt: new Date(createdAt),
             updatedAt: new Date(updatedAt)
-        };
+        } as ExtendedLibraryItem;
     }
 
     /**

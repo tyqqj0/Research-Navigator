@@ -325,11 +325,39 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 try { const { toast } = require('sonner'); toast.message('当前图为空，跳过关系图构建'); } catch { /* noop */ }
                 return;
             }
-            const relText = await graphBuilderExecutor.proposeRelationsText(papers);
-            await sessionRepository.putArtifact(relText as Artifact);
-            await emit({ id: newId(), type: 'GraphRelationsProposed', ts: Date.now(), sessionId, payload: { textArtifactId: relText.id } });
-            const idMap = Object.fromEntries(papers.map(p => [p.id, p.id]));
-            const edges = await graphBuilderExecutor.structureEdgesFromText(relText.data, idMap);
+            // Two-stage thinking with streaming UI
+            const version = Date.now();
+            await emit({ id: newId(), type: 'GraphThinkingStarted', ts: Date.now(), sessionId, payload: { version } as any });
+            // Phase 1: semantic grouping & storyline
+            const briefs = await paperMetadataExecutor.fetchBriefs(papers.map(p => p.id));
+            const p1 = await graphBuilderExecutor.thinkingPhase1(briefs, { onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 1, delta: d } as any }) });
+            await sessionRepository.putArtifact(p1 as Artifact);
+            // Phase 2: Title-based natural language relations with rationale/tags/evidence
+            const p2 = await graphBuilderExecutor.thinkingPhase2TextTitles(briefs, { onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 2, delta: d } as any }) });
+            await sessionRepository.putArtifact(p2 as Artifact);
+            await emit({ id: newId(), type: 'GraphThinkingCompleted', ts: Date.now(), sessionId, payload: { version, phase1ArtifactId: p1.id, phase2ArtifactId: p2.id } as any });
+            // Backward compatibility event
+            await emit({ id: newId(), type: 'GraphRelationsProposed', ts: Date.now(), sessionId, payload: { textArtifactId: p2.id } });
+            // Build mapping: include both ids and titles as keys → id
+            const idMap: Record<string, string> = {};
+            const normalizeTitle = (s?: string) => (s || '')
+                .toLowerCase()
+                .replace(/[\s\-_:;,./\\]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            for (const b of briefs) {
+                idMap[b.id] = b.id;
+                if (b.title) {
+                    idMap[b.title] = b.id;              // exact title
+                    idMap[normalizeTitle(b.title)] = b.id; // normalized title
+                }
+            }
+            const titles = briefs.map(b => b.title).filter(Boolean) as string[];
+            const edges = await graphBuilderExecutor.structureEdgesFromText(
+                p2.data,
+                idMap,
+                { titles, maxEdges: (runtimeConfig as any).GRAPH_JSONL_MAX_EDGES ?? 300 }
+            );
             await sessionRepository.putArtifact(edges as Artifact);
             await emit({ id: newId(), type: 'GraphEdgesStructured', ts: Date.now(), sessionId, payload: { edgeArtifactId: edges.id, size: edges.data.length } });
             // 将边写入图
@@ -339,12 +367,50 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 const curr = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
                 const graphId = curr?.meta?.graphId;
                 if (graphId) {
-                    for (const e of edges.data as any[]) {
-                        await gs.addEdge({ from: e.sourceId, to: e.targetId, relation: e.relation }, { graphId });
+                    try { console.debug('[orch][collection] applying structured edges to graph', { graphId, edgeCount: (edges as any)?.data?.length }); } catch { /* noop */ }
+                    // enforce year ordering for citation/extends
+                    const yearById: Record<string, number | undefined> = {};
+                    try {
+                        const { literatureDataAccess } = require('@/features/literature/data-access');
+                        for (const pid of papers.map(p => p.id)) {
+                            const item = await literatureDataAccess.literatures.getEnhanced(pid as any);
+                            yearById[pid] = item?.literature?.year || undefined;
+                        }
+                    } catch { /* ignore */ }
+                    let attempted = 0, added = 0, skippedYear = 0, skippedMissingNode = 0, errors = 0;
+                    for (const e of (edges as any).data) {
+                        attempted++;
+                        if ((e.relation === 'citation' || e.relation === 'extends') &&
+                            (yearById[e.sourceId] && yearById[e.targetId] && (yearById[e.sourceId]! > yearById[e.targetId]!))) {
+                            skippedYear++;
+                            continue; // violate ordering, skip
+                        }
+                        try {
+                            // validate nodes exist in current graph snapshot
+                            const g = useGraphStore.getState().graphs.get(graphId);
+                            if (!g?.nodes?.[e.sourceId] || !g?.nodes?.[e.targetId]) {
+                                skippedMissingNode++;
+                                continue;
+                            }
+                            await gs.addEdge({ from: e.sourceId, to: e.targetId, relation: e.relation, tags: e.tags, meta: e.rationale || e.evidence ? { rationale: e.rationale, evidence: e.evidence } : undefined }, { graphId });
+                            added++;
+                        } catch (err) {
+                            errors++;
+                        }
                     }
+                    try { console.debug('[orch][collection] edges apply summary', { attempted, added, skippedYear, skippedMissingNode, errors }); } catch { /* noop */ }
                 }
             } catch { /* ignore */ }
-            await emit({ id: newId(), type: 'GraphConstructionCompleted', ts: Date.now(), sessionId, payload: { nodes: papers.length, edges: edges.data.length } });
+            try {
+                const gsState = (useGraphStore as any)?.getState?.();
+                const sess = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
+                const gid = sess?.meta?.graphId;
+                const g = gid ? gsState?.graphs?.get?.(gid) : null;
+                const edgeCount = g?.edges ? Object.keys(g.edges).length : 0;
+                await emit({ id: newId(), type: 'GraphConstructionCompleted', ts: Date.now(), sessionId, payload: { nodes: papers.length, edges: edgeCount } });
+            } catch {
+                await emit({ id: newId(), type: 'GraphConstructionCompleted', ts: Date.now(), sessionId, payload: { nodes: papers.length, edges: edges.data.length } });
+            }
             // 请求用户决策：确认图谱或补充扩展
             try {
                 const curr = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);

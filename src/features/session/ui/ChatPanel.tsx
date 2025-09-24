@@ -50,6 +50,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
 
     const isOpen = Boolean((session as any)?.meta?.graphPanelOpen);
     return (
+        // <div></div>
         <Card className="relative h-[calc(100vh-5rem)] flex flex-col">
             {/* 右上角书签形按钮：收起为向左箭头，展开为小叉 */}
             <button
@@ -81,25 +82,48 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                 {/* <DeepResearchPill enabled={deep} onToggle={toggleDeep} /> */}
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
-                <div className="flex-1 overflow-auto divide-y">
-                    {messages.map(m => (
-                        <div key={m.id} className="p-3 text-sm">
-                            <div className="text-xs text-muted-foreground mb-1">{m.role} · {new Date(m.createdAt).toLocaleTimeString()}</div>
-                            {m.id.startsWith('proposal_') ? (
-                                <DirectionProposalCard sessionId={sessionId} content={m.content} status={m.status} />
-                            ) : m.id.startsWith('plan_') ? (
-                                <SearchThinkingCard status={m.status} content={m.content} />
-                            ) : m.id.startsWith('cands_') ? (
-                                <SearchCandidatesCard sessionId={sessionId} artifactId={m.id.replace('cands_', '')} />
-                            ) : m.id.startsWith('graph_decision_') ? (
-                                <GraphDecisionCard sessionId={sessionId} />
-                            ) : m.id.startsWith('report_') ? (
-                                <ReportCard sessionId={sessionId} messageId={m.id} status={m.status} content={m.content} />
-                            ) : (
-                                <Markdown text={m.content} />
-                            )}
-                        </div>
-                    ))}
+                <div className="flex-1 overflow-auto">
+                    {messages.map((m, idx) => {
+                        const prev = messages[idx - 1];
+                        const type = m.id.split('_')[0];
+                        const prevType = prev ? prev.id.split('_')[0] : null;
+                        const showDivider = prev && prevType !== type;
+                        const labelMap: Record<string, string> = {
+                            proposal: 'Step 1 · 方向提议',
+                            plan: 'Step 2.1 · 思考',
+                            cands: 'Step 2.1 · 搜索',
+                            graph: 'Step 2.2 · 关系图',
+                            report: 'Step 4 · 报告',
+                        };
+                        const label = labelMap[type] || undefined;
+                        return (
+                            <div key={m.id} className="p-3 text-sm">
+                                {showDivider && label && (
+                                    <div className="my-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                        <div className="h-px bg-border flex-1" />
+                                        <div>{label}</div>
+                                        <div className="h-px bg-border flex-1" />
+                                    </div>
+                                )}
+                                <div className="text-xs text-muted-foreground mb-1">{m.role} · {new Date(m.createdAt).toLocaleTimeString()}</div>
+                                {m.id.startsWith('proposal_') ? (
+                                    <DirectionProposalCard sessionId={sessionId} content={m.content} status={m.status} />
+                                ) : m.id.startsWith('graph_thinking_') ? (
+                                    <GraphThinkingCard status={m.status} content={m.content} />
+                                ) : m.id.startsWith('plan_') ? (
+                                    <SearchThinkingCard status={m.status} content={m.content} />
+                                ) : m.id.startsWith('cands_') ? (
+                                    <SearchCandidatesCard sessionId={sessionId} artifactId={m.id.replace('cands_', '')} />
+                                ) : m.id.startsWith('graph_decision_') ? (
+                                    <GraphDecisionCard sessionId={sessionId} />
+                                ) : m.id.startsWith('report_') ? (
+                                    <ReportCard sessionId={sessionId} messageId={m.id} status={m.status} content={m.content} />
+                                ) : (
+                                    <Markdown text={m.content} />
+                                )}
+                            </div>
+                        );
+                    })}
                     {/* 操作按钮已上移到头部 */}
                     {/* 决策任务卡：当等待决定时渲染卡片 */}
                     {!!(session as any)?.meta?.direction?.awaitingDecision && (
@@ -128,6 +152,20 @@ const SearchThinkingCard: React.FC<{ status: any; content: string }> = ({ status
             status={status}
             headerVariant="purple"
             contentClassName="space-y-2"
+        >
+            <Markdown text={content} />
+        </StreamCard>
+    );
+};
+
+const GraphThinkingCard: React.FC<{ status: any; content: string }> = ({ status, content }) => {
+    return (
+        <StreamCard
+            title="关系图·思考"
+            status={status}
+            headerVariant="purple"
+            className="mb-2"
+            contentClassName="space-y-3"
         >
             <Markdown text={content} />
         </StreamCard>
@@ -239,7 +277,7 @@ const ComposerBar: React.FC<{
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
     };
     return (
-        <div className="border-t p-3">
+        <div className="p-3">
             <div className="relative flex items-center gap-2">
                 <button
                     type="button"

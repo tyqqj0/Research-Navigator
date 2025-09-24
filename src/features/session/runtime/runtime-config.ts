@@ -9,6 +9,10 @@ export const runtimeConfig = {
 
     // Graph building
     GRAPH_WINDOW_SIZE: 50,
+    // JSONL parsing limits
+    GRAPH_JSONL_MAX_LINES: 200,
+    GRAPH_JSONL_MAX_EDGES: 300,
+    GRAPH_JSONL_MAX_TAGS: 4,
 } as const;
 
 

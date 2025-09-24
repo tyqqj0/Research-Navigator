@@ -32,7 +32,7 @@ export const StreamCard: React.FC<StreamCardProps> = ({
     const errored = status === "error";
 
     return (
-        <Card className={cn("border rounded-md", className)}>
+        <Card className={cn("rounded-md border-0 shadow-none", className)}>
             {(title || status || headerRight) && (
                 <CardHeader className="py-3" variant={headerVariant}>
                     <div className="flex items-center justify-between">
@@ -65,7 +65,7 @@ export const StreamCard: React.FC<StreamCardProps> = ({
                         <Skeleton className="h-4 w-1/2" />
                     </div>
                 )}
-                {footer && <div className="pt-2 border-t mt-2">{footer}</div>}
+                {footer && <div className="pt-2 mt-2">{footer}</div>}
             </CardContent>
         </Card>
     );

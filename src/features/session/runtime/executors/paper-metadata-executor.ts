@@ -2,7 +2,7 @@ import { literatureDataAccess } from '@/features/literature/data-access';
 import { sessionRepository } from '../../data-access/session-repository';
 import type { Artifact, SessionEvent } from '../../data-access/types';
 
-export interface BriefPaperMeta { id: string; title: string; firstAuthor?: string; year?: number; abstract?: string }
+export interface BriefPaperMeta { id: string; title: string; firstAuthor?: string; year?: number; publicationDate?: string; abstract?: string }
 
 export const paperMetadataExecutor = {
     async fetchBriefs(paperIds: string[]): Promise<BriefPaperMeta[]> {
@@ -12,8 +12,9 @@ export const paperMetadataExecutor = {
                 return {
                     id,
                     title: item?.literature?.title || id,
-                    firstAuthor: item?.literature?.authors?.[0]?.name,
+                    firstAuthor: (item?.literature?.authors && item.literature.authors.length > 0) ? String(item.literature.authors[0]) : undefined,
                     year: item?.literature?.year,
+                    publicationDate: item?.literature?.publicationDate,
                     abstract: item?.literature?.abstract
                 } as BriefPaperMeta;
             } catch {

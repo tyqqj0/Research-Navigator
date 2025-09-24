@@ -316,7 +316,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
 
                 {/* 底部区域固定在最底部 */}
                 {bottomSlot && (
-                    <div className="px-2 pb-2 border-t">
+                    <div className="px-2 pb-2">
                         {bottomSlot}
                     </div>
                 )}

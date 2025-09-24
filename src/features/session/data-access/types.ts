@@ -138,6 +138,9 @@ export type SessionEvent =
     | EventEnvelope<'CandidatesSelected', { candidateId: ArtifactId; size: number; ruleSet: string }>
     // Graph construction
     | EventEnvelope<'GraphConstructionStarted', { size: number }>
+    | EventEnvelope<'GraphThinkingStarted', { version: number }>
+    | EventEnvelope<'GraphThinkingDelta', { version: number; phase: 1 | 2; delta: string }>
+    | EventEnvelope<'GraphThinkingCompleted', { version: number; phase1ArtifactId: ArtifactId; phase2ArtifactId: ArtifactId }>
     | EventEnvelope<'GraphRelationsProposed', { textArtifactId: ArtifactId }>
     | EventEnvelope<'GraphEdgesStructured', { edgeArtifactId: ArtifactId; size: number }>
     | EventEnvelope<'GraphConstructionCompleted', { nodes: number; edges: number }>
