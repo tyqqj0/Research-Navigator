@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useGraphStore } from '@/features/graph/data-access/graph-store';
 import { Download, Upload, Plus, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useSessionStore } from '@/features/session/data-access/session-store';
 
 interface GraphPickerPanelProps {
     className?: string;
@@ -21,9 +22,26 @@ export const GraphPickerPanel: React.FC<GraphPickerPanelProps> = ({ className, o
     const [createOpen, setCreateOpen] = useState(false);
     const [createName, setCreateName] = useState('');
 
+
     useEffect(() => {
         store.listGraphs().then(setGraphList).catch(() => { });
     }, [store.listGraphs]);
+
+    const sessionTitleByGraphId = useMemo(() => {
+        try {
+            const map = new Map<string, string>();
+            const sessions = Array.from(useSessionStore.getState().sessions.values()) as any[];
+            for (const s of sessions) {
+                const sid = (s?.meta as any)?.graphId as string | undefined;
+                if (sid && typeof s?.title === 'string' && s.title.trim()) {
+                    map.set(sid, s.title as string);
+                }
+            }
+            return map;
+        } catch {
+            return new Map<string, string>();
+        }
+    }, [useSessionStore.getState().sessions]);
 
     const handleOpenCreate = () => {
         setCreateName('');
@@ -72,7 +90,7 @@ export const GraphPickerPanel: React.FC<GraphPickerPanelProps> = ({ className, o
         setImporting(true);
         try {
             const text = await file.text();
-            const { graph } = await store.importGraphJson(text, { generateNewId: true });
+            const graph = await store.importGraphJson(text, { generateNewId: true });
             const list = await store.listGraphs();
             setGraphList(list);
             onSelectGraph?.(graph.id);
@@ -118,7 +136,11 @@ export const GraphPickerPanel: React.FC<GraphPickerPanelProps> = ({ className, o
                                         className="flex-1 text-left truncate"
                                         onClick={() => { store.setCurrentGraphId(g.id); onSelectGraph?.(g.id); }}
                                     >
-                                        {g.name || g.id}
+                                        {sessionTitleByGraphId.has(g.id) ? (
+                                            <span className="truncate max-w-[12rem]">{sessionTitleByGraphId.get(g.id)}</span>
+                                        ) : (
+                                            <span className="truncate max-w-[12rem]">{g.name || g.id}</span>
+                                        )}
                                     </button>
                                     <Button size="sm" variant="ghost" onClick={() => handleExport(g.id)}>
                                         <Download className="h-4 w-4" />

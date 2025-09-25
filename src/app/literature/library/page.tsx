@@ -31,6 +31,7 @@ import { useLiteratureOperations } from '@/features/literature/hooks/use-literat
 import { useLiteratureCommands } from '@/features/literature/hooks/use-literature-commands';
 import LiteratureDetailPanel from '@/features/literature/management/components/LiteratureDetailPanel';
 import CitationGraphPanel from '@/features/literature/visualization/citation-graph/CitationGraphPanel';
+import { useSessionStore } from '@/features/session/data-access/session-store';
 import { useLiteratureViewStore } from '@/features/literature/stores/view-store';
 import { CollectionTreePanel } from '@/features/literature/management/components/CollectionTreePanel';
 import { useCollectionOperations } from '@/features/literature/hooks';
@@ -286,6 +287,14 @@ export default function LibraryPage() {
                                 <div className="text-base font-semibold mb-4 flex items-center gap-2">
                                     <Network className="w-5 h-5 text-blue-500" />
                                     引用关系图
+                                    {selectedCollectionId ? (() => {
+                                        try {
+                                            const sessions = Array.from(useSessionStore.getState().sessions.values());
+                                            const matched = sessions.find((s: any) => s?.linkedCollectionId === selectedCollectionId);
+                                            const title = matched?.title as string | undefined;
+                                            return title ? <span className="text-sm text-muted-foreground">（会话：{title}）</span> : null;
+                                        } catch { return null; }
+                                    })() : null}
                                 </div>
                                 <div className="flex-1 min-h-0">
                                     <CitationGraphPanel

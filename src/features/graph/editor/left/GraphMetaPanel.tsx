@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useGraphStore } from '@/features/graph/data-access';
 import { Download, Upload, Link2, Circle, GitBranch } from 'lucide-react';
+import { useSessionStore } from '@/features/session/data-access/session-store';
 
 interface GraphMetaPanelProps {
     className?: string;
@@ -19,6 +20,16 @@ export const GraphMetaPanel: React.FC<GraphMetaPanelProps> = ({ className, graph
         if (!graph) return { nodes: 0, edges: 0 };
         return { nodes: Object.keys(graph.nodes).length, edges: Object.keys(graph.edges).length };
     }, [graph]);
+
+    const linkedSessionTitle = useMemo(() => {
+        try {
+            const sessions = Array.from(useSessionStore.getState().sessions.values()) as any[];
+            const s = sessions.find(s => (s?.meta as any)?.graphId === graphId);
+            return s?.title as string | undefined;
+        } catch {
+            return undefined;
+        }
+    }, [graphId]);
 
     const handleExport = async () => {
         const json = await store.exportCurrentGraphJson().catch(async () => {
@@ -43,6 +54,9 @@ export const GraphMetaPanel: React.FC<GraphMetaPanelProps> = ({ className, graph
         <Card className={className}>
             <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-heading">{graph?.name || '图谱信息'}</CardTitle>
+                {linkedSessionTitle && (
+                    <div className="text-xs text-muted-foreground mt-1">会话：{linkedSessionTitle}</div>
+                )}
             </CardHeader>
             <CardContent className="pt-0">
                 <div className="text-sm text-muted-foreground mb-2">ID: <span className="text-xs">{graphId}</span></div>

@@ -15,6 +15,7 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useSessionStore } from '@/features/session/data-access/session-store';
 import { Input } from '@/components/ui/input';
 
 interface CollectionTreePanelProps {
@@ -50,6 +51,23 @@ export const CollectionTreePanel: React.FC<CollectionTreePanelProps> = ({ classN
     const [editTargetId, setEditTargetId] = useState<string | null>(null);
     const [editType, setEditType] = useState<Collection['type']>('general' as any);
     const [submitting, setSubmitting] = useState(false);
+    // session index -> collectionId: sessionTitle
+    const sessionTitleByCollectionId = useMemo(() => {
+        try {
+            const sessions = Array.from(useSessionStore.getState().sessions.values());
+            const map = new Map<string, string>();
+            for (const s of sessions) {
+                const cid = (s as any)?.linkedCollectionId as string | undefined;
+                if (cid) {
+                    const title = (s as any)?.title || '未命名会话';
+                    if (!map.has(cid)) map.set(cid, title);
+                }
+            }
+            return map;
+        } catch {
+            return new Map<string, string>();
+        }
+    }, [useSessionStore]);
 
     useEffect(() => {
         // 初次加载用户集合
@@ -174,7 +192,11 @@ export const CollectionTreePanel: React.FC<CollectionTreePanelProps> = ({ classN
                                 style={{ marginLeft: Math.max(0, depth - 1) * 14 }}
                             >
                                 {expanded ? <FolderOpen className="h-4 w-4 text-blue-600" /> : <Folder className="h-4 w-4 text-blue-600" />}
-                                <span className="truncate max-w-[12rem]">{c.name}</span>
+                                {sessionTitleByCollectionId.has(c.id) ? (
+                                    <span className="truncate max-w-[12rem]">{sessionTitleByCollectionId.get(c.id)}</span>
+                                ) : (
+                                    <span className="truncate max-w-[12rem]">{c.name}</span>
+                                )}
                                 <span className="text-xs text-muted-foreground">{c.itemCount ?? c.paperIds.length}</span>
                             </button>
                             <button
