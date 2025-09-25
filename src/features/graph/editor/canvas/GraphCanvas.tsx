@@ -8,7 +8,6 @@ import { useGraphStore } from '@/features/graph/data-access/graph-store';
 import type { GraphDataSource, GraphSnapshot } from '@/features/graph/data-access';
 import { graphStoreDataSource } from '@/features/graph/data-access/graph-store';
 import type { PaperSummary } from '../paper-catalog';
-import { useLiteratureStore } from '@/features/literature/data-access';
 import { ALLOWED_RELATIONS, RELATION_LABELS } from '@/features/graph/config/relations';
 
 interface GraphCanvasProps {
@@ -29,6 +28,8 @@ interface GraphCanvasProps {
     onEdgeSelect?: (edgeId: string | null) => void;
     onEdgeCreate?: (edge: { from: string; to: string; relation: string }) => void;
     onViewportChange?: (v: { pxPerYear: number; scrollTop: number }) => void;
+    // When streaming UI is active, we reduce/stop physics churn to avoid visual jitter
+    isStreaming?: boolean;
 }
 
 export interface GraphCanvasRef {
@@ -43,11 +44,9 @@ type Pos = { x: number; y: number };
 type SimNode = { id: string; x: number; y: number; vx?: number; vy?: number; fx?: number | null; fy?: number | null };
 
 export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((props, ref) => {
-    const { graphId, getPaperSummary, onNodeOpenDetail, layoutMode = 'free', dataSource, className, style, height, axisWidth, densityWidth, edgeHitbox, handleBaseSize, nodeRenderer, onNodeSelect, onEdgeSelect, onEdgeCreate, onViewportChange } = props;
+    const { graphId, getPaperSummary, onNodeOpenDetail, layoutMode = 'free', dataSource, className, style, height, axisWidth, densityWidth, edgeHitbox, handleBaseSize, nodeRenderer, onNodeSelect, onEdgeSelect, onEdgeCreate, onViewportChange, isStreaming } = props;
     const store = useGraphStore();
     const ds: GraphDataSource = dataSource || graphStoreDataSource;
-    // subscribe to literature updates so node labels (titles/dates) refresh when store changes
-    const _literatureLastUpdated = useLiteratureStore(s => s.stats.lastUpdated);
     const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
     const [internalLayoutMode, setInternalLayoutMode] = useState<'free' | 'timeline'>(layoutMode);
     useEffect(() => { setInternalLayoutMode(layoutMode); }, [layoutMode]);
@@ -77,10 +76,17 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     // local UI state: node positions and simple pan/zoom (MVP)
     const [nodePos, setNodePos] = useState<Record<string, Pos>>({});
     const containerRef = useRef<HTMLDivElement | null>(null);
+    // Smooth ctrl+wheel zoom state
+    const zoomRafRef = useRef<number | null>(null);
+    const accumulatedWheelDeltaRef = useRef<number>(0);
+    const lastZoomAnchorRef = useRef<{ mouseY: number; absY: number } | null>(null);
     const [drag, setDrag] = useState<{ id: string; offset: Pos } | null>(null);
     const [linking, setLinking] = useState<{ fromId: string; start: Pos; current: Pos } | null>(null);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+    // RAF throttle for free-mode dragging updates
+    const dragRafRef = useRef<number | null>(null);
+    const pendingDragRef = useRef<{ id: string; x: number; y: number } | null>(null);
 
     // timeline zoom scale (affects vertical mapping granularity)
     const [timelineScale, setTimelineScale] = useState<number>(1);
@@ -117,6 +123,8 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
 
     const nodes = useMemo(() => Object.values(snapshot?.nodes || {}), [snapshot]);
     const edges = useMemo(() => Object.values(snapshot?.edges || {}), [snapshot]);
+    const nodeIdsKey = useMemo(() => nodes.map(n => n.id).sort().join('|'), [nodes]);
+    const edgePairsKey = useMemo(() => edges.map(e => `${e.from}->${e.to}`).sort().join('|'), [edges]);
 
     // timeline scale
     const timeline = useMemo(() => {
@@ -342,6 +350,8 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     }, [nodes, layoutMode, getPaperSummary, timeline]);
 
     // ----- physics simulation (timeline mode) -----
+    const timelineMinMs = timeline.minDate.getTime();
+    const timelineMaxMs = timeline.maxDate.getTime();
     React.useEffect(() => {
         if (internalLayoutMode !== 'timeline' || !nodes.length) {
             if (simRef.current) { simRef.current.stop(); simRef.current = null; simNodesRef.current = []; }
@@ -390,8 +400,8 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                 return x > target ? target : x;
             }).strength(0.1))
             .alpha(1)
-            .alphaDecay(0.05)
-            .velocityDecay(0.4)
+            .alphaDecay(isStreaming ? 0.1 : 0.05)
+            .velocityDecay(isStreaming ? 0.6 : 0.4)
             .on('tick', () => {
                 if (rafRef.current != null) return;
                 rafRef.current = requestAnimationFrame(() => {
@@ -410,8 +420,9 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                     const draggedNode = dragging ? simNodesRef.current.find(n => n.id === dragging.id) : null;
                     const xr = SETTINGS.dragYRepel.xRadius;
                     const yr = SETTINGS.dragYRepel.yRadius;
-                    const pushBase = SETTINGS.dragYRepelPush;
-                    const ySpring = dragging ? SETTINGS.ySpringDragging : SETTINGS.ySpringRelease;
+                    const pushBase = (isStreaming ? 0.5 : 1.0) * SETTINGS.dragYRepelPush;
+                    const ySpringBase = dragging ? SETTINGS.ySpringDragging : SETTINGS.ySpringRelease;
+                    const ySpring = (isStreaming ? 0.35 : 1.0) * ySpringBase;
                     for (const sn of simNodesRef.current) {
                         if (draggedNode && sn.id === draggedNode.id) continue; // dragged node's y is controlled by mouse (fy)
                         const sum = getPaperSummary?.(sn.id);
@@ -447,7 +458,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
             if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [layoutMode, nodes, edges, timeline.minDate, timeline.maxDate, timelineScale]);
+    }, [internalLayoutMode, nodeIdsKey, edgePairsKey, timelineMinMs, timelineMaxMs, timelineScale, isStreaming]);
 
     const handleDrop = useCallback(async (e: React.DragEvent) => {
         e.preventDefault();
@@ -531,7 +542,22 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                     sim.alpha(0.3).restart();
                 }
             } else {
-                setNodePos((prev) => ({ ...prev, [drag.id]: { x: contentPos.x - drag.offset.x, y: contentPos.y - drag.offset.y } }));
+                const nextX = contentPos.x - drag.offset.x;
+                const nextY = contentPos.y - drag.offset.y;
+                pendingDragRef.current = { id: drag.id, x: nextX, y: nextY };
+                if (dragRafRef.current == null) {
+                    dragRafRef.current = requestAnimationFrame(() => {
+                        dragRafRef.current = null;
+                        const p = pendingDragRef.current;
+                        pendingDragRef.current = null;
+                        if (!p) return;
+                        setNodePos((prev) => {
+                            const current = prev[p.id];
+                            if (current && current.x === p.x && current.y === p.y) return prev;
+                            return { ...prev, [p.id]: { x: p.x, y: p.y } };
+                        });
+                    });
+                }
             }
         }
         if (linking) {
@@ -547,6 +573,8 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
             for (const n of simNodesRef.current) { n.fy = null; n.vy = 0; }
             simRef.current.alpha(0.25).restart();
         }
+        if (dragRafRef.current != null) { cancelAnimationFrame(dragRafRef.current); dragRafRef.current = null; }
+        pendingDragRef.current = null;
         setDrag(null);
         draggingRef.current = null;
         setLinking((l) => l ? { ...l, current: l.current } : null);
@@ -628,38 +656,62 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
 
     const handleWheel = useCallback((e: WheelEvent) => {
         if (internalLayoutMode !== 'timeline' || !containerRef.current) return;
-        // Zoom only when Ctrl is pressed; otherwise let native scrolling happen
-        if (!e.ctrlKey) return;
+        if (!e.ctrlKey) return; // let native scroll when not holding Ctrl
+        // prevent native page/container scroll and scrolling propagation
         e.preventDefault();
         e.stopPropagation();
+
         const container = containerRef.current;
         const rect = container.getBoundingClientRect();
         const mouseY = e.clientY - rect.top; // within container viewport
         const absY = container.scrollTop + mouseY;
-        const dateUnder = timeline.dateFromY(absY);
-        const scaleFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-        const newScale = Math.max(0.2, Math.min(8, timelineScale * scaleFactor));
 
-        // compute new y for same date under cursor using same mapping constants
-        const t = Math.max(0, Math.min(1, (dateUnder.getTime() - (timeline.minDate as Date).getTime()) / timeline.rangeMs));
-        const MS_PER_YEAR = 365.2425 * 24 * 3600 * 1000;
-        const yearsSpan = Math.max(0.25, timeline.rangeMs / MS_PER_YEAR);
-        const BASE_PX_PER_YEAR = 120;
-        const newPxPerYear = BASE_PX_PER_YEAR * newScale;
-        const newTrackHeight2 = newPxPerYear * yearsSpan;
-        const newAbsY = timeline.paddingTop + t * newTrackHeight2;
-        const newScrollTop = Math.max(0, newAbsY - mouseY);
-        container.scrollTop = newScrollTop;
-        setTimelineScale(newScale);
+        // accumulate deltas and apply zoom at most once per frame
+        accumulatedWheelDeltaRef.current += e.deltaY;
+        lastZoomAnchorRef.current = { mouseY, absY };
+
+        if (zoomRafRef.current == null) {
+            zoomRafRef.current = requestAnimationFrame(() => {
+                const delta = accumulatedWheelDeltaRef.current;
+                accumulatedWheelDeltaRef.current = 0;
+                zoomRafRef.current = null;
+
+                const anchor = lastZoomAnchorRef.current;
+                if (!anchor || !containerRef.current) return;
+
+                const { mouseY: anchorMouseY, absY: anchorAbsY } = anchor;
+                const dateUnder = timeline.dateFromY(anchorAbsY);
+
+                // Smooth factor: map wheel delta to exponential zoom for smoother feel
+                // Negative delta -> zoom in; Positive delta -> zoom out
+                const factor = Math.pow(1.1, -delta / 100);
+                const newScale = Math.max(0.2, Math.min(8, timelineScale * factor));
+
+                // compute new y for same date under cursor using same mapping constants
+                const t = Math.max(0, Math.min(1, (dateUnder.getTime() - (timeline.minDate as Date).getTime()) / timeline.rangeMs));
+                const MS_PER_YEAR = 365.2425 * 24 * 3600 * 1000;
+                const yearsSpan = Math.max(0.25, timeline.rangeMs / MS_PER_YEAR);
+                const BASE_PX_PER_YEAR = 120;
+                const newPxPerYear = BASE_PX_PER_YEAR * newScale;
+                const newTrackHeight2 = newPxPerYear * yearsSpan;
+                const newAbsY = timeline.paddingTop + t * newTrackHeight2;
+                const newScrollTop = Math.max(0, newAbsY - anchorMouseY);
+                containerRef.current.scrollTop = newScrollTop;
+                setTimelineScale(newScale);
+            });
+        }
     }, [internalLayoutMode, timeline, timelineScale]);
 
     useEffect(() => {
-        const el = containerRef.current;
-        if (!el) return;
-        const listener = (e: WheelEvent) => handleWheel(e);
-        // capture:true to cancel native scroll BEFORE it scrolls the page
-        el.addEventListener('wheel', listener, { passive: false, capture: true } as any);
-        return () => { el.removeEventListener('wheel', listener as any, { capture: true } as any); };
+        const listener = (e: WheelEvent) => {
+            const target = e.target as Node | null;
+            const container = containerRef.current;
+            if (!container || !target) return;
+            if (container.contains(target)) handleWheel(e);
+        };
+        // Use top-level capture to prevent native scroll and page bounce as early as possible
+        window.addEventListener('wheel', listener, { passive: false, capture: true } as any);
+        return () => { window.removeEventListener('wheel', listener as any, { capture: true } as any); };
     }, [handleWheel]);
 
     // track container height for vertical centering
@@ -743,7 +795,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     return (
         <div
             ref={containerRef}
-            className={`h-full relative overflow-auto overscroll-y-contain outline-none focus:outline-none ${className || ''}`}
+            className={`h-full relative overflow-auto overscroll-contain outline-none focus:outline-none ${className || ''}`}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onMouseMove={onMouseMove}
