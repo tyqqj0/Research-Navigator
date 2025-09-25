@@ -13,6 +13,8 @@ export const runtimeConfig = {
     GRAPH_JSONL_MAX_LINES: 200,
     GRAPH_JSONL_MAX_EDGES: 300,
     GRAPH_JSONL_MAX_TAGS: 4,
+    // Title generation
+    TITLE_GEN_LOCALE: 'zh-CN',
 } as const;
 
 

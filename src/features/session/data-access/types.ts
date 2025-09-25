@@ -62,6 +62,11 @@ export interface EventEnvelope<T extends string = string, P = unknown> {
     causationId?: string;
     payload: P;
     artifacts?: ArtifactRef[];
+    // Delivery quality-of-service hint for the event bus. When omitted, defaults to 'auto'.
+    // - 'sync': await all subscribers before returning
+    // - 'async': fire-and-forget subscriber notifications
+    // - 'auto': bus decides based on event type heuristics
+    qos?: 'sync' | 'async' | 'auto';
 }
 
 // Commands (intent)

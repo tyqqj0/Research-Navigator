@@ -373,13 +373,23 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 const graphId = curr?.meta?.graphId;
                 if (graphId) {
                     try { console.debug('[orch][collection] applying structured edges to graph', { graphId, edgeCount: (edges as any)?.data?.length }); } catch { /* noop */ }
-                    // enforce year ordering for citation/extends
-                    const yearById: Record<string, number | undefined> = {};
+                    // enforce chronological ordering (publicationDate -> year) for all relations
+                    const timeMsById: Record<string, number | undefined> = {};
                     try {
                         const { literatureDataAccess } = require('@/features/literature/data-access');
                         for (const pid of papers.map(p => p.id)) {
                             const item = await literatureDataAccess.literatures.getEnhanced(pid as any);
-                            yearById[pid] = item?.literature?.year || undefined;
+                            const pub = item?.literature?.publicationDate;
+                            let t: number | undefined = undefined;
+                            if (typeof pub === 'string' && pub.length > 3) {
+                                const d = new Date(pub);
+                                if (!isNaN(d.getTime())) t = d.getTime();
+                            }
+                            if (t === undefined) {
+                                const y = item?.literature?.year;
+                                if (typeof y === 'number' && isFinite(y)) t = new Date(y, 0, 1).getTime();
+                            }
+                            timeMsById[pid] = t;
                         }
                     } catch { /* ignore */ }
                     let attempted = 0, added = 0, reorderedDirection = 0, skippedMissingNode = 0, errors = 0;
@@ -388,8 +398,8 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                         // Enforce timeline direction: from older (smaller year) to newer (larger year)
                         let fromId = e.sourceId;
                         let toId = e.targetId;
-                        const sy = yearById[fromId];
-                        const ty = yearById[toId];
+                        const sy = timeMsById[fromId];
+                        const ty = timeMsById[toId];
                         if (typeof sy === 'number' && typeof ty === 'number' && sy > ty) {
                             const tmp = fromId; fromId = toId; toId = tmp;
                             reorderedDirection++;

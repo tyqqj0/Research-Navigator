@@ -15,10 +15,37 @@ export const eventBus = {
         return () => subscribers.delete(handler);
     },
     async publish(event: SessionEvent) {
-        // try { console.debug('[bus][event][publish]', BUS_ID, event.type, event.id, 'subs=', subscribers.size); } catch { }
+        // Persist first so handlers can rely on durable log
         await sessionRepository.appendEvent(event);
-        for (const h of Array.from(subscribers)) {
-            try { await Promise.resolve(h(event)); } catch (e) { try { console.warn('[bus][event][handler_error]', BUS_ID, (e as Error)?.message); } catch { } }
+        const qos = event.qos || 'async';
+        const nonBlockingTypes = new Set<string>([
+            'SessionRenamed',
+            'DeepResearchModeChanged',
+            'SearchRoundPlanned',
+            'SearchCandidatesReady',
+            'SearchExecuted',
+            'PapersIngested',
+            'CollectionUpdated',
+            'GraphThinkingDelta',
+            'GraphRelationsProposed'
+        ]);
+        const effective: 'sync' | 'async' = qos === 'auto'
+            ? (nonBlockingTypes.has(event.type) ? 'async' : 'sync')
+            : qos;
+        if (effective === 'sync') {
+            for (const h of Array.from(subscribers)) {
+                try { await Promise.resolve(h(event)); } catch (e) { try { console.warn('[bus][event][handler_error_sync]', BUS_ID, (e as Error)?.message); } catch { } }
+            }
+        } else {
+            for (const h of Array.from(subscribers)) {
+                try {
+                    void Promise.resolve().then(() => h(event)).catch((e) => {
+                        try { console.warn('[bus][event][handler_error]', BUS_ID, (e as Error)?.message); } catch { }
+                    });
+                } catch (e) {
+                    try { console.warn('[bus][event][handler_error_sync]', BUS_ID, (e as Error)?.message); } catch { }
+                }
+            }
         }
     }
 };

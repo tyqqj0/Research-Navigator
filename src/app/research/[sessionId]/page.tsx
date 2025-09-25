@@ -17,6 +17,7 @@ import '@/features/session/runtime/orchestrator/collection.orchestrator';
 import '@/features/session/runtime/orchestrator/report.orchestrator';
 import { startDirectionSupervisor } from '@/features/session/runtime/orchestrator/direction.supervisor';
 import { startCollectionSupervisor } from '@/features/session/runtime/orchestrator/collection.supervisor';
+import { startTitleSupervisor } from '@/features/session/runtime/orchestrator/title.supervisor';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SessionList } from '@/features/session/ui/SessionList';
@@ -35,7 +36,7 @@ export default function ResearchSessionPage() {
 
     const sessions = store.getSessions();
     // Ensure supervisors started once on client
-    useEffect(() => { startDirectionSupervisor(); startCollectionSupervisor(); }, []);
+    useEffect(() => { startDirectionSupervisor(); startCollectionSupervisor(); startTitleSupervisor(); }, []);
 
     const createSession = async () => {
         const id = crypto.randomUUID();
@@ -46,9 +47,11 @@ export default function ResearchSessionPage() {
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [titleDraft, setTitleDraft] = React.useState('');
 
+    const current = useSessionStore(state => state.sessions.get(sessionId!));
+    const displayTitle = current?.title || '未命名研究';
     const pageHeader = (
         <div className="px-6 py-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">研究会话 - {sessionId}</h2>
+            <h2 className="text-lg font-semibold" title={`ID: ${sessionId}`}>{displayTitle}</h2>
         </div>
     );
 
@@ -61,7 +64,7 @@ export default function ResearchSessionPage() {
         void loadCollections({ force: false });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    const current = useSessionStore(state => state.sessions.get(sessionId!));
+    // current already defined above
     const graphId = (current?.meta as any)?.graphId;
 
     const [detailOpen, setDetailOpen] = React.useState(false);
@@ -121,7 +124,7 @@ function DynamicSessionBody({ sessionId, getPaperSummary, graphId, onOpenDetail 
             <div
                 className="h-[calc(100vh-5rem)] grid"
                 style={{
-                    gridTemplateColumns: open ? '1.2fr 1.6fr 1fr' : '1fr 0fr 0fr',
+                    gridTemplateColumns: open ? '1.2fr 1.6fr 0.6fr' : '1fr 0fr 0fr',
                     gap: open ? '1rem' : '0rem',
                     transition: 'grid-template-columns 300ms ease-in-out, gap 300ms ease-in-out',
                     ...stageKeyStyle

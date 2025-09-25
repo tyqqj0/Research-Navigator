@@ -46,7 +46,7 @@ if (!g.__chatOrchestratorRegistered) {
             return;
         }
         if (cmd.type === 'RenameSession') {
-            await emit({ id: newId(), type: 'SessionRenamed', ts: Date.now(), sessionId: cmd.params.sessionId, payload: { title: cmd.params.title } });
+            await emit({ id: newId(), type: 'SessionRenamed', ts: Date.now(), sessionId: cmd.params.sessionId, payload: { title: cmd.params.title }, qos: 'sync' } as any);
             return;
         }
         if (cmd.type === 'ToggleDeepResearch') {
@@ -58,7 +58,7 @@ if (!g.__chatOrchestratorRegistered) {
             if (handledCmdIds.has(cmd.id)) { try { console.warn('[orch][chat][duplicate_cmd]', ORCH_ID, cmd.id); } catch { } return; }
             handledCmdIds.add(cmd.id);
             const userMid = newId();
-            await emit({ id: newId(), type: 'UserMessageAdded', ts: Date.now(), sessionId, payload: { messageId: userMid, text: cmd.params.text } });
+            await emit({ id: newId(), type: 'UserMessageAdded', ts: Date.now(), sessionId, payload: { messageId: userMid, text: cmd.params.text }, qos: 'async' } as any);
             // 当 Deep Research 开启且方向未确认时：仅记录用户消息，不启动普通对话，避免与方案生成并发
             try {
                 const { useSessionStore } = await import('../../data-access/session-store');

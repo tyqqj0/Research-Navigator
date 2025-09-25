@@ -14,9 +14,10 @@ import '../runtime/orchestrator/collection.orchestrator';
 import '../runtime/orchestrator/report.orchestrator';
 import { startDirectionSupervisor } from '@/features/session/runtime/orchestrator/direction.supervisor';
 import { startCollectionSupervisor } from '@/features/session/runtime/orchestrator/collection.supervisor';
+import { startTitleSupervisor } from '@/features/session/runtime/orchestrator/title.supervisor';
 
 export const SessionPage: React.FC<{ sessionId: string }> = ({ sessionId }) => {
-    React.useEffect(() => { startDirectionSupervisor(); startCollectionSupervisor(); }, []);
+    React.useEffect(() => { startDirectionSupervisor(); startCollectionSupervisor(); startTitleSupervisor(); }, []);
     const { getPaperSummary } = usePaperCatalog();
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const graphId = undefined as any; // 后续由编排器设置并接入 GraphCanvas
