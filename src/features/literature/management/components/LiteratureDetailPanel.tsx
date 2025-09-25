@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useLiteratureOperations } from '../../hooks/use-literature-operations';
@@ -12,7 +11,8 @@ import { useLiteratureCommands } from '../../hooks/use-literature-commands';
 import type { EnhancedLibraryItem, UpdateUserLiteratureMetaInput } from '../../data-access/models';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Info, ListTree, Plus, Loader2 } from 'lucide-react';
+import { Info, ListTree, Plus, Loader2, FileText } from 'lucide-react';
+import { NotesPanel } from '@/features/notes/components/NotesPanel';
 
 interface LiteratureDetailPanelProps {
     open: boolean;
@@ -46,7 +46,7 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
     const [tagsInput, setTagsInput] = useState('');
     const [readingStatus, setReadingStatus] = useState<UpdateUserLiteratureMetaInput['readingStatus']>('unread');
     const [rating, setRating] = useState<number | undefined>(undefined);
-    const [personalNotes, setPersonalNotes] = useState('');
+
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
@@ -58,7 +58,7 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
         setTagsInput((meta.tags || []).join(', '));
         setReadingStatus(meta.readingStatus || 'unread');
         setRating(meta.rating);
-        setPersonalNotes(meta.personalNotes || '');
+
         setError(null);
     }, [currentItem?.literature.paperId]);
 
@@ -75,7 +75,6 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
             const payload: UpdateUserLiteratureMetaInput = {
                 tags: parsedTags,
                 readingStatus,
-                personalNotes: personalNotes?.trim() || undefined,
             };
             if (typeof rating === 'number') payload.rating = rating;
 
@@ -91,7 +90,7 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
         } finally {
             setIsSaving(false);
         }
-    }, [currentItem, tagsInput, readingStatus, rating, personalNotes, updateUserMeta, onUpdated, onOpenChange]);
+    }, [currentItem, tagsInput, readingStatus, rating, updateUserMeta, onUpdated, onOpenChange]);
 
     const references = useMemo(() => {
         const pc = (currentItem?.literature.parsedContent as any) || {};
@@ -153,6 +152,8 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
             });
         }
     }, [addByIdentifier, makeIdentifier, defaultCollectionId]);
+
+    const resolvedPaperId = currentItem?.literature.paperId ?? paperId;
 
     const Body = (
         <div className="h-full overflow-hidden">
@@ -236,15 +237,7 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
                                             />
                                         </div>
 
-                                        <div className="space-y-2 md:col-span-2">
-                                            <div className="text-sm font-semibold">个人笔记</div>
-                                            <Textarea
-                                                rows={5}
-                                                placeholder="写下你的想法、要点或待办..."
-                                                value={personalNotes}
-                                                onChange={(e) => setPersonalNotes(e.target.value)}
-                                            />
-                                        </div>
+
                                     </div>
 
                                     {error && (
@@ -314,6 +307,15 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
                                 </div>
                             </ScrollArea>
                         </TabsContent>
+                        <TabsContent value="notes" className="h-full !mt-0">
+                            <ScrollArea className="h-full">
+                                {resolvedPaperId ? (
+                                    <NotesPanel paperId={resolvedPaperId} />
+                                ) : (
+                                    <div className="p-4 text-sm text-muted-foreground">未找到文献ID，无法加载笔记。</div>
+                                )}
+                            </ScrollArea>
+                        </TabsContent>
                     </div>
 
                     <div className="shrink-0 w-10 border-l border-border p-2">
@@ -325,6 +327,10 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
                             <TabsTrigger value="references" className="!justify-center !w-full !px-0 !py-2 h-9" aria-label="参考文献">
                                 <ListTree className="w-5 h-5" />
                                 <span className="sr-only">参考文献</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="notes" className="!justify-center !w-full !px-0 !py-2 h-9" aria-label="笔记">
+                                <FileText className="w-5 h-5" />
+                                <span className="sr-only">笔记</span>
                             </TabsTrigger>
                         </TabsList>
                     </div>
