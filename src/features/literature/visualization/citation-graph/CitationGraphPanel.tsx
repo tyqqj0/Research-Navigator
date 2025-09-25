@@ -122,11 +122,17 @@ export function CitationGraphPanel(props: CitationGraphPanelProps) {
     const [isLayouting, setIsLayouting] = useState(false);
     const physicsRef = useRef<CitationGraphPhysics | null>(null);
     const literatureStore = useLiteratureStore();
-   
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+    const viewportRef = useRef<{ x: number; y: number; zoom: number }>({ x: 0, y: 0, zoom: 1 });
+    const moveRafRef = useRef<number | null>(null);
+    const [viewportRev, setViewportRev] = useState(0);
+
 
     // Initialize physics
     useEffect(() => {
-        const onTick = () => {
+        // Throttled/RAF-position updates are handled inside physics
+        physicsRef.current = new CitationGraphPhysics(() => {
             setNodes((prevNodes: Node[]) => {
                 const physics = physicsRef.current;
                 const sim = physics?.getSimulation();
@@ -136,9 +142,7 @@ export function CitationGraphPanel(props: CitationGraphPanelProps) {
                     return simNode ? { ...n, position: { x: (simNode as any).x, y: (simNode as any).y } } : n;
                 });
             });
-        };
-
-        physicsRef.current = new CitationGraphPhysics(onTick);
+        });
         (window as any).citationGraphPhysics = physicsRef.current;
         return () => {
             physicsRef.current?.stop();
@@ -146,6 +150,20 @@ export function CitationGraphPanel(props: CitationGraphPanelProps) {
             delete (window as any).citationGraphPhysics;
         };
     }, [setNodes]);
+
+    // Observe container size for viewport culling
+    useEffect(() => {
+        if (!containerRef.current) return;
+        const el = containerRef.current;
+        const ro = new (window as any).ResizeObserver((entries: any[]) => {
+            for (const entry of entries) {
+                const cr = entry.contentRect;
+                setContainerSize({ width: cr.width, height: cr.height });
+            }
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
 
     const loadNetwork = useCallback(async () => {
         if (!visiblePaperIds || visiblePaperIds.length === 0) {
@@ -301,14 +319,41 @@ export function CitationGraphPanel(props: CitationGraphPanelProps) {
         return () => clearTimeout(handle);
     }, [loadNetwork, refreshKey]);
 
+    // Compute culled edges based on viewport
+    const culledEdges = React.useMemo(() => {
+        if (!edges.length || !nodes.length || !containerSize.width || !containerSize.height) return edges;
+        const { x, y, zoom } = viewportRef.current;
+        const margin = 200; // extra margin in pixels (flow space)
+        const left = -x / zoom - margin;
+        const top = -y / zoom - margin;
+        const right = left + containerSize.width / zoom + 2 * margin;
+        const bottom = top + containerSize.height / zoom + 2 * margin;
+        const isNodeVisible = (n: Node<any>) => {
+            const data = (n as any).data as { levelOfDetail?: 'detailed' | 'simplified' } | undefined;
+            const detailed = data?.levelOfDetail !== 'simplified';
+            const halfW = detailed ? 112 : 20; // approx w-56 / w-10
+            const halfH = detailed ? 48 : 20; // approx h-24 / h-10
+            const nx = n.position.x;
+            const ny = n.position.y;
+            return nx + halfW >= left && nx - halfW <= right && ny + halfH >= top && ny - halfH <= bottom;
+        };
+        const visible = new Set<string>();
+        for (const n of nodes) {
+            if (isNodeVisible(n)) visible.add(String(n.id));
+        }
+        if (visible.size === nodes.length) return edges;
+        return edges.filter(e => visible.has(String(e.source)) && visible.has(String(e.target)));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [edges, nodes, containerSize.width, containerSize.height, viewportRev]);
+
     return (
         <ReactFlowProvider>
             <Card className={cn('flex-1 flex flex-col', className)}>
                 <CardContent className="p-0 flex-1">
-                    <div className="relative h-full">
+                    <div ref={containerRef} className="relative h-full">
                         <ReactFlow
                             nodes={nodes}
-                            edges={edges}
+                            edges={culledEdges}
                             onNodesChange={onNodesChange}
                             onEdgesChange={onEdgesChange}
                             nodeTypes={nodeTypes}
@@ -316,6 +361,17 @@ export function CitationGraphPanel(props: CitationGraphPanelProps) {
                             nodesDraggable
                             connectionMode={ConnectionMode.Loose}
                             proOptions={{ hideAttribution: true }}
+                            onMoveStart={() => physicsRef.current?.setInteracting(true)}
+                            onMoveEnd={() => physicsRef.current?.setInteracting(false)}
+                            onMove={(_, vp) => {
+                                viewportRef.current = vp;
+                                if (moveRafRef.current == null) {
+                                    moveRafRef.current = requestAnimationFrame(() => {
+                                        moveRafRef.current = null;
+                                        setViewportRev(v => (v + 1) | 0);
+                                    });
+                                }
+                            }}
                             onNodeDragStart={(_, node) => {
                                 const physics = physicsRef.current;
                                 if (!physics) return;
@@ -332,6 +388,7 @@ export function CitationGraphPanel(props: CitationGraphPanelProps) {
                                     simNode.fx = x; simNode.fy = y;
                                     sim.alpha(0.3).restart();
                                 }
+                                physics.setInteracting(true);
                             }}
                             onNodeDrag={(_, node) => {
                                 const physics = physicsRef.current;
@@ -349,6 +406,7 @@ export function CitationGraphPanel(props: CitationGraphPanelProps) {
                                     simNode.fx = x; simNode.fy = y;
                                     sim.alpha(0.3).restart();
                                 }
+                                physics.setInteracting(true);
                             }}
                             onNodeDragStop={(_, node) => {
                                 const physics = physicsRef.current;
@@ -365,6 +423,7 @@ export function CitationGraphPanel(props: CitationGraphPanelProps) {
                                     simNode.fx = null; simNode.fy = null;
                                     sim.alpha(0.3).restart();
                                 }
+                                physics.setInteracting(false);
                             }}
                         >
                             <Controls showInteractive={false} />
