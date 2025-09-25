@@ -22,6 +22,15 @@ export default function ResearchPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [titleDraft, setTitleDraft] = useState('');
 
+    // 自动跳转到最近会话
+    useEffect(() => {
+        if (!hydrated) return;
+        const list = store.getSessions();
+        if (list.length > 0) {
+            router.replace(`/research/${list[0].id}`);
+        }
+    }, [hydrated]);
+
     const createSession = async () => {
         const id = crypto.randomUUID();
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'CreateSession', ts: Date.now(), sessionId: id, params: { title: '未命名研究' } } as any);
