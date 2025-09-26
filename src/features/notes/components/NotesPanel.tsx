@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import Markdown from '@/components/ui/markdown';
+import HtmlContent from '@/components/ui/html-content';
 
 export function NotesPanel({ paperId }: { paperId: string }) {
     const { notes, isLoading, error, create, update, remove } = useNotes(paperId);
@@ -82,7 +83,11 @@ function NoteItem({ id, title, content, rawHtml, updatedAt, onSave, onDelete }: 
                     </div>
                 </div>
                 {displayContent ? (
-                    <Markdown text={displayContent} className="text-sm" />
+                    content?.trim() ? (
+                        <Markdown text={displayContent} className="text-sm" />
+                    ) : (
+                        <HtmlContent html={displayContent} className="text-sm prose prose-sm dark:prose-invert" />
+                    )
                 ) : (
                     <div className="text-xs text-muted-foreground">（无内容）</div>
                 )}
