@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCollectionOperations } from '@/features/literature/hooks';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 
 interface DatasetSyncPanelProps {
     onImport?: (paperIds: string[], collectionId?: string) => Promise<void> | void;
@@ -20,6 +22,10 @@ export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport, de
 
     const [selectedCollection, setSelectedCollection] = React.useState<string | undefined>(undefined);
     const [selectedIds, setSelectedIds] = React.useState<Record<string, boolean>>({});
+    const [includeNotes, setIncludeNotes] = React.useState<boolean>(true);
+    // 预览笔记计数缓存与状态（不导入也可预览）
+    const previewCacheRef = React.useRef<Map<string, { count: number; ts: number }>>(new Map());
+    const [previewNoteCounts, setPreviewNoteCounts] = React.useState<Record<string, number>>({});
 
     React.useEffect(() => {
         loadNodes().catch(() => { });
@@ -85,9 +91,89 @@ export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport, de
             await literatureEntry.batchImport(
                 identifiers.map(id => ({ type: 'identifier', data: id, options: selectedCollection ? { addToCollection: selectedCollection } : optionsForAll }))
             );
+
+            // 可选：导入对应 Zotero 笔记（最小实现：逐条针对外部条目拉取 note 并 upsert 到本地 Notes）
+            if (includeNotes) {
+                try {
+                    const { datasetService } = await import('../data-access/dataset-service');
+                    const { notesService } = await import('@/features/notes/data-access/notes-service');
+                    // 依赖当前节点上下文推断 owner（user/group）
+                    const owner = nodes.find(n => n.id === currentNodeId)?.owner;
+                    const groupId = owner?.startsWith('group:') ? owner.split(':')[1] : undefined;
+                    // 针对每个被选中的外部条目拉取 notes
+                    for (const it of picked) {
+                        const externalId = it.id;
+                        const encoded = groupId ? `group|${groupId}|${externalId}` : `user|${externalId}`;
+                        const notes = await datasetService.listNotesByPaper(encoded);
+                        if (Array.isArray(notes) && notes.length > 0) {
+                            await notesService.upsertZoteroNotes(
+                                // 这里需要将外部条目匹配到本地 paperId：
+                                // 简化策略：通过 batchImport 已将对应文献导入，本地以 DOI 优先可检索。
+                                // 为避免复杂查找，这里回退到后端再次解析 identifier，直接获取 paperId。
+                                // 由于我们没有直接映射，这里跳过映射环节，后续在详情页按需触发补链。
+                                // 因此此处暂不处理无法映射的情况。
+                                (await (await import('@/features/literature/data-access')).literatureEntry.addByIdentifier(
+                                    it.doi ? `DOI:${it.doi}` : (it.s2Id ? `S2:${it.s2Id}` : (it.url ? `URL:${it.url}` : it.title))
+                                )).paperId,
+                                notes.map(n => ({
+                                    title: n.title,
+                                    markdown: n.markdown,
+                                    rawHtml: n.rawHtml,
+                                    tags: n.tags,
+                                    externalItemKey: (n.externalRef as any)?.zoteroKey,
+                                }))
+                            );
+                        }
+                    }
+                } catch { /* noop: 笔记导入失败不阻塞文献导入 */ }
+            }
         }
         setSelectedIds({});
     };
+
+    // 加载当前可见 items 的 Zotero 笔记计数（预览用）。缓存 60s。
+    React.useEffect(() => {
+        let cancelled = false;
+        const run = async () => {
+            if (!items || items.length === 0) return;
+            try {
+                const { datasetService } = await import('../data-access/dataset-service');
+                const owner = nodes.find(n => n.id === currentNodeId)?.owner;
+                const groupId = owner?.startsWith('group:') ? owner.split(':')[1] : undefined;
+                const now = Date.now();
+                const nextMap: Record<string, number> = { ...previewNoteCounts };
+                const tasks: Promise<void>[] = [];
+                for (const it of items) {
+                    const cacheKey = groupId ? `group|${groupId}|${it.id}` : `user|${it.id}`;
+                    const cached = previewCacheRef.current.get(cacheKey);
+                    if (cached && now - cached.ts < 60_000) {
+                        if (nextMap[it.id] !== cached.count) nextMap[it.id] = cached.count;
+                        continue;
+                    }
+                    tasks.push((async () => {
+                        try {
+                            const notes = await datasetService.listNotesByPaper(cacheKey);
+                            const count = Array.isArray(notes) ? notes.length : 0;
+                            previewCacheRef.current.set(cacheKey, { count, ts: Date.now() });
+                            if (!cancelled) {
+                                // 单条增量更新，避免一次性重绘抖动
+                                setPreviewNoteCounts(prev => ({ ...prev, [it.id]: count }));
+                            }
+                        } catch {
+                            // 静默失败
+                        }
+                    })());
+                }
+                if (tasks.length > 0) await Promise.allSettled(tasks);
+                if (!cancelled) setPreviewNoteCounts(prev => ({ ...nextMap, ...prev }));
+            } catch {
+                // 静默失败
+            }
+        };
+        void run();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [items, currentNodeId]);
 
     const byParent = React.useMemo(() => {
         const map: Record<string | 'root', DatasetNode[]> = { root: [] } as any;
@@ -137,21 +223,35 @@ export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport, de
         const isSelected = currentNodeId === n.id;
         const isRoot = n.kind === 'root';
         return (
-            <li key={n.id} className="px-0 py-1 select-none">
-                <div className={`flex items-center gap-2 rounded-md cursor-pointer hover:bg-muted ${isSelected ? 'bg-accent' : ''}`}
-                    onClick={() => loadPapers(n.id)}>
-                    <button type="button" className="h-5 w-5 grid place-items-center"
-                        onClick={(e) => { e.stopPropagation(); if (hasChildren) toggleExpand(n.id); }}>
+            <li key={n.id} className="px-0 py-0 select-none">
+                <div
+                    className={`flex items-center rounded-md cursor-pointer hover:bg-muted ${isSelected ? 'bg-accent' : ''}`}
+                    style={{ paddingLeft: depth * 12 }}
+                    onClick={() => loadPapers(n.id)}
+                >
+                    {/* Arrow column (fixed width) */}
+                    <button
+                        type="button"
+                        className="h-7 w-4 grid place-items-center flex-shrink-0 mx-1"
+                        onClick={(e) => { e.stopPropagation(); if (hasChildren) toggleExpand(n.id); }}
+                        aria-label={hasChildren ? (isExpanded ? '折叠' : '展开') : '无子项'}
+                    >
                         {hasChildren ? (isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <span className="inline-block w-4" />}
                     </button>
-                    <span className="inline-flex items-center gap-1" style={{ marginLeft: Math.max(0, depth - 1) * 12 }}>
+
+                    {/* Icon column (fixed width) with extra right spacing */}
+                    <span className="h-7 w-4 grid place-items-center flex-shrink-0 mr-2">
                         {isRoot ? <Library className="h-4 w-4 text-emerald-600" /> : <Folder className="h-4 w-4 text-blue-600" />}
+                    </span>
+
+                    {/* Text column (flex) */}
+                    <span className="h-7 inline-flex items-center gap-2 min-w-0 pr-2">
                         <span className="truncate max-w-[12rem]">{n.name}</span>
                         {typeof n.totalItems === 'number' && <span className="text-xs text-muted-foreground">{n.totalItems}</span>}
                     </span>
                 </div>
                 {isExpanded && hasChildren && (
-                    <ul className="ml-4 mt-1">
+                    <ul className="mt-0.5">
                         {byParent[n.id].map(child => renderNode(child, depth + 1))}
                     </ul>
                 )}
@@ -189,6 +289,10 @@ export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport, de
                                 ))}
                             </SelectContent>
                         </Select>
+                        <div className="flex items-center gap-2 text-xs">
+                            <span>包含笔记</span>
+                            <Switch checked={includeNotes} onCheckedChange={setIncludeNotes} />
+                        </div>
                         {/* Mirror path: when not selected, auto-create path by source hierarchy */}
                         <div className="text-xs text-muted-foreground">未选择集合时将按来源路径自动创建</div>
                         <Button size="sm" onClick={doImport} disabled={loading || items.length === 0}>导入所选</Button>
@@ -205,8 +309,11 @@ export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport, de
                                 <input type="checkbox" className="h-4 w-4" checked={!!selectedIds[it.id]} onChange={() => toggleSelect(it.id)} />
                                 <div className="min-w-0 flex-1">
                                     <div className="font-medium truncate">{it.title}</div>
-                                    <div className="text-xs text-muted-foreground truncate">
-                                        {(it.authors || []).join(', ')} {it.year ? `· ${it.year}` : ''} {it.doi ? `· DOI:${it.doi}` : (it.s2Id ? `· S2:${it.s2Id}` : (it.url ? `· URL` : ''))}
+                                    <div className="text-xs text-muted-foreground truncate flex items-center gap-2">
+                                        <span className="truncate">{(it.authors || []).join(', ')} {it.year ? `· ${it.year}` : ''} {it.doi ? `· DOI:${it.doi}` : (it.s2Id ? `· S2:${it.s2Id}` : (it.url ? `· URL` : ''))}</span>
+                                        {typeof previewNoteCounts[it.id] === 'number' && previewNoteCounts[it.id] > 0 && (
+                                            <Badge variant="secondary" className="h-4 text-[10px] px-2">Zotero 笔记 {previewNoteCounts[it.id]}</Badge>
+                                        )}
                                     </div>
                                 </div>
                             </li>

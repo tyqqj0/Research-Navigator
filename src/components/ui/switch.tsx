@@ -13,7 +13,7 @@ const Switch = React.forwardRef<
   const baseStyles = "peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full"
 
   // 边框和背景 - 可以调整边框和内阴影
-  const borderStyles = "border-1 border-gray-200 bg-gray-200 shadow-inner"
+  const borderStyles = "border border-gray-200 bg-gray-200 shadow-inner"
 
   // 焦点状态
   const focusStyles = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
@@ -25,13 +25,13 @@ const Switch = React.forwardRef<
   const disabledStyles = "disabled:cursor-not-allowed disabled:opacity-50"
 
   // 过渡动画
-  const transitionStyles = "transition-all duration-1000"
+  const transitionStyles = "transition-colors duration-300"
 
   // 滑块样式
   const thumbBaseStyles = "pointer-events-none block h-5 w-5 rounded-full bg-white ring-0"
-  const thumbShadowStyles = "shadow-lg border border-gray-200"
-  const thumbMovementStyles = "data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0"
-  const thumbTransitionStyles = "transition-all duration-1000"
+  const thumbShadowStyles = "shadow-sm border border-gray-200"
+  const thumbMovementStyles = "translate-x-[-9px] data-[state=checked]:translate-x-[10.5px]"
+  const thumbTransitionStyles = "transition-transform duration-300 ease-out"
 
   return (
     <SwitchPrimitives.Root

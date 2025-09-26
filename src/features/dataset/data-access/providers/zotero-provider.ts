@@ -160,17 +160,22 @@ export class ZoteroDatasetProvider implements IDatasetAdapter {
         const cfg = this.requireCfg();
         const headers = buildHeaders(cfg);
         // Zotero 笔记作为 child item, type 'note'
-        // Determine group from encoded paperExternalId if it contains owner prefix
+        // 支持两种传入形式：
+        // 1) 纯 itemKey（默认 user 库）
+        // 2) 编码形式：`group|<groupId>|<itemKey>` 或 `user|<itemKey>`
         let groupParam = '';
-        // If we pass a pure Zotero key here, group membership is determined by current node.
-        // Prefer using owner prefix in nodeId when calling listNotesByPaper.
-        if (paperExternalId.includes(':')) {
-            const parts = paperExternalId.split(':');
-            // Support encoded id like group:123:col:ABCD -> extract 123
-            const idx = parts.indexOf('group');
-            if (idx >= 0 && parts[idx + 1]) groupParam = parts[idx + 1];
+        let itemIdForPath = paperExternalId;
+        if (paperExternalId.includes('|')) {
+            const parts = paperExternalId.split('|');
+            if (parts[0] === 'group' && parts[1]) {
+                groupParam = parts[1];
+                itemIdForPath = parts[2] || '';
+            } else if (parts[0] === 'user') {
+                itemIdForPath = parts[1] || '';
+            }
         }
-        const url = `${API_PREFIX}/items/${encodeURIComponent(paperExternalId)}/children?itemType=note${groupParam ? `&group=${encodeURIComponent(groupParam)}` : ''}`;
+        if (!itemIdForPath) itemIdForPath = paperExternalId;
+        const url = `${API_PREFIX}/items/${encodeURIComponent(itemIdForPath)}/children?itemType=note${groupParam ? `&group=${encodeURIComponent(groupParam)}` : ''}`;
         const res = await fetch(url, { headers });
         if (!res.ok) return [];
         const rows = await res.json();

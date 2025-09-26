@@ -17,6 +17,37 @@ class NotesDatabase extends Dexie {
 const db = new NotesDatabase();
 
 export const notesRepository = {
+    async findByExternalItemKey(userId: string, itemKey: string): Promise<NoteModel | undefined> {
+        return db.notes
+            .where('externalRef.itemKey')
+            .equals(itemKey)
+            .and(n => n.userId === userId && !n.isDeleted)
+            .first();
+    },
+
+    async upsert(note: NoteModel, externalItemKey?: string): Promise<void> {
+        if (externalItemKey) {
+            const existing = await db.notes
+                .where('externalRef.itemKey')
+                .equals(externalItemKey)
+                .and(n => n.userId === note.userId && n.paperId === note.paperId)
+                .first();
+            if (existing) {
+                await db.notes.update(existing.noteId, {
+                    title: note.title,
+                    contentMarkdown: note.contentMarkdown,
+                    rawHtml: note.rawHtml,
+                    tags: note.tags,
+                    updatedAt: new Date(),
+                    isDeleted: false,
+                    externalRef: note.externalRef || existing.externalRef,
+                    source: note.source,
+                });
+                return;
+            }
+        }
+        await db.notes.put(note);
+    },
     async listByPaperId(userId: string, paperId: string): Promise<NoteModel[]> {
         return db.notes
             .where('[userId+paperId]')

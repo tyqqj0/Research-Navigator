@@ -26,7 +26,7 @@ const Checkbox = React.forwardRef<
   const disabledStyles = "disabled:cursor-not-allowed disabled:opacity-50"
 
   // 过渡动画
-  const transitionStyles = "transition-all duration-200"
+  const transitionStyles = "transition-all duration-100"
 
   return (
     <CheckboxPrimitive.Root

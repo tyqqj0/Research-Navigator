@@ -60,6 +60,42 @@ export class NotesService {
     async remove(noteId: string): Promise<void> {
         await notesRepository.softDelete(noteId);
     }
+
+    /**
+     * Upsert a batch of Zotero notes for a given paper.
+     */
+    async upsertZoteroNotes(paperId: string, items: Array<{
+        title?: string;
+        markdown?: string;
+        rawHtml?: string;
+        tags?: string[];
+        externalItemKey?: string;
+        lastModified?: string;
+    }>): Promise<void> {
+        const userId = this.requireUserId();
+        for (const it of items) {
+            const note: NoteModel = {
+                noteId: crypto.randomUUID(),
+                userId,
+                paperId,
+                title: it.title,
+                contentMarkdown: it.markdown || '',
+                rawHtml: it.rawHtml,
+                tags: it.tags || [],
+                source: 'zotero',
+                privacy: 'private',
+                isDeleted: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                externalRef: it.externalItemKey ? {
+                    provider: 'zotero',
+                    itemKey: it.externalItemKey,
+                    lastModified: it.lastModified,
+                } : undefined,
+            };
+            await notesRepository.upsert(note, it.externalItemKey);
+        }
+    }
 }
 
 export const notesService = new NotesService();

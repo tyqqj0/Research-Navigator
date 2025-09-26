@@ -35,6 +35,8 @@ import {
 import { useLiteratureOperations } from '../../hooks/use-literature-operations';
 import { useLiteratureCommands } from '../../hooks/use-literature-commands';
 import { LibraryItem, EnhancedLibraryItem } from '../../data-access/models';
+import { StickyNote } from 'lucide-react';
+import { notesService } from '@/features/notes/data-access/notes-service';
 
 // 添加缺失的类型定义
 type SortField = 'title' | 'authors' | 'publicationDate' | 'createdAt' | 'updatedAt';
@@ -89,6 +91,9 @@ export function LiteratureListPanel({
     const [addInput, setAddInput] = useState('');
     const [adding, setAdding] = useState(false);
     const [addError, setAddError] = useState<string | null>(null);
+
+    // 本地笔记计数（按当前页批量查询）
+    const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
 
     // 使用外部数据或hook数据
     const literatures = externalLiteratures || hookResult.literatures;
@@ -262,6 +267,22 @@ export function LiteratureListPanel({
 
     // 仅切换“当前页全选”
     const currentPageIds = useMemo(() => paginatedItems.map(item => item.literature.paperId), [paginatedItems]);
+
+    // 加载当前页的本地笔记数量（避免在 paginatedItems 定义前访问）
+    useEffect(() => {
+        let cancelled = false;
+        const run = async () => {
+            try {
+                if (currentPageIds.length === 0) { if (!cancelled) setNoteCounts({}); return; }
+                const counts = await notesService.countByPaperIds(currentPageIds);
+                if (!cancelled) setNoteCounts(counts);
+            } catch {
+                if (!cancelled) setNoteCounts({});
+            }
+        };
+        void run();
+        return () => { cancelled = true; };
+    }, [currentPageIds.join('|')]);
     const numSelectedOnPage = useMemo(() => currentPageIds.filter(id => selectedItems.has(id)).length, [currentPageIds, selectedItems]);
     const isAllOnPageSelected = numSelectedOnPage === currentPageIds.length && currentPageIds.length > 0;
     const isAnyOnPageSelected = numSelectedOnPage > 0;
@@ -639,7 +660,7 @@ export function LiteratureListPanel({
                                                 {item.literature.title}
                                             </h3>
 
-                                            {/* 作者、年份与来源 */}
+                                            {/* 作者、年份与来源 + 笔记计数 */}
                                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
                                                 <div className="flex items-center gap-1 min-w-0">
                                                     <User className="h-3 w-3" />
@@ -657,6 +678,13 @@ export function LiteratureListPanel({
                                                         {item.literature.source === 'search' && '搜索'}
                                                     </Badge>
                                                 </div>
+
+                                                {typeof noteCounts[item.literature.paperId] === 'number' && noteCounts[item.literature.paperId] > 0 && (
+                                                    <div className="flex items-center gap-1 text-xs">
+                                                        <StickyNote className="h-3.5 w-3.5" />
+                                                        <span>笔记 {noteCounts[item.literature.paperId]}</span>
+                                                    </div>
+                                                )}
 
                                                 { /* 操作菜单靠右显示 */}
                                                 <DropdownMenu>
