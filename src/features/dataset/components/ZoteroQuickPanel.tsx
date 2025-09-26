@@ -86,11 +86,11 @@ export const ZoteroQuickPanel: React.FC<ZoteroQuickPanelProps> = ({ className, c
             </Card>
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="sm:max-w-5xl h-[80vh] p-0 grid-rows-[auto,1fr] top-[10vh] translate-y-0">
-                    <DialogHeader className="px-6 py-4 border-b">
+                <DialogContent className="sm:max-w-5xl h-[80vh] grid grid-rows-[auto_minmax(0,1fr)] items-stretch content-stretch justify-stretch overflow-hidden">
+                    <DialogHeader className="px-6 py-2">
                         <DialogTitle>Zotero 导入</DialogTitle>
                     </DialogHeader>
-                    <div className="h-full min-h-0 px-6 pb-6">
+                    <div className="h-full min-h-0 px-6 pb-6 overflow-hidden">
                         <DatasetSyncPanel defaultCollectionId={currentCollectionId} />
                     </div>
                 </DialogContent>
