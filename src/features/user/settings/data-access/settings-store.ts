@@ -11,6 +11,7 @@ import type {
     SearchSettings,
     UISettings,
     ResearchSettings,
+    DatasetSettings,
     LegacySettingStore
 } from './settings-types';
 
@@ -156,6 +157,12 @@ const defaultSettings: UserSettings = {
     search: defaultSearchSettings,
     ui: defaultUISettings,
     research: defaultResearchSettings,
+    dataset: {
+        provider: 'zotero',
+        apiKey: '',
+        apiBase: '',
+        libraryId: ''
+    } as DatasetSettings,
     version: '1.0.0',
     createdAt: new Date(),
     updatedAt: new Date()

@@ -78,6 +78,17 @@ export interface SearchSettings {
     };
 }
 
+// ========== Dataset 设置（外部源） ==========
+
+export type DatasetProvider = 'zotero' | 'notion' | 'obsidian' | 'custom';
+
+export interface DatasetSettings {
+    provider: DatasetProvider;
+    apiKey?: string;
+    apiBase?: string;
+    libraryId?: string;
+}
+
 // ========== 界面设置 ==========
 
 export interface UISettings {
@@ -142,6 +153,8 @@ export interface UserSettings {
     search: SearchSettings;
     ui: UISettings;
     research: ResearchSettings;
+    // Dataset 外部同步配置（可选）
+    dataset?: DatasetSettings;
 
     // 元数据
     version: string;
