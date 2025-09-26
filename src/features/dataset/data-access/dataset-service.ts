@@ -13,9 +13,9 @@ function resolveAuthConfig(override?: Partial<DatasetAuthConfig>): DatasetAuthCo
     const ds = useSettingsStore.getState().dataset;
     return {
         apiKey: override?.apiKey ?? ds?.apiKey ?? process.env.NEXT_PUBLIC_DATASET_API_KEY,
-        // apiBase and libraryId no longer required when using proxy
+        // apiBase no longer required when using proxy
         apiBase: undefined,
-        libraryId: undefined
+        roots: override?.roots ?? ds?.roots ?? [{ kind: 'user' as const }]
     };
 }
 

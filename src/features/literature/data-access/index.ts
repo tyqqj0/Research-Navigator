@@ -265,7 +265,13 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
             let core = val.replace(/\s+/g, '').replace(/[\u3000-\u303F]/g, '');
             core = core.replace(/\.pdf(?:[?#].*)?$/i, '');
             core = core.replace(/[\.,;:!?]+$/g, '');
-            normalized = `DOI:${core}`;
+            // Special-case: 10.48550/arXiv.<id> -> ARXIV:<id>
+            const mArxivDoi = core.match(/^10\.48550\/arXiv\.(\d{4}\.\d{4,5}(?:v\d+)?)$/i);
+            if (mArxivDoi) {
+                normalized = `ARXIV:${mArxivDoi[1]}`;
+            } else {
+                normalized = `DOI:${core}`;
+            }
         }
 
         // 最终统一前缀大小写到约定集合

@@ -24,21 +24,73 @@ export class ZoteroDatasetProvider implements IDatasetAdapter {
     }
 
     async listNodes(): Promise<DatasetNode[]> {
-        // Zotero 没有强层级集合树（有 collections），这里拉取 collections 作为节点；根节点作为占位
+        // Build roots automatically: include user and all accessible group libraries.
         const cfg = this.requireCfg();
         const headers = buildHeaders(cfg);
-        const url = `${API_PREFIX}/collections`;
-        const res = await fetch(url, { headers });
-        if (!res.ok) throw new Error(`Zotero collections failed: ${res.status}`);
-        const data = await res.json();
-        const nodes: DatasetNode[] = [
-            { id: 'root', name: '全部条目', kind: 'root', totalItems: undefined }
-        ];
-        for (const c of data || []) {
+        const nodes: DatasetNode[] = [];
+
+        type Root = { kind: 'user' } | { kind: 'group'; id: string; name?: string };
+        const roots: Root[] = [{ kind: 'user' }];
+        try {
+            const groupRes = await fetch(`${API_PREFIX}/groups`, { headers });
+            if (groupRes.ok) {
+                const groups = await groupRes.json();
+                for (const g of groups || []) {
+                    const id = String(g?.id ?? g?.data?.id ?? g?.groupID ?? g?.groupId ?? '');
+                    if (!id) continue;
+                    roots.push({ kind: 'group', id, name: g?.name || g?.data?.name });
+                }
+            }
+        } catch {
+            // ignore group fetch errors; still allow personal library
+        }
+
+        // Helper to push a collection as a node
+        function pushCollection(ownerKey: string, c: any) {
             const key = c?.key || c?.data?.key || c?.data?.id || c?.id;
             const name = c?.name || c?.data?.name || 'Collection';
-            nodes.push({ id: String(key), name: String(name), kind: 'collection', parentId: undefined, totalItems: undefined });
+            const parentKey = c?.parentCollection || c?.data?.parentCollection || null;
+            nodes.push({
+                id: `${ownerKey}:col:${String(key)}`,
+                name: String(name),
+                kind: 'collection',
+                parentId: parentKey ? `${ownerKey}:col:${String(parentKey)}` : `${ownerKey}:root`,
+                totalItems: undefined,
+                owner: ownerKey,
+            });
         }
+
+        // Fetch all collections (paginated) for each root
+        async function fetchAllCollections(qs: URLSearchParams): Promise<any[]> {
+            const all: any[] = [];
+            let start = 0;
+            const limit = 100;
+            while (true) {
+                const params = new URLSearchParams(qs);
+                params.set('start', String(start));
+                params.set('limit', String(limit));
+                const url = `${API_PREFIX}/collections?${params.toString()}`;
+                const res = await fetch(url, { headers });
+                if (!res.ok) break;
+                const data = await res.json();
+                if (!Array.isArray(data) || data.length === 0) break;
+                all.push(...data);
+                if (data.length < limit) break;
+                start += data.length;
+            }
+            return all;
+        }
+
+        for (const r of roots) {
+            const ownerKey = r.kind === 'group' ? `group:${r.id}` : 'user';
+            nodes.push({ id: `${ownerKey}:root`, name: r.kind === 'group' ? (r.name || `Group ${r.id}`) : '我的库', kind: 'root', parentId: null, owner: ownerKey });
+
+            const usp = new URLSearchParams();
+            if (r.kind === 'group') usp.set('group', r.id);
+            const collections = await fetchAllCollections(usp);
+            for (const c of collections) pushCollection(ownerKey, c);
+        }
+
         return nodes;
     }
 
@@ -48,7 +100,30 @@ export class ZoteroDatasetProvider implements IDatasetAdapter {
         const limit = Math.min(Math.max(opts?.limit || 25, 1), 100);
         const start = opts?.cursor ? parseInt(opts.cursor, 10) : 0;
         const params = new URLSearchParams({ start: String(start), limit: String(limit), format: 'json' });
-        if (nodeId !== 'root') params.set('collection', nodeId);
+        let ownerKey = 'user';
+        let collectionKey: string | null = null;
+        if (nodeId.includes(':')) {
+            const [owner, type, rest] = nodeId.split(':'); // e.g., user:root or group:123:col:ABCD
+            if (owner === 'user') ownerKey = 'user';
+            else if (owner === 'group') {
+                // group:123:root or group:123:col:ABCD
+                const parts = nodeId.split(':');
+                // parts[1] = groupId
+                ownerKey = `group:${parts[1]}`;
+                // detect collection
+                const idx = parts.indexOf('col');
+                if (idx >= 0 && parts[idx + 1]) collectionKey = parts[idx + 1];
+            }
+            if (type === 'col' && rest) collectionKey = rest;
+        } else {
+            // legacy ids: 'root' or collectionKey
+            if (nodeId !== 'root') collectionKey = nodeId;
+        }
+        if (ownerKey.startsWith('group:')) {
+            const groupId = ownerKey.split(':')[1];
+            params.set('group', groupId);
+        }
+        if (collectionKey) params.set('collection', collectionKey);
         const url = `${API_PREFIX}/items/top?${params.toString()}`;
         const res = await fetch(url, { headers });
         if (!res.ok) throw new Error(`Zotero items failed: ${res.status}`);
@@ -76,7 +151,7 @@ export class ZoteroDatasetProvider implements IDatasetAdapter {
                     extra: { itemType: data?.itemType, collections: data?.collections || [] }
                 } as DatasetPaperItem;
             });
-        const nextStart = start + itemsRaw.length;
+        const nextStart = start + (Array.isArray(itemsRaw) ? itemsRaw.length : 0);
         const next = itemsRaw.length < limit ? undefined : String(nextStart);
         return { items, next };
     }
@@ -85,7 +160,17 @@ export class ZoteroDatasetProvider implements IDatasetAdapter {
         const cfg = this.requireCfg();
         const headers = buildHeaders(cfg);
         // Zotero 笔记作为 child item, type 'note'
-        const url = `${API_PREFIX}/items/${encodeURIComponent(paperExternalId)}/children?itemType=note`;
+        // Determine group from encoded paperExternalId if it contains owner prefix
+        let groupParam = '';
+        // If we pass a pure Zotero key here, group membership is determined by current node.
+        // Prefer using owner prefix in nodeId when calling listNotesByPaper.
+        if (paperExternalId.includes(':')) {
+            const parts = paperExternalId.split(':');
+            // Support encoded id like group:123:col:ABCD -> extract 123
+            const idx = parts.indexOf('group');
+            if (idx >= 0 && parts[idx + 1]) groupParam = parts[idx + 1];
+        }
+        const url = `${API_PREFIX}/items/${encodeURIComponent(paperExternalId)}/children?itemType=note${groupParam ? `&group=${encodeURIComponent(groupParam)}` : ''}`;
         const res = await fetch(url, { headers });
         if (!res.ok) return [];
         const rows = await res.json();

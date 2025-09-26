@@ -43,8 +43,8 @@ async function proxyZotero(request: Request, pathBuilder: (userId: number, searc
     }
 }
 
-export async function GET(request: Request, context: { params: { segments?: string[] } }) {
-    const segments = context.params.segments || [];
+export async function GET(request: Request, context: { params: Promise<{ segments?: string[] }> }) {
+    const { segments = [] } = await context.params;
 
     // /api/dataset/zotero/test?limit=1
     if (segments.length === 1 && segments[0] === 'test') {
@@ -55,28 +55,52 @@ export async function GET(request: Request, context: { params: { segments?: stri
         });
     }
 
-    // /api/dataset/zotero/collections
-    if (segments.length === 1 && segments[0] === 'collections') {
-        return proxyZotero(request, (userId) => `/users/${userId}/collections`);
-    }
-
-    // /api/dataset/zotero/items/top?start=0&limit=25[&collection=xxx]
-    if (segments.length === 2 && segments[0] === 'items' && segments[1] === 'top') {
+    // /api/dataset/zotero/groups -> list groups with minimal fields
+    if (segments.length === 1 && segments[0] === 'groups') {
         return proxyZotero(request, (userId, search) => {
             if (!search.get('format')) search.set('format', 'json');
-            const collection = search.get('collection');
-            if (collection && collection !== 'root') {
-                return `/users/${userId}/collections/${encodeURIComponent(collection)}/items/top`;
-            }
-            return `/users/${userId}/items/top`;
+            return `/users/${userId}/groups`;
         });
     }
 
-    // /api/dataset/zotero/items/{id}/children?itemType=note
+    // /api/dataset/zotero/collections[?group={groupId}] supports pagination: start, limit
+    if (segments.length === 1 && segments[0] === 'collections') {
+        return proxyZotero(request, (userId, search) => {
+            const groupId = search.get('group');
+            if (groupId) return `/groups/${encodeURIComponent(groupId)}/collections`;
+            return `/users/${userId}/collections`;
+        });
+    }
+
+    // /api/dataset/zotero/items/top?start=0&limit=25[&collection=xxx][&group={groupId}]
+    if (segments.length === 2 && segments[0] === 'items' && segments[1] === 'top') {
+        return proxyZotero(request, (userId, search) => {
+            if (!search.get('format')) search.set('format', 'json');
+            const groupId = search.get('group');
+            const collection = search.get('collection');
+            if (groupId) {
+                if (collection && collection !== 'root') {
+                    return `/groups/${encodeURIComponent(groupId)}/collections/${encodeURIComponent(collection)}/items/top`;
+                }
+                return `/groups/${encodeURIComponent(groupId)}/items/top`;
+            } else {
+                if (collection && collection !== 'root') {
+                    return `/users/${userId}/collections/${encodeURIComponent(collection)}/items/top`;
+                }
+                return `/users/${userId}/items/top`;
+            }
+        });
+    }
+
+    // /api/dataset/zotero/items/{id}/children?itemType=note[&group={groupId}]
     if (segments.length === 3 && segments[0] === 'items' && segments[2] === 'children') {
         const itemId = segments[1];
         return proxyZotero(request, (userId, search) => {
             if (!search.get('itemType')) search.set('itemType', 'note');
+            const groupId = search.get('group');
+            if (groupId) {
+                return `/groups/${encodeURIComponent(groupId)}/items/${encodeURIComponent(itemId)}/children`;
+            }
             return `/users/${userId}/items/${encodeURIComponent(itemId)}/children`;
         });
     }

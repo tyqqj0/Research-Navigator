@@ -54,13 +54,13 @@ export const ZoteroQuickPanel: React.FC<ZoteroQuickPanelProps> = ({ className, c
     return (
         <>
             <Card className={className}>
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3" variant="gray">
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
                         <DownloadCloud className="w-4 h-4" />
                         Zotero 快捷导入
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-0 space-y-3" variant="gradient">
+                <CardContent className="pt-0 space-y-3 theme-background-primary" variant="gray">
                     <div className="flex items-center gap-2">
                         <KeyRound className="w-4 h-4 text-muted-foreground" />
                         <Input
@@ -86,11 +86,11 @@ export const ZoteroQuickPanel: React.FC<ZoteroQuickPanelProps> = ({ className, c
             </Card>
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="sm:max-w-5xl h-[70vh]">
-                    <DialogHeader>
+                <DialogContent className="sm:max-w-5xl h-[80vh] p-0 grid-rows-[auto,1fr] top-[10vh] translate-y-0">
+                    <DialogHeader className="px-6 py-4 border-b">
                         <DialogTitle>Zotero 导入</DialogTitle>
                     </DialogHeader>
-                    <div className="h-full min-h-0">
+                    <div className="h-full min-h-0 px-6 pb-6">
                         <DatasetSyncPanel defaultCollectionId={currentCollectionId} />
                     </div>
                 </DialogContent>

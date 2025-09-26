@@ -1,6 +1,6 @@
 'use client';
 
-import { KeyRound, PlugZap, ShieldCheck, Settings2 } from 'lucide-react';
+import { KeyRound, PlugZap, ShieldCheck, Settings2, Users } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +70,23 @@ export function DatasetSettingsTab() {
                                             value={settings?.apiKey || ''}
                                             onChange={(e) => updateSettings({ apiKey: e.target.value })}
                                             placeholder="输入 Zotero API Key"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>来源根（多选，可并列显示）</Label>
+                                    <div className="text-xs text-muted-foreground">默认包含“个人库”；可添加群组ID以并列展示</div>
+                                    <div className="flex items-center gap-2">
+                                        <Users className="w-4 h-4 text-muted-foreground" />
+                                        <Input
+                                            placeholder="添加群组ID，以逗号分隔，如：123456,789012"
+                                            value={(settings?.roots || []).filter(r => r.kind === 'group').map(r => r.id).filter(Boolean).join(',')}
+                                            onChange={(e) => {
+                                                const raw = e.target.value;
+                                                const ids = raw.split(',').map(s => s.trim()).filter(Boolean);
+                                                const nextRoots = [{ kind: 'user' as const }, ...ids.map(id => ({ kind: 'group' as const, id }))];
+                                                updateSettings({ roots: nextRoots as any });
+                                            }}
                                         />
                                     </div>
                                 </div>

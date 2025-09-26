@@ -5,7 +5,8 @@ export type DatasetProvider = 'zotero' | 'notion' | 'obsidian' | 'custom';
 export interface DatasetAuthConfig {
     apiKey?: string;
     apiBase?: string;
-    libraryId?: string;
+    // Support multiple roots simultaneously: e.g., 'user' and/or specific group ids
+    roots?: Array<{ kind: 'user' | 'group'; id?: string; name?: string }>;
 }
 
 export type DatasetNodeKind = 'root' | 'folder' | 'collection';
@@ -16,6 +17,8 @@ export interface DatasetNode {
     kind: DatasetNodeKind;
     parentId?: string | null;
     totalItems?: number;
+    // Optional root owner for multi-root: 'user' or 'group:{id}'
+    owner?: string;
 }
 
 export interface DatasetPaperItem {

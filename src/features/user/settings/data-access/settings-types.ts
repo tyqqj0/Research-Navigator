@@ -87,6 +87,8 @@ export interface DatasetSettings {
     apiKey?: string;
     apiBase?: string;
     libraryId?: string;
+    // Multi-root dataset sources (user and/or groups)
+    roots?: Array<{ kind: 'user' | 'group'; id?: string; name?: string }>;
 }
 
 // ========== 界面设置 ==========
