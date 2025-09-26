@@ -9,9 +9,10 @@ import { useCollectionOperations } from '@/features/literature/hooks';
 
 interface DatasetSyncPanelProps {
     onImport?: (paperIds: string[], collectionId?: string) => Promise<void> | void;
+    defaultCollectionId?: string;
 }
 
-export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport }) => {
+export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport, defaultCollectionId }) => {
     const { nodes, items, loading, error, loadNodes, loadPapers, currentNodeId } = useDataset();
     const { collections, loadCollections } = useCollectionOperations();
 
@@ -23,6 +24,15 @@ export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport }) 
         loadCollections({ force: false }).catch(() => { });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Initialize default selected collection once
+    React.useEffect(() => {
+        if (defaultCollectionId) {
+            setSelectedCollection((prev) => prev ?? defaultCollectionId);
+        }
+        // only on mount or when defaultCollectionId provided first time
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [defaultCollectionId]);
 
     const toggleSelect = (id: string) => {
         setSelectedIds((prev) => ({ ...prev, [id]: !prev[id] }));

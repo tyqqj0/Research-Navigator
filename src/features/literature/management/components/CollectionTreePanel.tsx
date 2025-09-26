@@ -17,6 +17,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useSessionStore } from '@/features/session/data-access/session-store';
 import { Input } from '@/components/ui/input';
+import { ZoteroQuickPanel } from '@/features/dataset/components/ZoteroQuickPanel';
 
 interface CollectionTreePanelProps {
     className?: string;
@@ -92,6 +93,11 @@ export const CollectionTreePanel: React.FC<CollectionTreePanelProps> = ({ classN
         Object.keys(map).forEach(k => map[k as any].sort(sortFn));
         return map;
     }, [collections]);
+
+    const selectedCollectionId = useMemo(() => {
+        const ids = Array.from(uiState.selectedIds);
+        return ids.length > 0 ? ids[0] : undefined;
+    }, [uiState.selectedIds]);
 
     const handleSelect = (id: string) => {
         setActiveVirtual(null);
@@ -367,6 +373,11 @@ export const CollectionTreePanel: React.FC<CollectionTreePanelProps> = ({ classN
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Zotero 快捷面板：置于我的集合卡片下方 */}
+            <div className="mt-4">
+                <ZoteroQuickPanel currentCollectionId={selectedCollectionId} className={"theme-background-primary"} />
+            </div>
 
             {/* 创建/重命名对话框 */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>

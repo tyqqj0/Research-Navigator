@@ -174,6 +174,7 @@ export interface SettingsActions {
     updateSearchSettings: (settings: Partial<SearchSettings>) => void;
     updateUISettings: (settings: Partial<UISettings>) => void;
     updateResearchSettings: (settings: Partial<ResearchSettings>) => void;
+    updateDatasetSettings: (settings: Partial<DatasetSettings>) => void;
 
     // 高级操作
     exportSettings: () => string;

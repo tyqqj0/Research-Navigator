@@ -12,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useRouter } from 'next/navigation';
 
-import { AISettingsTab, SearchSettingsTab, UISettingsTab, ResearchSettingsTab, BackupSettingsTab } from '@/features/user/settings';
+import { AISettingsTab, SearchSettingsTab, UISettingsTab, ResearchSettingsTab, BackupSettingsTab, DatasetSettingsTab } from '@/features/user/settings';
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState('ai');
@@ -73,6 +73,12 @@ export default function SettingsPage() {
                                         >
                                             📚 研究设置
                                         </TabsTrigger>
+                                        <TabsTrigger
+                                            value="dataset"
+                                            className="w-full justify-start px-3 py-2 text-left theme-text"
+                                        >
+                                            🔗 外部数据
+                                        </TabsTrigger>
                                         <Separator className="my-2" />
                                         <TabsTrigger
                                             value="backup"
@@ -107,6 +113,9 @@ export default function SettingsPage() {
 
                                     <TabsContent value="backup" className="mt-0">
                                         <BackupSettingsTab />
+                                    </TabsContent>
+                                    <TabsContent value="dataset" className="mt-0">
+                                        <DatasetSettingsTab />
                                     </TabsContent>
                                 </div>
                             </ScrollArea>

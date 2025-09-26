@@ -2,9 +2,10 @@ import { useSettingsStore } from '@/features/user/settings/data-access/settings-
 import type { DatasetAuthConfig, DatasetNode, DatasetPaperItem, DatasetNoteItem } from './dataset-types';
 import type { IDatasetAdapter } from './dataset-adapter';
 import { ExampleDatasetProvider } from './providers/example-provider';
+import { ZoteroDatasetProvider } from './providers/zotero-provider';
 
 function selectAdapter(provider?: string): IDatasetAdapter {
-    // TODO: add real providers mapping
+    if ((provider || 'zotero') === 'zotero') return new ZoteroDatasetProvider();
     return new ExampleDatasetProvider();
 }
 
@@ -12,8 +13,9 @@ function resolveAuthConfig(override?: Partial<DatasetAuthConfig>): DatasetAuthCo
     const ds = useSettingsStore.getState().dataset;
     return {
         apiKey: override?.apiKey ?? ds?.apiKey ?? process.env.NEXT_PUBLIC_DATASET_API_KEY,
-        apiBase: override?.apiBase ?? ds?.apiBase ?? process.env.NEXT_PUBLIC_DATASET_API_BASE,
-        libraryId: override?.libraryId ?? ds?.libraryId ?? process.env.NEXT_PUBLIC_DATASET_LIBRARY_ID
+        // apiBase and libraryId no longer required when using proxy
+        apiBase: undefined,
+        libraryId: undefined
     };
 }
 

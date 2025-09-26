@@ -228,6 +228,14 @@ export const useSettingsStore = create<SettingsStore>()(
                 }));
             },
 
+            updateDatasetSettings: (newDatasetSettings) => {
+                set((state) => ({
+                    ...state,
+                    dataset: { ...(state.dataset || { provider: 'zotero', apiKey: '', apiBase: '', libraryId: '' }), ...newDatasetSettings },
+                    updatedAt: new Date()
+                }));
+            },
+
             // 高级操作
             exportSettings: () => {
                 const state = get();

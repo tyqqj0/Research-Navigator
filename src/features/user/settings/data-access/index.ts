@@ -10,3 +10,11 @@ export * from './settings-store';
 
 // Repository
 export * from './settings-repository';
+
+// Convenience hooks for dataset settings
+import { useSettingsStore } from './settings-store';
+export const useDatasetSettings = () => {
+    const settings = useSettingsStore((state) => state.dataset);
+    const updateSettings = useSettingsStore((state) => state.updateDatasetSettings);
+    return { settings, updateSettings };
+};
