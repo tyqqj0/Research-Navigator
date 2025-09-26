@@ -35,8 +35,9 @@ import {
 import { useLiteratureOperations } from '../../hooks/use-literature-operations';
 import { useLiteratureCommands } from '../../hooks/use-literature-commands';
 import { LibraryItem, EnhancedLibraryItem } from '../../data-access/models';
-import { StickyNote } from 'lucide-react';
+import { StickyNote, Plus } from 'lucide-react';
 import { notesService } from '@/features/notes/data-access/notes-service';
+import LiteratureQuickAddOverlay from './LiteratureQuickAddOverlay';
 
 // 添加缺失的类型定义
 type SortField = 'title' | 'authors' | 'publicationDate' | 'createdAt' | 'updatedAt';
@@ -50,6 +51,7 @@ interface LiteratureListPanelProps {
     limit?: number;
     literatures?: EnhancedLibraryItem[]; // 可选的外部数据
     isLoading?: boolean; // 可选的外部加载状态
+    contextCollectionId?: string | null; // 可选：用于快速添加的上下文集合
     onItemClick?: (item: EnhancedLibraryItem) => void;
     onItemEdit?: (item: EnhancedLibraryItem) => void;
     onItemDelete?: (item: EnhancedLibraryItem) => void;
@@ -66,6 +68,7 @@ export function LiteratureListPanel({
     limit,
     literatures: externalLiteratures,
     isLoading: externalIsLoading,
+    contextCollectionId,
     onItemClick,
     onItemEdit,
     onItemDelete,
@@ -91,6 +94,7 @@ export function LiteratureListPanel({
     const [addInput, setAddInput] = useState('');
     const [adding, setAdding] = useState(false);
     const [addError, setAddError] = useState<string | null>(null);
+    const [quickAddOpen, setQuickAddOpen] = useState(false);
 
     // 本地笔记计数（按当前页批量查询）
     const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
@@ -458,9 +462,13 @@ export function LiteratureListPanel({
             {/* 控制栏 */}
             {showControls && (
                 <CardHeader>
-                    <div className="flex flex-col space-y-4">
+                    <div className="flex flex-col space-y-0">
                         {/* 搜索和筛选 */}
                         <div className="flex flex-col sm:flex-row gap-4">
+                            {/* 添加文献 */}
+                            <Button size="sm" variant="default" onClick={() => setQuickAddOpen(true)}>
+                                <Plus className="h-4 w-4 mr-1" /> 添加文献
+                            </Button>
                             {/* 搜索框 */}
                             <SearchInput
                                 className="flex-1"
@@ -570,9 +578,9 @@ export function LiteratureListPanel({
                             </div>
 
                             {/* 右侧：新增与排序 */}
-                            <div className="flex items-center gap-2">
+                            {/* <div className="flex items-center gap-2"> */}
                                 {/* 添加入口在列表工具栏右上角 */}
-                                <div className="hidden md:flex items-center gap-2 mr-2">
+                                {/* <div className="hidden md:flex items-center gap-2 mr-2">
                                     <Input
                                         placeholder="输入DOI/URL/S2Id添加"
                                         className="w-49"
@@ -584,9 +592,9 @@ export function LiteratureListPanel({
                                     <Button size="sm" onClick={handleAdd} disabled={adding || !addInput.trim()}>
                                         新建
                                     </Button>
-                                </div>
+                                </div> */}
 
-                            </div>
+                            {/* </div> */}
                         </div>
                         {addError && (
                             <div className="text-xs text-red-600">添加错误：{addError}</div>
@@ -832,6 +840,11 @@ export function LiteratureListPanel({
                     </div>
                 )}
             </CardContent>
+            <LiteratureQuickAddOverlay
+                open={quickAddOpen}
+                onOpenChange={setQuickAddOpen}
+                contextCollectionId={contextCollectionId}
+            />
         </Card>
     );
 }

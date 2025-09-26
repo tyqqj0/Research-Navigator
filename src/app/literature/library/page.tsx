@@ -407,6 +407,7 @@ export default function LibraryPage() {
                                     isLoading={isLoading}
                                     className="h-full flex flex-col"
                                     onVisibleIdsChange={handleVisibleIdsChange}
+                                    contextCollectionId={selectedCollectionId}
                                 />
                             </div>
                         </div>

@@ -65,6 +65,7 @@ export const SessionCollectionPanel: React.FC<{ sessionId: SessionId; onOpenDeta
                     onItemClick={(item) => {
                         try { onOpenDetail?.(item.literature.paperId); } catch { /* noop */ }
                     }}
+                    contextCollectionId={cid}
                 />
             </div>
         </div>

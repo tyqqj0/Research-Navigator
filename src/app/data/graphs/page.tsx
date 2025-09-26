@@ -124,6 +124,7 @@ export default function GraphPage() {
                                 showPagination={true}
                                 showControls={true}
                                 onItemClick={(item) => { setActivePaperId(item.literature.paperId); setDetailOpen(true); }}
+                                contextCollectionId={null}
                             />
                         </div>
                     </div>
