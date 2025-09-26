@@ -87,7 +87,7 @@ export default function ResearchSessionPage() {
         <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
             <div className="h-full flex relative">
                 {/* 子侧边栏：会话列表 */}
-                <div className="w-64 border-r bg-background p-3 h-[calc(100vh-4rem)]"><SessionList /></div>
+                <div className="w-60 border-r bg-background p-3 h-[calc(100vh-4rem)]"><SessionList /></div>
 
                 {/* 动态布局：根据阶段和用户开关决定单列/三列，并带过渡动画 */}
                 <DynamicSessionBody sessionId={sessionId!} getPaperSummary={getPaperSummary} graphId={graphId} onOpenDetail={openDetail} />

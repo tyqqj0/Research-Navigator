@@ -465,7 +465,7 @@ export function LiteratureListPanel({
                     <div className="flex flex-col space-y-0">
                         {/* 添加文献 */}
                         <div className="flex flex-col py-2">
-                        <Button size="sm" variant="outline" onClick={() => setQuickAddOpen(true)}>
+                        <Button size="sm" variant="emphasize" onClick={() => setQuickAddOpen(true)}>
                             <Plus className="h-4 w-4 mr-1" /> 添加文献
                             </Button>
                         </div>

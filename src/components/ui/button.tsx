@@ -11,6 +11,8 @@ const buttonVariants = cva(
       variant: {
         default:
           "theme-primary hover:opacity-95",
+        emphasize:
+          "theme-info hover:opacity-95",
         destructive:
           "theme-error hover:opacity-95",
         outline:
