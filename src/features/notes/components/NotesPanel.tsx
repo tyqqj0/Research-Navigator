@@ -5,6 +5,7 @@ import { useNotes } from '../hooks/use-notes';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import Markdown from '@/components/ui/markdown';
 
 export function NotesPanel({ paperId }: { paperId: string }) {
     const { notes, isLoading, error, create, update, remove } = useNotes(paperId);
@@ -41,7 +42,16 @@ export function NotesPanel({ paperId }: { paperId: string }) {
                 ) : (
                     <div className="space-y-3">
                         {sorted.map(n => (
-                            <NoteItem key={n.noteId} id={n.noteId} title={n.title} content={n.contentMarkdown} updatedAt={n.updatedAt} onSave={(t, c) => update(n.noteId, { title: t, contentMarkdown: c })} onDelete={() => remove(n.noteId)} />
+                            <NoteItem
+                                key={n.noteId}
+                                id={n.noteId}
+                                title={n.title}
+                                content={n.contentMarkdown}
+                                rawHtml={n.rawHtml}
+                                updatedAt={n.updatedAt}
+                                onSave={(t, c) => update(n.noteId, { title: t, contentMarkdown: c })}
+                                onDelete={() => remove(n.noteId)}
+                            />
                         ))}
                     </div>
                 )}
@@ -50,10 +60,12 @@ export function NotesPanel({ paperId }: { paperId: string }) {
     );
 }
 
-function NoteItem({ id, title, content, updatedAt, onSave, onDelete }: { id: string; title?: string; content: string; updatedAt?: Date; onSave: (title?: string, content?: string) => void; onDelete: () => void; }) {
+function NoteItem({ id, title, content, rawHtml, updatedAt, onSave, onDelete }: { id: string; title?: string; content: string; rawHtml?: string; updatedAt?: Date; onSave: (title?: string, content?: string) => void; onDelete: () => void; }) {
     const [editing, setEditing] = useState(false);
     const [t, setT] = useState(title || '');
     const [c, setC] = useState(content || '');
+
+    const displayContent = content?.trim() ? content : (rawHtml ?? '');
 
     const handleSave = () => { onSave(t.trim() || undefined, c); setEditing(false); };
 
@@ -61,13 +73,19 @@ function NoteItem({ id, title, content, updatedAt, onSave, onDelete }: { id: str
         return (
             <div className="rounded-md border p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-medium truncate">{title || '无标题'}</div>
+                    {title ? (
+                        <div className="text-sm font-medium truncate">{title}</div>
+                    ) : <div />}
                     <div className="flex items-center gap-2">
                         <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>编辑</Button>
                         <Button variant="destructive" size="sm" onClick={onDelete}>删除</Button>
                     </div>
                 </div>
-                <div className="text-sm whitespace-pre-wrap">{content}</div>
+                {displayContent ? (
+                    <Markdown text={displayContent} className="text-sm" />
+                ) : (
+                    <div className="text-xs text-muted-foreground">（无内容）</div>
+                )}
                 {updatedAt && (<div className="text-[11px] text-muted-foreground">更新于 {new Date(updatedAt).toLocaleString()}</div>)}
             </div>
         );

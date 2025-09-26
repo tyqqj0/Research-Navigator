@@ -184,7 +184,7 @@ export class ZoteroDatasetProvider implements IDatasetAdapter {
             return {
                 id: data?.key || data?.id || r?.key || r?.id,
                 paperExternalId,
-                title: (data?.note || '').slice(0, 40),
+                title: undefined,
                 markdown: undefined,
                 rawHtml: data?.note || '',
                 tags: (data?.tags || []).map((t: any) => t?.tag).filter(Boolean),

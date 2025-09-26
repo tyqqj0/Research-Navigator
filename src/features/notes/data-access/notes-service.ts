@@ -2,6 +2,7 @@
 
 import { authStoreUtils, type AuthStoreState } from '@/stores/auth.store';
 import { notesRepository } from './notes-repository';
+import { htmlToMarkdown } from '../utils/convert';
 import type { CreateNoteInput, NoteModel, UpdateNoteInput } from './notes-types';
 
 export class NotesService {
@@ -74,12 +75,24 @@ export class NotesService {
     }>): Promise<void> {
         const userId = this.requireUserId();
         for (const it of items) {
+            const existingMarkdown = (it.markdown || '').trim();
+            const fallbackMarkdown = it.rawHtml ? htmlToMarkdown(it.rawHtml) : '';
+            const contentMarkdown = existingMarkdown || fallbackMarkdown;
+            if (!contentMarkdown) {
+                console.warn('[notes] Skipped Zotero note import: empty content', {
+                    paperId,
+                    externalItemKey: it.externalItemKey,
+                });
+                continue;
+            }
+            // Do not auto-derive titles for Zotero notes; keep undefined unless provided
+            const title = (it.title || '').trim() || undefined;
             const note: NoteModel = {
                 noteId: crypto.randomUUID(),
                 userId,
                 paperId,
-                title: it.title,
-                contentMarkdown: it.markdown || '',
+                title,
+                contentMarkdown,
                 rawHtml: it.rawHtml,
                 tags: it.tags || [],
                 source: 'zotero',
