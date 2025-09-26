@@ -32,7 +32,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                     value={value}
                     onChange={handleChange}
                     placeholder={placeholder}
-                    className={cn('pl-9 pr-8', isLoading ? 'cursor-progress' : undefined)}
+                    className={cn('pl-9 pr-0', isLoading ? 'cursor-progress' : undefined)}
                     {...props}
                 />
                 {!!value && (

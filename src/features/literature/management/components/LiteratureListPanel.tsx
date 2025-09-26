@@ -463,12 +463,16 @@ export function LiteratureListPanel({
             {showControls && (
                 <CardHeader>
                     <div className="flex flex-col space-y-0">
+                        {/* 添加文献 */}
+                        <div className="flex flex-col py-2">
+                        <Button size="sm" variant="outline" onClick={() => setQuickAddOpen(true)}>
+                            <Plus className="h-4 w-4 mr-1" /> 添加文献
+                            </Button>
+                        </div>
                         {/* 搜索和筛选 */}
                         <div className="flex flex-col sm:flex-row gap-4">
                             {/* 添加文献 */}
-                            <Button size="sm" variant="default" onClick={() => setQuickAddOpen(true)}>
-                                <Plus className="h-4 w-4 mr-1" /> 添加文献
-                            </Button>
+                            
                             {/* 搜索框 */}
                             <SearchInput
                                 className="flex-1"
@@ -508,20 +512,21 @@ export function LiteratureListPanel({
                                     </SelectContent>
                                 </Select> */}
                                 <Select value={sortField} onValueChange={(value) => setSortField(value as SortField)}>
-                                    <SelectTrigger className="w-25">
+                                    <SelectTrigger className="h-9 w-18">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="title">标题</SelectItem>
                                         <SelectItem value="authors">作者</SelectItem>
-                                        <SelectItem value="publicationDate">发布时间</SelectItem>
-                                        <SelectItem value="createdAt">添加时间</SelectItem>
-                                        <SelectItem value="updatedAt">更新时间</SelectItem>
+                                        <SelectItem value="publicationDate">发布</SelectItem>
+                                        <SelectItem value="createdAt">添加</SelectItem>
+                                        <SelectItem value="updatedAt">更新</SelectItem>
                                     </SelectContent>
                                 </Select>
 
-                                <Button
+                                <Button 
                                     variant="outline"
+                                    className="h-9"
                                     size="sm"
                                     onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
                                 >
