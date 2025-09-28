@@ -77,7 +77,7 @@ export const LiteratureQuickAddOverlay: React.FC<LiteratureQuickAddOverlayProps>
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleSubmit(); } }}
                         />
-                        <Button onClick={handleSubmit} disabled={isLoading || !input.trim()}>
+                        <Button variant="emphasize" onClick={handleSubmit} disabled={isLoading || !input.trim()}>
                             {isLoading ? '解析中…' : '解析'}
                         </Button>
                     </div>
