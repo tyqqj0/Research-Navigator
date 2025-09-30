@@ -61,12 +61,11 @@ export function useLiteratureQuickAdd(options: UseLiteratureQuickAddOptions = {}
             // 1) explicit prefix or URL/DOI handling using helper
             const byHelper = normalizeLiteratureIdentifier(raw).normalized;
 
-            // Treat pure 40-hex string as S2 hash if user didn't provide prefix
-            const isHex40 = HEX40_RE.test(raw);
-            const normalizedCandidate = isHex40 && !/^\w+:/.test(raw) ? `S2:${raw}` : byHelper;
+            // Do NOT auto-treat bare 40-hex as S2 without explicit prefix
+            const normalizedCandidate = byHelper;
 
             // Accept as identifier only if clearly valid.
-            const s2Payload = normalizedCandidate.match(/^S2:(.+)$/i)?.[1] || null;
+            const s2Payload = normalizedCandidate.match(/^(.+)$/i)?.[1] || null;
             const isValidS2 = !!(s2Payload && HEX40_RE.test(s2Payload));
             const isOtherKnownPrefix = /^(CorpusId:|DOI:|ARXIV:|MAG:|ACL:|PMID:|PMCID:)/i.test(normalizedCandidate);
             const acceptAsIdentifier = isValidS2 || isOtherKnownPrefix;
@@ -115,14 +114,14 @@ export function useLiteratureQuickAdd(options: UseLiteratureQuickAddOptions = {}
                     .map((v) => v.trim())
                     .map((v) => {
                         const isBareHex = HEX40_RE.test(v);
-                        if (isBareHex && !/^\w+:/.test(v)) return `S2:${v}`;
+                        if (isBareHex && !/^\w+:/.test(v)) return `${v}`;
                         return v;
                     })
                     .filter((v) => {
                         if (/^URL:/i.test(v)) return false;
-                        const s2 = v.match(/^S2:(.+)$/i)?.[1] || null;
+                        const s2 = v.match(/^(.+)$/i)?.[1] || null;
                         if (s2 && !HEX40_RE.test(s2)) return false;
-                        return /^(S2:|CorpusId:|DOI:|ARXIV:|MAG:|ACL:|PMID:|PMCID:)/i.test(v);
+                        return /^(|CorpusId:|DOI:|ARXIV:|MAG:|ACL:|PMID:|PMCID:)/i.test(v);
                     })
             ));
 
@@ -134,7 +133,7 @@ export function useLiteratureQuickAdd(options: UseLiteratureQuickAddOptions = {}
 
                     const enhanced = mapped.map((c) => {
                         const rawId = c.bestIdentifier?.trim() || '';
-                        const normId = HEX40_RE.test(rawId) && !/^\w+:/.test(rawId) ? `S2:${rawId}` : rawId;
+                        const normId = HEX40_RE.test(rawId) && !/^\w+:/.test(rawId) ? `${rawId}` : rawId;
                         const item = normId ? byId.get(normId) : undefined;
                         if (item) {
                             return {

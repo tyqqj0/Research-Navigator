@@ -107,7 +107,7 @@ export function buildCandidatesFromWebResults(query: string, items: WebSearchIte
 }
 
 export function normalizeIdentifier(id: DiscoveredIdentifier): string {
-    if (id.kind === 'S2') return `S2:${id.value}`;
+    if (id.kind === 'S2') return `${id.value}`;
     if (id.kind === 'DOI') return `DOI:${id.value}`;
     if (id.kind === 'ARXIV') {
         const raw = String(id.value).replace(/^arXiv:/i, '');

@@ -294,7 +294,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
         } else if (/^10\.\S+\/\S+/.test(v)) {
             normalized = `DOI:${v}`;
         } else {
-            normalized = `S2:${v}`;
+            normalized = `${v}`;
         }
         return { normalized, encoded: encodeURIComponent(normalized) };
     }

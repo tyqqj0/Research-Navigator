@@ -62,7 +62,7 @@ export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport, de
         if (picked.length === 0) return;
         const identifiers = picked.map((i) => {
             if (i.doi) return `DOI:${i.doi}`;
-            if (i.s2Id) return `S2:${i.s2Id}`;
+            if (i.s2Id) return `${i.s2Id}`;
             if (i.url) return `URL:${i.url}`;
             return i.title;
         });
@@ -113,7 +113,7 @@ export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport, de
                                 // 由于我们没有直接映射，这里跳过映射环节，后续在详情页按需触发补链。
                                 // 因此此处暂不处理无法映射的情况。
                                 (await (await import('@/features/literature/data-access')).literatureEntry.addByIdentifier(
-                                    it.doi ? `DOI:${it.doi}` : (it.s2Id ? `S2:${it.s2Id}` : (it.url ? `URL:${it.url}` : it.title))
+                                    it.doi ? `DOI:${it.doi}` : (it.s2Id ? `${it.s2Id}` : (it.url ? `URL:${it.url}` : it.title))
                                 )).paperId,
                                 notes.map(n => ({
                                     title: n.title,
@@ -310,7 +310,7 @@ export const DatasetSyncPanel: React.FC<DatasetSyncPanelProps> = ({ onImport, de
                                 <div className="min-w-0 flex-1">
                                     <div className="font-medium truncate">{it.title}</div>
                                     <div className="text-xs text-muted-foreground truncate flex items-center gap-2">
-                                        <span className="truncate">{(it.authors || []).join(', ')} {it.year ? `· ${it.year}` : ''} {it.doi ? `· DOI:${it.doi}` : (it.s2Id ? `· S2:${it.s2Id}` : (it.url ? `· URL` : ''))}</span>
+                                        <span className="truncate">{(it.authors || []).join(', ')} {it.year ? `· ${it.year}` : ''} {it.doi ? `· DOI:${it.doi}` : (it.s2Id ? `· ${it.s2Id}` : (it.url ? `· URL` : ''))}</span>
                                         {typeof previewNoteCounts[it.id] === 'number' && previewNoteCounts[it.id] > 0 && (
                                             <Badge variant="secondary" className="h-4 text-[10px] px-2">Zotero 笔记 {previewNoteCounts[it.id]}</Badge>
                                         )}
