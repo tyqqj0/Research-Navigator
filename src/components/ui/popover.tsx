@@ -13,6 +13,16 @@ const PopoverAnchor = PopoverPrimitive.Anchor;
 
 const PopoverClose = PopoverPrimitive.Close;
 
+/**
+ * NOTE 关于 theme-primary-background: 
+ * 主题类应该只影响背景色，不应修改文字颜色。
+ * .theme-primary-background 默认包含 background-color 和 color,
+ * 但 color 设的是 `color: var(--color-background)`，可能导致内容文本也变成了背景色。
+ * 理想用法: 
+ *   - 只取 background，不覆盖 color
+ *   - 或者同时使用 .theme-primary-background 和 .theme-text-primary 以保证文字可读性
+ * 所以这里用: "theme-primary-background theme-text-primary"
+ */
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
@@ -24,8 +34,9 @@ const PopoverContent = React.forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        // Prefer plugin animations when available, but provide transition fallbacks
-        "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none",
+        // 覆盖背景 & 文字色
+        "theme-primary-background theme-text-primary",
+        "z-50 w-72 rounded-md border p-4 shadow-md outline-none",
         // Plugin-based animations (tailwindcss-animate)
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",

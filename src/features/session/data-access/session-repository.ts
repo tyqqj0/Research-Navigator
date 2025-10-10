@@ -170,7 +170,26 @@ export const sessionRepository = {
 
     async putArtifact(a: Artifact) { await sessionDb.artifacts.put(a); },
     async getArtifact(id: string) { return await sessionDb.artifacts.get(id) ?? null; },
-    async listArtifacts(kind?: string) { return kind ? await sessionDb.artifacts.where({ kind }).toArray() : await sessionDb.artifacts.toArray(); }
+    async listArtifacts(kind?: string) { return kind ? await sessionDb.artifacts.where({ kind }).toArray() : await sessionDb.artifacts.toArray(); },
+
+    // Convenience: report artifacts
+    async listReports() {
+        return await sessionDb.artifacts.where({ kind: 'report_final' }).reverse().sortBy('createdAt');
+    },
+    async searchReports(params: { query?: string; limit?: number }) {
+        const { query, limit } = params || {} as any;
+        const list = await sessionDb.artifacts.where({ kind: 'report_final' }).reverse().sortBy('createdAt');
+        if (!query || !query.trim()) return typeof limit === 'number' ? list.slice(0, Math.max(0, limit)) : list;
+        const q = query.trim().toLowerCase();
+        const filtered = list.filter(a => {
+            const title = String((a.meta as any)?.title || '').toLowerCase();
+            if (title.includes(q)) return true;
+            // fallback: search a short prefix of data
+            const head = String(a.data || '').slice(0, 512).toLowerCase();
+            return head.includes(q);
+        });
+        return typeof limit === 'number' ? filtered.slice(0, Math.max(0, limit)) : filtered;
+    }
 };
 
 

@@ -72,7 +72,7 @@ if (!g.__chatOrchestratorRegistered) {
                 }
             } catch { /* ignore store check errors */ }
             const asMid = newId();
-            const contextMessages = await buildAssistantMessages(sessionId, cmd.params.text, 6);
+            const contextMessages = await buildAssistantMessages(sessionId, cmd.params.text, 6, (cmd as any).inputRefs || null);
             if (running.has(sessionId)) { try { console.warn('[orch][chat][running_exists_skip]', ORCH_ID, sessionId); } catch { } return; }
             const run = assistantExecutor.start({
                 messages: contextMessages,

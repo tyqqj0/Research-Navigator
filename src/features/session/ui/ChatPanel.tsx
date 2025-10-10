@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useSessionStore } from '../data-access/session-store';
-import type { SessionId } from '../data-access/types';
+import type { SessionId, ArtifactRef } from '../data-access/types';
 import { commandBus } from '@/features/session/runtime/command-bus';
 import { Markdown } from '@/components/ui/markdown';
 import { sessionRepository } from '../data-access/session-repository';
@@ -17,7 +17,10 @@ import { DirectionProposalCard } from './DirectionProposalCard';
 // import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { StreamCard } from '@/components/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronLeft, X, Search, Send } from 'lucide-react';
+import { ChevronLeft, X, Search, Send, AtSign, BookOpen, FileText } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { literatureDataAccess } from '@/features/literature/data-access';
 // import { SessionStatusStrip } from './SessionStatusStrip';
 import { SessionStageIndicator } from './SessionStageIndicator';
 
@@ -30,6 +33,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const toggleGraphPanel = useSessionStore(s => s.toggleGraphPanel);
     const [userInput, setUserInput] = React.useState('');
+    const [selectedRefs, setSelectedRefs] = React.useState<ArtifactRef[]>([]);
     const [deep, setDeep] = React.useState<boolean>(() => {
         try {
             const s = (useSessionStore.getState() as any).sessions.get(sessionId);
@@ -40,7 +44,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
     const sendUserMessage = async () => {
         const text = userInput.trim();
         if (!text) return;
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text } } as any);
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text }, inputRefs: selectedRefs } as any);
         setUserInput('');
     };
 
@@ -138,7 +142,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                     )}
                 </div>
 
-                <ComposerBar value={userInput} onChange={setUserInput} onSend={sendUserMessage} deep={deep} onToggleDeep={toggleDeep} />
+                <ComposerBar
+                    value={userInput}
+                    onChange={setUserInput}
+                    onSend={sendUserMessage}
+                    deep={deep}
+                    onToggleDeep={toggleDeep}
+                    selectedRefs={selectedRefs}
+                    onRefsChange={setSelectedRefs}
+                />
             </CardContent>
         </Card>
     );
@@ -302,12 +314,73 @@ const ComposerBar: React.FC<{
     onSend: () => void;
     deep: boolean;
     onToggleDeep: (b: boolean) => void;
-}> = ({ value, onChange, onSend, deep, onToggleDeep }) => {
+    selectedRefs: ArtifactRef[];
+    onRefsChange: (refs: ArtifactRef[]) => void;
+}> = ({ value, onChange, onSend, deep, onToggleDeep, selectedRefs, onRefsChange }) => {
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
     };
+
+    const [mentionOpen, setMentionOpen] = React.useState(false);
+    const [query, setQuery] = React.useState('');
+    const [litResults, setLitResults] = React.useState<any[]>([]);
+    const [repResults, setRepResults] = React.useState<any[]>([]);
+    const [loading, setLoading] = React.useState(false);
+
+    // Debounced search for mentions
+    React.useEffect(() => {
+        let cancelled = false;
+        const q = query.trim();
+        if (!mentionOpen) return;
+        const t = setTimeout(async () => {
+            if (!q) { setLitResults([]); setRepResults([]); return; }
+            setLoading(true);
+            try {
+                const [lits, reps] = await Promise.all([
+                    literatureDataAccess.searchLiterature(q, { limit: 8 }).catch(() => []),
+                    sessionRepository.searchReports({ query: q, limit: 8 }).catch(() => [])
+                ]);
+                if (!cancelled) { setLitResults(lits || []); setRepResults(reps || []); }
+            } finally { if (!cancelled) setLoading(false); }
+        }, 250);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [query, mentionOpen]);
+
+    const addRef = (ref: ArtifactRef) => {
+        const key = `${ref.kind}:${ref.id}`;
+        const setKeys = new Set(selectedRefs.map(r => `${r.kind}:${r.id}`));
+        if (setKeys.has(key)) return;
+        onRefsChange([...selectedRefs, ref]);
+    };
+    const removeRef = (ref: ArtifactRef) => {
+        const key = `${ref.kind}:${ref.id}`;
+        onRefsChange(selectedRefs.filter(r => `${r.kind}:${r.id}` !== key));
+    };
+
+    const formatRefLabel = (r: ArtifactRef): string => {
+        if (r.kind === 'literature') return `文献:${String(r.id).slice(0, 12)}`;
+        if (r.kind === 'report_final') return `报告:${String(r.id).slice(0, 12)}`;
+        return `${r.kind}:${String(r.id).slice(0, 12)}`;
+    };
+
     return (
         <div className="p-3">
+            {/* Selected references chips */}
+            {selectedRefs.length > 0 && (
+                <div className="px-2 pb-2 flex items-center gap-2 flex-wrap">
+                    {selectedRefs.map((r) => (
+                        <Badge key={`${r.kind}:${r.id}`} variant="secondary" className="flex items-center gap-1">
+                            <span className="inline-flex items-center gap-1">
+                                {r.kind === 'literature' ? <BookOpen className="w-3 h-3" /> : r.kind === 'report_final' ? <FileText className="w-3 h-3" /> : null}
+                                {formatRefLabel(r)}
+                            </span>
+                            <button type="button" className="ml-1 hover:text-red-600" onClick={() => removeRef(r)}>
+                                <X className="w-3 h-3" />
+                            </button>
+                        </Badge>
+                    ))}
+                </div>
+            )}
             <div className="relative flex items-center gap-2">
                 <button
                     type="button"
@@ -322,12 +395,78 @@ const ComposerBar: React.FC<{
                     <span>Deep Research</span>
                 </button>
                 <Input
-                    className="pl-32 pr-14"
+                    className="pl-32 pr-28"
                     placeholder="输入你的问题（普通对话）或让我们找到研究方向"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     onKeyDown={onKeyDown}
                 />
+                <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
+                    <PopoverTrigger asChild>
+                        <Button size="sm" variant="ghost" className="absolute right-10" title="添加参考 (@)" onClick={() => setMentionOpen(!mentionOpen)}>
+                            <AtSign className="w-4 h-4" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-96 p-3">
+                        <div className="space-y-2">
+                            <Input autoFocus placeholder="搜索文献/报告…" value={query} onChange={(e) => setQuery(e.target.value)} />
+                            <div className="text-xs text-muted-foreground">按 Enter 发送消息；使用 @ 添加上下文参考</div>
+                            <div className="max-h-64 overflow-auto space-y-2">
+                                {/* 文献结果 */}
+                                {litResults && litResults.length > 0 && (
+                                    <div>
+                                        <div className="px-1 py-1 text-xs font-medium text-muted-foreground">文献</div>
+                                        <div className="space-y-1">
+                                            {litResults.map((it: any) => (
+                                                <button
+                                                    key={it.paperId}
+                                                    type="button"
+                                                    className="w-full text-left px-2 py-1 rounded hover:bg-muted"
+                                                    onClick={() => addRef({ kind: 'literature', id: it.paperId })}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm truncate">{it.title || it.paperId}</div>
+                                                            <div className="text-[11px] text-muted-foreground truncate">{(it.authors || []).slice(0, 3).join(', ')}{it.year ? ` · ${it.year}` : ''}</div>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {/* 报告结果 */}
+                                {repResults && repResults.length > 0 && (
+                                    <div>
+                                        <div className="px-1 py-1 text-xs font-medium text-muted-foreground">报告</div>
+                                        <div className="space-y-1">
+                                            {repResults.map((a: any) => (
+                                                <button
+                                                    key={a.id}
+                                                    type="button"
+                                                    className="w-full text-left px-2 py-1 rounded hover:bg-muted"
+                                                    onClick={() => addRef({ kind: 'report_final', id: a.id })}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <FileText className="w-3.5 h-3.5 text-purple-600" />
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm truncate">{String((a.meta || {}).title || a.id)}</div>
+                                                            <div className="text-[11px] text-muted-foreground truncate">{String(a.data || '').slice(0, 80)}</div>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {!loading && query.trim() && litResults.length === 0 && repResults.length === 0 && (
+                                    <div className="px-1 py-1 text-xs text-muted-foreground">无结果</div>
+                                )}
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
                 <Button size="sm" className="absolute right-2" onClick={onSend}>
                     <Send className="w-4 h-4" />
                 </Button>

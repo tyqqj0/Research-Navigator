@@ -1,7 +1,7 @@
 import { commandBus } from '../command-bus';
 import { eventBus } from '../event-bus';
 import { applyEventToProjection } from '../projectors';
-import type { Artifact, SessionCommand, SessionEvent } from '../../data-access/types';
+import type { Artifact, ChatSession, SessionCommand, SessionEvent } from '../../data-access/types';
 import { startTextStream } from '@/lib/ai/streaming/start';
 import { resolveModelForPurpose } from '@/lib/settings/ai';
 import { buildReportOutlineMessages } from '@/features/session/runtime/prompts/report';
@@ -136,7 +136,20 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
 
             // Assemble final
             const finalText = `# 摘要\n\n${abstract.trim()}\n\n${draft.replace(/^#\s*摘要[\s\S]*?(?:\n{2,}|$)/i, '').trim()}`;
-            const finalArtifact: Artifact<string> = { id: newId(), kind: 'report_final', version: 1, data: finalText, meta: { sessionId }, createdAt: Date.now() } as any;
+
+            // Heuristic title generation (no extra LLM call)
+            let session: ChatSession | null = null;
+            try { session = await sessionRepository.getSession(sessionId); } catch { }
+            const title = deriveReportTitle(draft, finalText, session || undefined);
+
+            const finalArtifact: Artifact<string> = {
+                id: newId(),
+                kind: 'report_final',
+                version: 1,
+                data: finalText,
+                meta: { sessionId, title },
+                createdAt: Date.now()
+            } as any;
             await sessionRepository.putArtifact(finalArtifact);
             await emit({ id: newId(), type: 'ReportFinalAssembled', ts: Date.now(), sessionId, payload: { messageId: reportMid, finalArtifactId: finalArtifact.id, citeKeys, bibtexByKey } as any });
 
@@ -156,5 +169,35 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
         }
     });
 }
+
+// Extract a reasonable report title using content and session hints
+function deriveReportTitle(draft: string, finalText: string, session?: ChatSession): string {
+    // 1) Prefer first top-level heading (excluding 摘要)
+    const pickHeading = (text: string): string | undefined => {
+        const m = text.match(/^#\s+(.+)$/m);
+        const h = m ? m[1].trim() : '';
+        if (h && !/^摘要$/i.test(h)) return sanitizeTitle(h);
+        return undefined;
+    };
+    const fromDraft = pickHeading(draft);
+    if (fromDraft) return fromDraft;
+    const fromFinal = pickHeading(finalText);
+    if (fromFinal) return fromFinal;
+
+    // 2) Use direction spec or session title as hint
+    const directionSpec = safeGet(session, s => (s.meta as any)?.direction?.spec as string | undefined);
+    if (directionSpec) return sanitizeTitle(truncate(directionSpec, 40)) + ' · 报告';
+    if (session?.title) return sanitizeTitle(truncate(session.title, 40)) + ' · 报告';
+
+    // 3) Fallback to timestamped generic title
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ts = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    return `研究报告 ${ts}`;
+}
+
+function truncate(s: string, max: number): string { return s.length > max ? s.slice(0, max) : s; }
+function sanitizeTitle(s: string): string { return s.replace(/[#`\n\r]/g, ' ').replace(/\s+/g, ' ').trim(); }
+function safeGet<T, R>(obj: T | undefined, fn: (o: T) => R | undefined): R | undefined { try { return obj ? fn(obj) : undefined; } catch { return undefined; } }
 
 
