@@ -132,7 +132,7 @@ function DynamicSessionBody({ sessionId, getPaperSummary, graphId, onOpenDetail 
             >
                 {/* 左：对话栏 */}
                 <div className="min-w-0">
-                    <ChatPanel sessionId={sessionId} />
+                    <ChatPanel sessionId={sessionId} onOpenDetail={onOpenDetail} />
                 </div>
 
                 {/* 中：图谱 */}

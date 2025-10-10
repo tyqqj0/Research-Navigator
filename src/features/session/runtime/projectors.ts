@@ -59,7 +59,18 @@ export function applyEventToProjection(e: SessionEvent) {
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
             if (s) {
-                const next = { ...s, meta: { ...s.meta, deepResearchEnabled: e.payload.enabled }, updatedAt: e.ts } as any;
+                const stage: string | undefined = (s.meta as any)?.stage;
+                const resettingForNewRound = Boolean(e.payload.enabled && stage === 'report_done');
+                const next = {
+                    ...s,
+                    meta: {
+                        ...s.meta,
+                        deepResearchEnabled: e.payload.enabled,
+                        // 若在报告完成后重新开启 Deep，则重置方向状态以便进入新一轮
+                        ...(resettingForNewRound ? { direction: {} } : {})
+                    },
+                    updatedAt: e.ts
+                } as any;
                 store.upsertSession(next);
             }
         } catch { /* ignore */ }
@@ -559,7 +570,13 @@ export function applyEventToProjection(e: SessionEvent) {
                 const prevEntry = prevReport[e.payload.messageId] || {};
                 const next = {
                     ...s,
-                    meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, finalArtifactId: e.payload.finalArtifactId, citeKeys: e.payload.citeKeys, bibtexByKey: e.payload.bibtexByKey } }, stage: 'report_done' },
+                    meta: {
+                        ...s.meta,
+                        report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, finalArtifactId: e.payload.finalArtifactId, citeKeys: e.payload.citeKeys, bibtexByKey: e.payload.bibtexByKey } },
+                        stage: 'report_done',
+                        // 报告完成后自动关闭 Deep 模式
+                        deepResearchEnabled: false
+                    },
                     updatedAt: e.ts
                 } as any;
                 useSessionStore.getState().upsertSession(next);
@@ -587,7 +604,7 @@ export function applyEventToProjection(e: SessionEvent) {
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
             if (s) {
-                const next = { ...s, meta: { ...s.meta, stage: 'report_done' }, updatedAt: e.ts } as any;
+                const next = { ...s, meta: { ...s.meta, stage: 'report_done', deepResearchEnabled: false }, updatedAt: e.ts } as any;
                 store.upsertSession(next);
             }
         } catch { /* ignore */ }

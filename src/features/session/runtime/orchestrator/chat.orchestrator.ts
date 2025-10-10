@@ -58,7 +58,7 @@ if (!g.__chatOrchestratorRegistered) {
             if (handledCmdIds.has(cmd.id)) { try { console.warn('[orch][chat][duplicate_cmd]', ORCH_ID, cmd.id); } catch { } return; }
             handledCmdIds.add(cmd.id);
             const userMid = newId();
-            await emit({ id: newId(), type: 'UserMessageAdded', ts: Date.now(), sessionId, payload: { messageId: userMid, text: cmd.params.text }, qos: 'async' } as any);
+            await emit({ id: newId(), type: 'UserMessageAdded', ts: Date.now(), sessionId, payload: { messageId: userMid, text: cmd.params.text }, artifacts: (cmd as any).inputRefs || undefined, qos: 'async' } as any);
             // 当 Deep Research 开启且方向未确认时：仅记录用户消息，不启动普通对话，避免与方案生成并发
             try {
                 const { useSessionStore } = await import('../../data-access/session-store');
@@ -66,7 +66,8 @@ if (!g.__chatOrchestratorRegistered) {
                 const deep = Boolean(s?.meta?.deepResearchEnabled);
                 const confirmed = Boolean(s?.meta?.direction?.confirmed);
                 const awaiting = Boolean(s?.meta?.direction?.awaitingDecision);
-                if (deep && (!confirmed || awaiting)) {
+                const stage = (s?.meta as any)?.stage;
+                if (deep && ((!confirmed || awaiting) || stage === 'report_done')) {
                     try { console.debug('[orch][chat][skip_normal_chat_due_to_direction_phase]', ORCH_ID, { sessionId, awaiting }); } catch { }
                     return;
                 }

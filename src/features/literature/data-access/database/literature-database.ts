@@ -576,10 +576,32 @@ export class literatureDatabase extends Dexie {
 
             // 排序
             if (sort.field === 'title' || sort.field === 'year' || sort.field === 'createdAt') {
-                query = query.sortBy(sort.field) as any;
+                // Dexie Collection.sortBy 返回的是已排序数组，需要在内存中分页
+                const sortedItems = await (query as any).sortBy(sort.field);
                 if (sort.order === 'desc') {
-                    query = query.reverse();
+                    sortedItems.reverse();
                 }
+
+                // 重新分页
+                const offset = (page - 1) * pageSize;
+                const paginatedItems = sortedItems.slice(offset, offset + pageSize);
+
+                const result: PaginatedResult<LibraryItem> = {
+                    items: paginatedItems,
+                    total: sortedItems.length,
+                    page,
+                    pageSize,
+                    totalPages: Math.ceil(sortedItems.length / pageSize),
+                };
+
+                // 缓存结果
+                this.setCache(cacheKey, result, this.defaultCacheTTL);
+
+                // 记录性能
+                const queryTime = Date.now() - startTime;
+                this.updateQueryStats(queryTime);
+
+                return result;
             } else if (sort.field === 'authors') {
                 // 按第一个作者排序 - 需要特殊处理
                 const sortedItems = await query.toArray();

@@ -17,8 +17,10 @@ export function startDirectionSupervisor() {
             const enabled = Boolean(s?.meta?.deepResearchEnabled);
             const confirmed = Boolean(s?.meta?.direction?.confirmed);
             const awaiting = Boolean(s?.meta?.direction?.awaitingDecision);
+            const stage = (s?.meta as any)?.stage;
             try { console.debug('[supervisor][direction][onUserMessage]', { sessionId, enabled, confirmed, awaiting }); } catch { }
-            if (enabled && !confirmed && !awaiting) {
+            // 若在报告完成后，用户重开 Deep（或仍为开启状态），下一条用户消息应触发新一轮提案
+            if (enabled && (!confirmed || stage === 'report_done') && !awaiting) {
                 const cmdId = crypto.randomUUID();
                 try { console.debug('[supervisor][direction][dispatch_propose]', cmdId, sessionId); } catch { }
                 await commandBus.dispatch({ id: cmdId, type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: e.payload.text } } as any);

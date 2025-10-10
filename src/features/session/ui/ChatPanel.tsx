@@ -17,18 +17,20 @@ import { DirectionProposalCard } from './DirectionProposalCard';
 // import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { StreamCard } from '@/components/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronLeft, X, Search, Send, AtSign, BookOpen, FileText } from 'lucide-react';
+import { ChevronLeft, X, Search, Send, AtSign, BookOpen, FileText, FileStack } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { literatureDataAccess } from '@/features/literature/data-access';
 // import { SessionStatusStrip } from './SessionStatusStrip';
 import { SessionStageIndicator } from './SessionStageIndicator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 interface ChatPanelProps {
     sessionId: SessionId;
+    onOpenDetail?: (paperId: string) => void;
 }
 
-export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
+export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail }) => {
     const messages = useSessionStore(s => s.getMessages(sessionId));
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const toggleGraphPanel = useSessionStore(s => s.toggleGraphPanel);
@@ -40,12 +42,42 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
             return Boolean(s?.meta?.deepResearchEnabled);
         } catch { return false; }
     });
+    const [reportsOpen, setReportsOpen] = React.useState(false);
+    const meta: any = (session as any)?.meta || {};
+    // Keep deep in sync with store updates
+    React.useEffect(() => {
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(sessionId);
+            const v = Boolean(s?.meta?.deepResearchEnabled);
+            setDeep(v);
+        } catch { /* ignore */ }
+    }, [session?.meta]);
+
+    // Auto-attach the final report as a selected reference when report completes
+    const autoAttachedReportsRef = React.useRef<Set<string>>(new Set());
+    React.useEffect(() => {
+        // Find the last report message in the message list
+        const lastReportMsg = [...(messages || [])].reverse().find(m => m.id.startsWith('report_'));
+        if (!lastReportMsg) return;
+        const reportMeta = (meta.report || {})[lastReportMsg.id] || {};
+        const finalId: string | undefined = reportMeta.finalArtifactId;
+        if (!finalId) return;
+        const key = `report_final:${finalId}`;
+        const exists = selectedRefs.some(r => r.kind === 'report_final' && String(r.id) === String(finalId));
+        if (!exists && !autoAttachedReportsRef.current.has(key)) {
+            setSelectedRefs(prev => [...prev, { kind: 'report_final', id: finalId }]);
+            autoAttachedReportsRef.current.add(key);
+        }
+    }, [meta.report, messages]);
+
+    // Remove "新一轮研究" button behavior from ChatPanel; new round will be driven by deep toggle + next message
 
     const sendUserMessage = async () => {
         const text = userInput.trim();
         if (!text) return;
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text }, inputRefs: selectedRefs } as any);
         setUserInput('');
+        // 如果 Deep 模式开启且方向未确认，chat.orchestrator 不会生成普通回复；direction.supervisor 会用这条消息触发提案
     };
 
     const toggleDeep = async (enabled: boolean) => {
@@ -54,6 +86,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
     };
 
     const isOpen = Boolean((session as any)?.meta?.graphPanelOpen);
+    const lastUserText = React.useMemo(() => {
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i].role === 'user') return messages[i].content || '';
+        }
+        return '';
+    }, [messages]);
+    const hasQuery = (userInput.trim() || lastUserText.trim()).length > 0;
     return (
         // <div></div>
         <Card className="relative h-[calc(100vh-5rem)] flex flex-col">
@@ -81,7 +120,25 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
             <CardHeader className="py-2 space-y-2">
                 <div className="flex items-center justify-between">
                     <CardTitle className="text-sm">对话</CardTitle>
-                    <SessionStageIndicator sessionId={sessionId} />
+                    <div className="flex items-center gap-2">
+                        <Dialog open={reportsOpen} onOpenChange={setReportsOpen}>
+                            <DialogTrigger asChild>
+                                <Button size="sm" variant="secondary" title="查看报告">
+                                    <FileStack className="w-4 h-4 mr-1" />
+                                    报告
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-5xl max-h-[80vh] overflow-hidden">
+                                <DialogHeader>
+                                    <DialogTitle>报告列表</DialogTitle>
+                                </DialogHeader>
+                                <div className="h-[65vh] overflow-hidden">
+                                    <ReportsViewer onClose={() => setReportsOpen(false)} />
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                        <SessionStageIndicator sessionId={sessionId} />
+                    </div>
                 </div>
                 {/* <SessionStatusStrip sessionId={sessionId} /> */}
                 {/* <DeepResearchPill enabled={deep} onToggle={toggleDeep} /> */}
@@ -150,6 +207,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId }) => {
                     onToggleDeep={toggleDeep}
                     selectedRefs={selectedRefs}
                     onRefsChange={setSelectedRefs}
+                    onOpenDetail={onOpenDetail}
                 />
             </CardContent>
         </Card>
@@ -316,7 +374,8 @@ const ComposerBar: React.FC<{
     onToggleDeep: (b: boolean) => void;
     selectedRefs: ArtifactRef[];
     onRefsChange: (refs: ArtifactRef[]) => void;
-}> = ({ value, onChange, onSend, deep, onToggleDeep, selectedRefs, onRefsChange }) => {
+    onOpenDetail?: (paperId: string) => void;
+}> = ({ value, onChange, onSend, deep, onToggleDeep, selectedRefs, onRefsChange, onOpenDetail }) => {
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
     };
@@ -326,8 +385,28 @@ const ComposerBar: React.FC<{
     const [litResults, setLitResults] = React.useState<any[]>([]);
     const [repResults, setRepResults] = React.useState<any[]>([]);
     const [loading, setLoading] = React.useState(false);
+    const getLiterature = useLiteratureStore(s => s.getLiterature);
 
-    // Debounced search for mentions
+    // Cache report titles for chips to avoid async rendering glitches
+    const [reportTitles, setReportTitles] = React.useState<Record<string, string>>({});
+    React.useEffect(() => {
+        let cancelled = false;
+        const run = async () => {
+            const tasks = (selectedRefs || []).filter(r => r.kind === 'report_final').map(async (r) => {
+                const key = String(r.id);
+                if (reportTitles[key]) return;
+                try {
+                    const a = await sessionRepository.getArtifact(key);
+                    if (!cancelled) setReportTitles(prev => ({ ...prev, [key]: String((a?.meta || {}).title || '') }));
+                } catch { /* ignore */ }
+            });
+            await Promise.all(tasks);
+        };
+        void run();
+        return () => { cancelled = true; };
+    }, [selectedRefs]);
+
+    // Debounced search for mentions (local library + reports)
     React.useEffect(() => {
         let cancelled = false;
         const q = query.trim();
@@ -336,15 +415,34 @@ const ComposerBar: React.FC<{
             if (!q) { setLitResults([]); setRepResults([]); return; }
             setLoading(true);
             try {
-                const [lits, reps] = await Promise.all([
-                    literatureDataAccess.searchLiterature(q, { limit: 8 }).catch(() => []),
+                const [litPage, reps] = await Promise.all([
+                    literatureDataAccess.literatures
+                        .search({ searchTerm: q }, { field: 'createdAt', order: 'desc' }, 1, 8)
+                        .catch(() => ({ items: [] })),
                     sessionRepository.searchReports({ query: q, limit: 8 }).catch(() => [])
                 ]);
-                if (!cancelled) { setLitResults(lits || []); setRepResults(reps || []); }
+                const friendly = Array.isArray(litPage?.items)
+                    ? (litPage.items as any[]).map((it: any) => it?.literature || it).filter(Boolean)
+                    : [];
+                if (!cancelled) { setLitResults(friendly); setRepResults(reps || []); }
             } finally { if (!cancelled) setLoading(false); }
         }, 250);
         return () => { cancelled = true; clearTimeout(t); };
     }, [query, mentionOpen]);
+
+    // Auto-open mentions when typing '@' and sync token
+    const handleInputChange = (next: string) => {
+        onChange(next);
+        const lastAt = next.lastIndexOf('@');
+        if (lastAt >= 0) {
+            setMentionOpen(true);
+            const token = next.slice(lastAt + 1).split(/\s/)[0] || '';
+            setQuery(token);
+        } else {
+            if (mentionOpen) setMentionOpen(false);
+            setQuery('');
+        }
+    };
 
     const addRef = (ref: ArtifactRef) => {
         const key = `${ref.kind}:${ref.id}`;
@@ -352,14 +450,34 @@ const ComposerBar: React.FC<{
         if (setKeys.has(key)) return;
         onRefsChange([...selectedRefs, ref]);
     };
+    const handleSelectRef = (ref: ArtifactRef) => {
+        addRef(ref);
+        // remove the latest @token from input and close popover
+        const lastAt = value.lastIndexOf('@');
+        if (lastAt >= 0) {
+            let end = lastAt + 1;
+            while (end < value.length && !/\s/.test(value[end])) end++;
+            const newVal = (value.slice(0, lastAt) + value.slice(end)).replace(/\s+$/, '');
+            onChange(newVal);
+        }
+        setMentionOpen(false);
+        setQuery('');
+    };
     const removeRef = (ref: ArtifactRef) => {
         const key = `${ref.kind}:${ref.id}`;
         onRefsChange(selectedRefs.filter(r => `${r.kind}:${r.id}` !== key));
     };
 
     const formatRefLabel = (r: ArtifactRef): string => {
-        if (r.kind === 'literature') return `文献:${String(r.id).slice(0, 12)}`;
-        if (r.kind === 'report_final') return `报告:${String(r.id).slice(0, 12)}`;
+        if (r.kind === 'literature') {
+            const item = getLiterature(String(r.id));
+            const title = item?.literature?.title;
+            return title ? `文献: ${title.slice(0, 16)}...` : `文献:${String(r.id).slice(0, 12)}`;
+        }
+        if (r.kind === 'report_final') {
+            const title = reportTitles[String(r.id)];
+            return title ? `报告: ${title.slice(0, 16)}...` : `报告:${String(r.id).slice(0, 12)}`;
+        }
         return `${r.kind}:${String(r.id).slice(0, 12)}`;
     };
 
@@ -369,11 +487,16 @@ const ComposerBar: React.FC<{
             {selectedRefs.length > 0 && (
                 <div className="px-2 pb-2 flex items-center gap-2 flex-wrap">
                     {selectedRefs.map((r) => (
-                        <Badge key={`${r.kind}:${r.id}`} variant="secondary" className="flex items-center gap-1">
-                            <span className="inline-flex items-center gap-1">
+                        <Badge key={`${r.kind}:${r.id}`} variant="secondary" className="flex items-center gap-0">
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-1 hover:underline"
+                                title={formatRefLabel(r)}
+                                onClick={() => { if (r.kind === 'literature' && onOpenDetail) onOpenDetail(String(r.id)); }}
+                            >
                                 {r.kind === 'literature' ? <BookOpen className="w-3 h-3" /> : r.kind === 'report_final' ? <FileText className="w-3 h-3" /> : null}
                                 {formatRefLabel(r)}
-                            </span>
+                            </button>
                             <button type="button" className="ml-1 hover:text-red-600" onClick={() => removeRef(r)}>
                                 <X className="w-3 h-3" />
                             </button>
@@ -398,8 +521,25 @@ const ComposerBar: React.FC<{
                     className="pl-32 pr-28"
                     placeholder="输入你的问题（普通对话）或让我们找到研究方向"
                     value={value}
-                    onChange={(e) => onChange(e.target.value)}
+                    onChange={(e) => handleInputChange(e.target.value)}
                     onKeyDown={onKeyDown}
+                    onDragOver={(e) => {
+                        if (Array.from(e.dataTransfer.types).includes('application/x-paper-ids')) {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'copy';
+                        }
+                    }}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        const raw = e.dataTransfer.getData('application/x-paper-ids');
+                        if (!raw) return;
+                        try {
+                            const ids = JSON.parse(raw) as string[];
+                            if (Array.isArray(ids)) {
+                                ids.forEach((pid) => addRef({ kind: 'literature', id: pid }));
+                            }
+                        } catch { /* ignore */ }
+                    }}
                 />
                 <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
                     <PopoverTrigger asChild>
@@ -422,7 +562,7 @@ const ComposerBar: React.FC<{
                                                     key={it.paperId}
                                                     type="button"
                                                     className="w-full text-left px-2 py-1 rounded hover:bg-muted"
-                                                    onClick={() => addRef({ kind: 'literature', id: it.paperId })}
+                                                    onClick={() => handleSelectRef({ kind: 'literature', id: it.paperId })}
                                                 >
                                                     <div className="flex items-center gap-2">
                                                         <BookOpen className="w-3.5 h-3.5 text-blue-600" />
@@ -446,7 +586,7 @@ const ComposerBar: React.FC<{
                                                     key={a.id}
                                                     type="button"
                                                     className="w-full text-left px-2 py-1 rounded hover:bg-muted"
-                                                    onClick={() => addRef({ kind: 'report_final', id: a.id })}
+                                                    onClick={() => handleSelectRef({ kind: 'report_final', id: a.id })}
                                                 >
                                                     <div className="flex items-center gap-2">
                                                         <FileText className="w-3.5 h-3.5 text-purple-600" />
@@ -752,6 +892,83 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                     <Markdown text={finalOutlineText} />
                 </StreamCard>
             ) : null} */}
+        </div>
+    );
+};
+
+const ReportsViewer: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
+    const [loading, setLoading] = React.useState(true);
+    const [reports, setReports] = React.useState<any[]>([]);
+    const [activeId, setActiveId] = React.useState<string | null>(null);
+    const [activeContent, setActiveContent] = React.useState<string>('');
+
+    React.useEffect(() => {
+        let cancelled = false;
+        const run = async () => {
+            setLoading(true);
+            try {
+                const list = await sessionRepository.listReports();
+                if (cancelled) return;
+                setReports(list || []);
+                const first = list && list[0];
+                if (first) {
+                    setActiveId(first.id);
+                    setActiveContent(String(first.data || ''));
+                }
+            } finally { if (!cancelled) setLoading(false); }
+        };
+        void run();
+        return () => { cancelled = true; };
+    }, []);
+
+    const onPick = async (id: string) => {
+        setActiveId(id);
+        try {
+            const a = await sessionRepository.getArtifact(id);
+            setActiveContent(String(a?.data || ''));
+        } catch { /* ignore */ }
+    };
+
+    return (
+        <div className="grid grid-cols-12 gap-3 h-full">
+            <div className="col-span-4 border rounded p-2 min-h-[420px] h-full overflow-hidden">
+                <div className="text-sm font-medium mb-2">全部报告</div>
+                <div className="space-y-1 h-full overflow-auto pr-1">
+                    {loading ? (
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-5/6" />
+                            <Skeleton className="h-4 w-2/3" />
+                            <Skeleton className="h-4 w-4/5" />
+                        </div>
+                    ) : (reports.length === 0 ? (
+                        <div className="text-xs text-muted-foreground">暂无报告</div>
+                    ) : (
+                        reports.map(r => (
+                            <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => onPick(r.id)}
+                                className={cn(
+                                    'w-full text-left px-2 py-1 rounded border',
+                                    activeId === r.id ? 'bg-blue-50 border-blue-200' : 'hover:bg-muted border-transparent'
+                                )}
+                            >
+                                <div className="text-sm truncate">{String((r.meta || {}).title || r.id)}</div>
+                                <div className="text-[11px] text-muted-foreground truncate">{new Date(r.createdAt).toLocaleString()}</div>
+                            </button>
+                        ))
+                    ))}
+                </div>
+            </div>
+            <div className="col-span-8 border rounded p-2 min-h-[420px] h-full overflow-hidden">
+                {/* <div className="flex items-center justify-between mb-2"> */}
+                {/* <div className="text-sm font-medium">预览</div> */}
+                {/* {onClose ? <Button size="sm" variant="ghost" onClick={onClose}>关闭</Button> : null} */}
+                {/* </div> */}
+                <div className="prose prose-sm max-w-none h-full overflow-auto pr-2">
+                    {activeContent ? <Markdown text={activeContent} /> : <div className="text-xs text-muted-foreground">选择左侧报告进行预览</div>}
+                </div>
+            </div>
         </div>
     );
 };

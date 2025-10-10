@@ -89,7 +89,17 @@ if (!g_any.__directionOrchestratorRegistered) {
         // try { console.debug('[orch][direction][cmd]', ORCH_ID, cmd.type, cmd.id); } catch { }
         if (cmd.type === 'ProposeDirection') {
             const { sessionId, userQuery } = cmd.params as any;
-            const inst = ensureInstance(sessionId)!;
+            let inst = ensureInstance(sessionId)!;
+            try {
+                const snap: any = inst.service.getSnapshot ? inst.service.getSnapshot() : null;
+                const isDone: boolean = Boolean(snap && ((snap.status === 'done') || (snap.matches && snap.matches('done'))));
+                if (isDone) {
+                    try { inst.service.stop?.(); } catch { /* ignore */ }
+                    // drop and recreate the instance to start a fresh round
+                    try { instances.delete(sessionId as any); } catch { /* ignore */ }
+                    inst = ensureInstance(sessionId)!;
+                }
+            } catch { /* ignore snapshot checks */ }
             inst.service.send({ type: 'PROPOSE', userQuery, sessionId });
             return;
         }
