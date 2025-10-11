@@ -2,6 +2,7 @@ import { create } from 'zustand';
 const EMPTY_MESSAGES: ChatMessage[] = [] as any;
 import type { ChatMessage, ChatSession, MessageId, SessionId } from './types';
 import { sessionRepository } from './session-repository';
+import { authStoreUtils, useAuthStore } from '@/stores/auth.store';
 
 interface SessionProjectionState {
     sessions: Map<SessionId, ChatSession>;
@@ -37,10 +38,11 @@ interface SessionProjectionState {
     toggleGraphPanel(sessionId: SessionId): void;
 }
 
-export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
+export const useSessionStore = create<SessionProjectionState & { __activeUserId?: string }>()((set, get) => ({
     sessions: new Map(),
     messagesBySession: new Map(),
     orderedSessionIds: undefined,
+    __activeUserId: undefined,
 
     getSessions() {
         const ids = get().orderedSessionIds;
@@ -168,7 +170,7 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
             const messagesBySession = new Map(state.messagesBySession);
             // Deduplicate by id while preserving order (first occurrence kept)
             const seen = new Set<string>();
-            const msgs = (msgsRaw || []).filter(m => {
+            const msgs = (msgsRaw || []).filter((m: ChatMessage) => {
                 if (seen.has(m.id)) return false;
                 seen.add(m.id);
                 return true;
@@ -206,11 +208,17 @@ export const useSessionStore = create<SessionProjectionState>()((set, get) => ({
     },
 
     async loadAllSessions() {
+        const userId = (() => { try { return authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous'; } catch { return 'anonymous'; } })();
+        // If switching user, clear store first to avoid mixed state and loops
+        const prevUser = get().__activeUserId;
+        if (prevUser && prevUser !== userId) {
+            set(() => ({ sessions: new Map(), messagesBySession: new Map(), orderedSessionIds: undefined } as Partial<SessionProjectionState>));
+        }
         const sessions = await sessionRepository.listSessions();
         set(() => {
-            const map = new Map(sessions.map(s => [s.id, s] as const));
-            const orderedSessionIds = sessions.map(s => s.id);
-            return { sessions: map, orderedSessionIds } as Partial<SessionProjectionState>;
+            const map = new Map(sessions.map((s: ChatSession) => [s.id, s] as const));
+            const orderedSessionIds = sessions.map((s: ChatSession) => s.id);
+            return { sessions: map, orderedSessionIds, __activeUserId: userId } as Partial<SessionProjectionState & { __activeUserId?: string }>;
         });
     }
 }));

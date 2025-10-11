@@ -22,6 +22,7 @@ import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SessionList } from '@/features/session/ui/SessionList';
 import { useSessionStore } from '@/features/session/data-access/session-store';
+import { useAuthStore } from '@/stores/auth.store';
 import { commandBus } from '@/features/session/runtime/command-bus';
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
 import { useCollectionOperations } from '@/features/literature/hooks/use-collection-operations';
@@ -33,6 +34,18 @@ export default function ResearchSessionPage() {
     const sessionId = params?.sessionId;
     const store = useSessionStore();
     useEffect(() => { if (sessionId) void Promise.all([store.loadAllSessions(), store.loadSessionProjection(sessionId)]); }, [sessionId]);
+    // Re-load when user changes to avoid stale cross-user state
+    useEffect(() => {
+        let prevUserId = useAuthStore.getState().currentUser?.id;
+        const unsub = useAuthStore.subscribe((state) => {
+            const uid = state.currentUser?.id;
+            if (uid !== prevUserId) {
+                prevUserId = uid;
+                void Promise.all([store.loadAllSessions(), sessionId ? store.loadSessionProjection(sessionId) : Promise.resolve()]);
+            }
+        });
+        return () => { unsub(); };
+    }, [sessionId, store]);
 
     const sessions = store.getSessions();
     // Ensure supervisors started once on client

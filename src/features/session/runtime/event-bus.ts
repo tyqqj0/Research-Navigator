@@ -1,5 +1,6 @@
 import type { SessionEvent } from '../data-access/types';
 import { sessionRepository } from '../data-access/session-repository';
+import { authStoreUtils } from '@/stores/auth.store';
 
 type Handler = (e: SessionEvent) => void | Promise<void>;
 
@@ -16,7 +17,12 @@ export const eventBus = {
     },
     async publish(event: SessionEvent) {
         // Persist first so handlers can rely on durable log
-        await sessionRepository.appendEvent(event);
+        try {
+            const uid = (event as any).userId || authStoreUtils.getStoreInstance().requireAuth();
+            await sessionRepository.appendEvent({ ...event, userId: uid } as any);
+        } catch {
+            await sessionRepository.appendEvent(event);
+        }
         const qos = event.qos || 'async';
         const nonBlockingTypes = new Set<string>([
             'SessionRenamed',

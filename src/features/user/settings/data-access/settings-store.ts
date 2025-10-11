@@ -4,6 +4,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { authStoreUtils } from '@/stores/auth.store';
 import type {
     UserSettings,
     SettingsActions,
@@ -172,84 +173,126 @@ const defaultSettings: UserSettings = {
 
 interface SettingsStore extends UserSettings, SettingsActions { }
 
-export const useSettingsStore = create<SettingsStore>()(
+type PerUserProfiles = Record<string, UserSettings>;
+
+export const useSettingsStore = create<SettingsStore & { __profiles?: PerUserProfiles; __activeUserId?: string }>()(
     persist(
         (set, get) => ({
-            // 初始状态
+            // 初始状态（镜像当前用户配置，如果无用户则使用默认）
             ...defaultSettings,
+            __profiles: {} as PerUserProfiles,
+            __activeUserId: undefined,
 
             // 基础操作
             updateSettings: (newSettings) => {
-                set((state) => ({
-                    ...state,
-                    ...newSettings,
-                    updatedAt: new Date()
-                }));
+                set((state) => {
+                    const userId = state.__activeUserId || authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                    const profiles = { ...(state.__profiles || {}) } as PerUserProfiles;
+                    const base = profiles[userId] || { ...defaultSettings };
+                    const merged: UserSettings = { ...(base as any), ...(newSettings as any), updatedAt: new Date() };
+                    profiles[userId] = merged;
+                    // 镜像到顶层字段，维持现有API
+                    return { ...(merged as any), __profiles: profiles, __activeUserId: userId } as any;
+                });
             },
 
             resetSettings: () => {
-                set({
-                    ...defaultSettings,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
+                set((state) => {
+                    const userId = state.__activeUserId || authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                    const profiles = { ...(state.__profiles || {}) } as PerUserProfiles;
+                    const fresh = { ...defaultSettings, createdAt: new Date(), updatedAt: new Date() } as UserSettings;
+                    profiles[userId] = fresh;
+                    return { ...(fresh as any), __profiles: profiles, __activeUserId: userId } as any;
                 });
             },
 
             // 分类操作
             updateAISettings: (newAISettings) => {
-                set((state) => ({
-                    ...state,
-                    ai: { ...state.ai, ...newAISettings },
-                    updatedAt: new Date()
-                }));
+                set((state) => {
+                    const userId = state.__activeUserId || authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                    const profiles = { ...(state.__profiles || {}) } as PerUserProfiles;
+                    const base = profiles[userId] || { ...defaultSettings };
+                    const next: UserSettings = { ...(base as any), ai: { ...base.ai, ...newAISettings }, updatedAt: new Date() };
+                    profiles[userId] = next;
+                    return { ...(next as any), __profiles: profiles, __activeUserId: userId } as any;
+                });
             },
 
             updateSearchSettings: (newSearchSettings) => {
-                set((state) => ({
-                    ...state,
-                    search: { ...state.search, ...newSearchSettings },
-                    updatedAt: new Date()
-                }));
+                set((state) => {
+                    const userId = state.__activeUserId || authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                    const profiles = { ...(state.__profiles || {}) } as PerUserProfiles;
+                    const base = profiles[userId] || { ...defaultSettings };
+                    const next: UserSettings = { ...(base as any), search: { ...base.search, ...newSearchSettings }, updatedAt: new Date() };
+                    profiles[userId] = next;
+                    return { ...(next as any), __profiles: profiles, __activeUserId: userId } as any;
+                });
             },
 
             updateUISettings: (newUISettings) => {
-                set((state) => ({
-                    ...state,
-                    ui: { ...state.ui, ...newUISettings },
-                    updatedAt: new Date()
-                }));
+                set((state) => {
+                    const userId = state.__activeUserId || authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                    const profiles = { ...(state.__profiles || {}) } as PerUserProfiles;
+                    const base = profiles[userId] || { ...defaultSettings };
+                    const next: UserSettings = { ...(base as any), ui: { ...base.ui, ...newUISettings }, updatedAt: new Date() };
+                    profiles[userId] = next;
+                    return { ...(next as any), __profiles: profiles, __activeUserId: userId } as any;
+                });
             },
 
             updateResearchSettings: (newResearchSettings) => {
-                set((state) => ({
-                    ...state,
-                    research: { ...state.research, ...newResearchSettings },
-                    updatedAt: new Date()
-                }));
+                set((state) => {
+                    const userId = state.__activeUserId || authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                    const profiles = { ...(state.__profiles || {}) } as PerUserProfiles;
+                    const base = profiles[userId] || { ...defaultSettings };
+                    const next: UserSettings = { ...(base as any), research: { ...base.research, ...newResearchSettings }, updatedAt: new Date() };
+                    profiles[userId] = next;
+                    return { ...(next as any), __profiles: profiles, __activeUserId: userId } as any;
+                });
             },
 
             updateDatasetSettings: (newDatasetSettings) => {
-                set((state) => ({
-                    ...state,
-                    dataset: { ...(state.dataset || { provider: 'zotero', apiKey: '', apiBase: '', libraryId: '' }), ...newDatasetSettings },
-                    updatedAt: new Date()
-                }));
+                set((state) => {
+                    const userId = state.__activeUserId || authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                    const profiles = { ...(state.__profiles || {}) } as PerUserProfiles;
+                    const base = profiles[userId] || { ...defaultSettings };
+                    const next: UserSettings = {
+                        ...(base as any),
+                        dataset: { ...(base.dataset || { provider: 'zotero', apiKey: '', apiBase: '', libraryId: '' }), ...newDatasetSettings },
+                        updatedAt: new Date()
+                    };
+                    profiles[userId] = next;
+                    return { ...(next as any), __profiles: profiles, __activeUserId: userId } as any;
+                });
             },
 
             // 高级操作
             exportSettings: () => {
-                const state = get();
-                return JSON.stringify(state, null, 2);
+                const state: any = get();
+                const userId = state.__activeUserId || authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                const profile = (state.__profiles && state.__profiles[userId]) || {
+                    ai: state.ai,
+                    search: state.search,
+                    ui: state.ui,
+                    research: state.research,
+                    dataset: state.dataset,
+                    version: state.version,
+                    createdAt: state.createdAt,
+                    updatedAt: state.updatedAt
+                };
+                return JSON.stringify(profile, null, 2);
             },
 
             importSettings: (settingsJson) => {
                 try {
                     const importedSettings = JSON.parse(settingsJson);
-                    // 验证设置格式
                     if (get().validateSettings(importedSettings)) {
-                        set({
-                            ...importedSettings,
-                            updatedAt: new Date()
+                        set((state: any) => {
+                            const userId = state.__activeUserId || authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                            const profiles = { ...(state.__profiles || {}) } as PerUserProfiles;
+                            const next: UserSettings = { ...(importedSettings as any), updatedAt: new Date() };
+                            profiles[userId] = next;
+                            return { ...(next as any), __profiles: profiles, __activeUserId: userId } as any;
                         });
                     }
                 } catch (error) {
@@ -263,8 +306,30 @@ export const useSettingsStore = create<SettingsStore>()(
             }
         }),
         {
-            name: 'user-settings',
-            version: 1
+            name: 'user-settings-v2',
+            version: 2,
+            migrate: (persistedState: any, version: number) => {
+                // v1 -> v2: wrap previous single profile into per-user profiles using current user
+                if (version < 2 && persistedState) {
+                    try {
+                        const uid = authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                        const { ai, search, ui, research, dataset, createdAt, updatedAt } = persistedState || {};
+                        const profile: UserSettings = {
+                            ai: ai || defaultAISettings,
+                            search: search || defaultSearchSettings,
+                            ui: ui || defaultUISettings,
+                            research: research || defaultResearchSettings,
+                            dataset: dataset || (defaultSettings as any).dataset,
+                            version: '1.0.0',
+                            createdAt: createdAt ? new Date(createdAt) : new Date(),
+                            updatedAt: new Date()
+                        };
+                        const wrapped = { ...profile, __profiles: { [uid]: profile }, __activeUserId: uid } as any;
+                        return wrapped;
+                    } catch { /* ignore */ }
+                }
+                return persistedState;
+            }
         }
     )
 );

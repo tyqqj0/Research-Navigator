@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { MainLayout } from '@/components/layout';
 import { Button, Card, CardContent } from '@/components/ui';
 import { useSessionStore } from '@/features/session/data-access/session-store';
+import { useAuthStore } from '@/stores/auth.store';
 import { commandBus } from '@/features/session/runtime/command-bus';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,18 @@ export default function ResearchPage() {
     const [hydrated, setHydrated] = useState(false);
 
     useEffect(() => { void store.loadAllSessions().then(() => setHydrated(true)); }, []);
+    // Re-load sessions when user changes
+    useEffect(() => {
+        let prevUserId = useAuthStore.getState().currentUser?.id;
+        const unsub = useAuthStore.subscribe((state) => {
+            const uid = state.currentUser?.id;
+            if (uid !== prevUserId) {
+                prevUserId = uid;
+                void store.loadAllSessions().then(() => setHydrated(true));
+            }
+        });
+        return () => { unsub(); };
+    }, [store]);
     const sessions = store.getSessions();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [titleDraft, setTitleDraft] = useState('');

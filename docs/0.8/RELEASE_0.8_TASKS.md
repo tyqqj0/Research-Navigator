@@ -128,3 +128,7 @@
 - [ ] Prompt 管理：`PromptRegistry` 支持 Run/Session 覆盖与回滚；节点生成 `prompt_snapshot`/`context_snapshot` artifacts。
 - [ ] Deep Research 多次运行：同会话可多次运行并切换；会话内 @ 引用解析为 `inputRefs` 并注入。
 
+
+
+### 补充
+1. 卡片统一提供可收缩的模板
