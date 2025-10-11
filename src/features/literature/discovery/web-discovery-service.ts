@@ -6,15 +6,47 @@ import { literatureEntry } from '../data-access';
 
 export const webDiscovery: WebDiscoveryAPI = {
     async searchWeb(query, opts) {
-        const items = await tavilySearch(query, { maxResults: opts?.limit, includeDomains: opts?.includeDomains });
-        const candidates = buildCandidatesFromWebResults(query, items);
+        // 优先走后端搜索（无需 Tavily Key），失败时回退 Tavily
+        const limit = Math.max(1, Math.min(opts?.limit || 8, 50));
         try {
-            const total = candidates.length;
-            const withBest = candidates.filter(c => !!c.bestIdentifier).length;
-            const onlyUrl = candidates.filter(c => c.bestIdentifier && /^URL:/i.test(c.bestIdentifier)).length;
-            console.debug('[webDiscovery] searchWeb result', { query, limit: opts?.limit, includeDomains: opts?.includeDomains, total, withBest, onlyUrl });
-        } catch { /* noop */ }
-        return { query, candidates } as DiscoveryResult;
+            const fields = ['paperId', 'title', 'year', 'authors', 'url'];
+            const res = await backendApiService.searchPapers({ query, limit, offset: 0, fields });
+            const candidates: DiscoveryCandidate[] = (res.results || []).map((it: any, idx: number) => {
+                const paperId = String(it.paperId || it.id || '');
+                const url: string = it.url || `https://www.semanticscholar.org/paper/${paperId}`;
+                const site = (() => { try { return new URL(url).hostname; } catch { return undefined; } })();
+                const extracted = [
+                    { kind: 'S2', value: paperId } as const,
+                    ...(it.doi ? ([{ kind: 'DOI', value: String(it.doi) }] as const) : [])
+                ] as unknown as DiscoveryCandidate['extracted'];
+                return {
+                    id: `s_${paperId || idx}`,
+                    title: it.title,
+                    snippet: Array.isArray(it.authors) && it.authors.length ? `${it.authors.join(', ')} · ${it.year || ''}` : (it.year ? String(it.year) : undefined),
+                    sourceUrl: url,
+                    site,
+                    extracted,
+                    bestIdentifier: paperId || undefined,
+                    confidence: 0.95
+                } as DiscoveryCandidate;
+            });
+            try {
+                const total = candidates.length;
+                console.debug('[webDiscovery] backend search result', { query, limit, total });
+            } catch { /* noop */ }
+            return { query, candidates } as DiscoveryResult;
+        } catch (err) {
+            // 回退 Tavily：保持兼容旧的候选展示
+            const items = await tavilySearch(query, { maxResults: opts?.limit, includeDomains: opts?.includeDomains });
+            const candidates = buildCandidatesFromWebResults(query, items);
+            try {
+                const total = candidates.length;
+                const withBest = candidates.filter(c => !!c.bestIdentifier).length;
+                const onlyUrl = candidates.filter(c => c.bestIdentifier && /^URL:/i.test(c.bestIdentifier)).length;
+                console.debug('[webDiscovery] tavily fallback result', { query, limit: opts?.limit, includeDomains: opts?.includeDomains, total, withBest, onlyUrl });
+            } catch { /* noop */ }
+            return { query, candidates } as DiscoveryResult;
+        }
     },
 
     async resolveToPaperIds(candidates) {

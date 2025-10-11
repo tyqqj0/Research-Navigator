@@ -22,6 +22,24 @@ async function emit(e: SessionEvent) { await eventBus.publish(e); applyEventToPr
 
 const runners = new Map<string, { service: any }>();
 
+// HMR-safe dynamic loader for graph-store with diagnostics
+async function loadGraphStoreSafely(context: string): Promise<any | null> {
+    try {
+        try { console.debug('[orch][collection] loading graph-store', { context }); } catch { /* noop */ }
+        const mod: any = await import('@/features/graph/data-access/graph-store');
+        const useGraphStore = mod?.useGraphStore || mod?.default;
+        if (!useGraphStore) {
+            try { console.warn('[orch][collection] graph-store missing export', { context, exports: Object.keys(mod || {}) }); } catch { /* noop */ }
+            return null;
+        }
+        return useGraphStore;
+    } catch (err: any) {
+        const msg = String(err?.message || err);
+        try { console.warn('[orch][collection] graph-store dynamic import failed', { context, error: msg }); } catch { /* noop */ }
+        return null;
+    }
+}
+
 // Global sentinel to avoid duplicate registrations in dev/hot-reload
 declare const globalThis: any;
 if (!(globalThis as any).__collectionOrchestratorRegistered) {
@@ -56,10 +74,15 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
             await emit({ id: newId(), type: 'SessionCollectionBound', ts: Date.now(), sessionId, payload: { collectionId: collection.id, created: true } });
             // 提前创建空图谱以便中间面板立即出现，并支持后续实时加点
             try {
-                const { useGraphStore } = require('@/features/graph/data-access/graph-store');
-                const gs = useGraphStore.getState();
-                const graph = await gs.createGraph({ name: `Session Graph ${new Date().toLocaleString()}` });
-                await emit({ id: newId(), type: 'GraphReady', ts: Date.now(), sessionId, payload: { graphId: graph.id } as any });
+                const useGraphStore = await loadGraphStoreSafely('InitCollection:createGraph');
+                if (useGraphStore) {
+                    const gs = useGraphStore.getState();
+                    const graph = await gs.createGraph({ name: `Session Graph ${new Date().toLocaleString()}` });
+                    try { console.debug('[orch][collection] Graph created in InitCollection', { graphId: graph.id }); } catch { /* noop */ }
+                    await emit({ id: newId(), type: 'GraphReady', ts: Date.now(), sessionId, payload: { graphId: graph.id } as any });
+                } else {
+                    try { console.warn('[orch][collection] Skip graph creation: graph-store unavailable (likely HMR)'); } catch { /* noop */ }
+                }
             } catch { /* ignore graph creation errors */ }
             return;
         }
@@ -291,7 +314,8 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
             const windowSize = (cmd.params as any).window || runtimeConfig.GRAPH_WINDOW_SIZE;
             let papers: Array<{ id: string; title: string }>;
             try {
-                const { useGraphStore } = require('@/features/graph/data-access/graph-store');
+                const useGraphStore = await loadGraphStoreSafely('BuildGraph:loadAndMaybeCreate');
+                if (!useGraphStore) throw new Error('graph-store unavailable (HMR)');
                 const gs = useGraphStore.getState();
                 let graphId: string | undefined = s?.meta?.graphId as string | undefined;
                 if (!graphId) {
@@ -368,7 +392,8 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
             await emit({ id: newId(), type: 'GraphEdgesStructured', ts: Date.now(), sessionId, payload: { edgeArtifactId: edges.id, size: edges.data.length } });
             // 将边写入图
             try {
-                const { useGraphStore } = require('@/features/graph/data-access/graph-store');
+                const useGraphStore = await loadGraphStoreSafely('BuildGraph:applyEdges');
+                if (!useGraphStore) throw new Error('graph-store unavailable (HMR)');
                 const gs = useGraphStore.getState();
                 const curr = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
                 const graphId = curr?.meta?.graphId;
@@ -422,7 +447,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 }
             } catch { /* ignore */ }
             try {
-                const { useGraphStore } = require('@/features/graph/data-access/graph-store');
+                const useGraphStore = await loadGraphStoreSafely('BuildGraph:finalGraphStats');
                 const gsState = (useGraphStore as any)?.getState?.();
                 const sess = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
                 const gid = sess?.meta?.graphId;
