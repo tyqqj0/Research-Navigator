@@ -9,6 +9,9 @@ export interface DiscoveryCandidate {
     id: string; // query+rank 哈希
     title?: string;
     snippet?: string;
+    venue?: string;
+    publication?: string;
+    year?: number;
     sourceUrl: string;
     site?: string;
     extracted: DiscoveredIdentifier[];

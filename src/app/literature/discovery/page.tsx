@@ -93,8 +93,10 @@ export default function LiteratureDiscoveryPage() {
                                     {candidates.map((c: any) => (
                                         <div key={c.id} className="p-3 rounded-md border flex items-start justify-between gap-4">
                                             <div className="min-w-0 flex-1">
-                                                <div className="font-medium truncate">{c.title || c.sourceUrl}</div>
-                                                <div className="text-xs text-muted-foreground truncate">{c.site}</div>
+                                                <div className="font-medium line-clamp-2">{c.title || c.sourceUrl}</div>
+                                                {(c.publication || c.venue || c.year) && (
+                                                    <div className="text-xs text-muted-foreground truncate">{[(c.publication || c.venue), c.year].filter(Boolean).join(' · ')}</div>
+                                                )}
                                                 <div className="text-xs line-clamp-2 mt-1">{c.snippet}</div>
                                                 <div className="text-xs mt-2 flex items-center gap-2 flex-wrap">
                                                     {c.bestIdentifier && (

@@ -102,13 +102,19 @@ export const LiteratureQuickAddOverlay: React.FC<LiteratureQuickAddOverlayProps>
                         return (
                             <div className="border rounded-md p-3">
                                 <div className="text-sm text-muted-foreground">识别到标识：<span className="font-mono">{c.bestIdentifier}</span></div>
-                                {c.title && <div className="mt-1 text-sm font-medium">{c.title}</div>}
-                                {(c.meta?.publication || c.meta?.year) && (
+                                {c.title && <div className="mt-1 text-sm font-semibold">{c.title}</div>}
+                                {(c.meta?.venue || c.meta?.publication || c.meta?.year) && (
                                     <div className="text-xs text-muted-foreground">
-                                        {[c.meta?.publication, c.meta?.year].filter(Boolean).join(' · ')}
+                                        {[c.meta?.venue || c.meta?.publication, c.meta?.year].filter(Boolean).join(' · ')}
                                     </div>
                                 )}
-                                {c.snippet && <div className="mt-1 text-xs text-muted-foreground line-clamp-3">{c.snippet}</div>}
+                                {(() => {
+                                    const pub = String(c.meta?.publication || c.meta?.venue || '').trim().toLowerCase();
+                                    const snip = String(c.snippet || '').trim();
+                                    if (!snip) return null;
+                                    if (pub && snip.toLowerCase() === pub) return null;
+                                    return <div className="mt-1 text-xs text-muted-foreground line-clamp-3">{snip}</div>;
+                                })()}
                                 <div className="mt-3">
                                     <Button onClick={() => handleAddSingle(c.bestIdentifier!)} disabled={isLoading}>
                                         添加到{selectedCollectionId ? '集合' : '文库'}
@@ -126,13 +132,19 @@ export const LiteratureQuickAddOverlay: React.FC<LiteratureQuickAddOverlayProps>
                             {candidates.map(c => (
                                 <div key={c.id} className="p-3 border rounded-md flex items-center justify-between gap-3">
                                     <div className="min-w-0">
-                                        <div className="text-sm font-medium truncate">{c.title || '未命名'}</div>
-                                        {(c.meta?.publication || c.meta?.year) && (
+                                        <div className="text-sm font-semibold line-clamp-2">{c.title || '未命名'}</div>
+                                        {(c.meta?.venue || c.meta?.publication || c.meta?.year) && (
                                             <div className="text-xs text-muted-foreground">
-                                                {[c.meta?.publication, c.meta?.year].filter(Boolean).join(' · ')}
+                                                {[c.meta?.venue || c.meta?.publication, c.meta?.year].filter(Boolean).join(' · ')}
                                             </div>
                                         )}
-                                        {c.snippet && <div className="text-xs text-muted-foreground line-clamp-2">{c.snippet}</div>}
+                                        {(() => {
+                                            const pub = String(c.meta?.publication || c.meta?.venue || '').trim().toLowerCase();
+                                            const snip = String(c.snippet || '').trim();
+                                            if (!snip) return null;
+                                            if (pub && snip.toLowerCase() === pub) return null;
+                                            return <div className="text-xs text-muted-foreground line-clamp-2">{snip}</div>;
+                                        })()}
                                     </div>
                                     <div className="shrink-0">
                                         <Button size="sm" onClick={() => handleAddSingle(c.bestIdentifier || undefined)} disabled={!c.bestIdentifier || isLoading}>+ 入库</Button>

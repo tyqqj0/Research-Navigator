@@ -82,7 +82,7 @@ export function useLiteratureQuickAdd(options: UseLiteratureQuickAddOptions = {}
                             title: item?.title,
                             snippet,
                             bestIdentifier: normalizedCandidate,
-                            meta: { kind: 'identifier', paperId: item?.paperId, year: (item as any)?.year, publication: (item as any)?.publication },
+                            meta: { kind: 'identifier', paperId: item?.paperId, year: (item as any)?.year, venue: (item as any)?.publication || (item as any)?.venue },
                         },
                     ]);
                 } catch {
@@ -140,7 +140,7 @@ export function useLiteratureQuickAdd(options: UseLiteratureQuickAddOptions = {}
                                 ...c,
                                 title: c.title || item.title,
                                 snippet: c.snippet || (item as any)?.abstract,
-                                meta: { ...c.meta, paperId: item.paperId, year: (item as any)?.year, publication: (item as any)?.publication },
+                                meta: { ...c.meta, paperId: item.paperId, year: (item as any)?.year, venue: (item as any)?.publication || (item as any)?.venue },
                             } as QuickAddCandidate;
                         }
                         return c;

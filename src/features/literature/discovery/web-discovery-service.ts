@@ -9,7 +9,8 @@ export const webDiscovery: WebDiscoveryAPI = {
         // 优先走后端搜索（无需 Tavily Key），失败时回退 Tavily
         const limit = Math.max(1, Math.min(opts?.limit || 8, 50));
         try {
-            const fields = ['paperId', 'title', 'year', 'authors', 'url'];
+            // 请求 publication 字段（后端 mapper 会将 venue 归一到 publication）
+            const fields = ['paperId', 'title', 'year', 'authors', 'venue', 'url'];
             const res = await backendApiService.searchPapers({ query, limit, offset: 0, fields });
             const candidates: DiscoveryCandidate[] = (res.results || []).map((it: any, idx: number) => {
                 const paperId = String(it.paperId || it.id || '');
@@ -22,7 +23,11 @@ export const webDiscovery: WebDiscoveryAPI = {
                 return {
                     id: `s_${paperId || idx}`,
                     title: it.title,
-                    snippet: Array.isArray(it.authors) && it.authors.length ? `${it.authors.join(', ')} · ${it.year || ''}` : (it.year ? String(it.year) : undefined),
+                    // 简短片段：仅作者，避免与 venue/year 重复
+                    snippet: (Array.isArray(it.authors) && it.authors.length) ? it.authors.join(', ') : undefined,
+                    publication: it.publication || it.venue,
+                    venue: it.venue || it.publication,
+                    year: it.year,
                     sourceUrl: url,
                     site,
                     extracted,

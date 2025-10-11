@@ -590,6 +590,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
             try {
                 const existing = await this.services.literature.getLiterature(paper.paperId);
                 if (existing) {
+                    try { console.debug('[LiteratureEntry.batch] existing item found', { paperId: paper.paperId, title: (existing as any)?.title || (existing as any)?.literature?.title }); } catch { }
                     // 同步到列表（增强版）
                     try {
                         const enhanced = await this.composition.getEnhancedLiterature(paper.paperId);
@@ -598,6 +599,24 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                             (literatureStore as any).getState().addLiterature(enhanced as EnhancedLibraryItem);
                         }
                     } catch { /* ignore */ }
+                    // 若增强项缺少引用，尝试补齐引用并触发解析
+                    try {
+                        const enhanced = await this.composition.getEnhancedLiterature(paper.paperId);
+                        const hasRefs = Array.isArray((enhanced as any)?.literature?.parsedContent?.extractedReferences) && (enhanced as any).literature.parsedContent.extractedReferences.length > 0;
+                        if (!hasRefs) {
+                            const refs = await (this.services.backend as any).getPaperReferences(paper.paperId);
+                            const refIds = (refs || []).map((r: any) => r?.targetPaperId).filter((x: any) => typeof x === 'string' && x.length > 0);
+                            console.debug('[LiteratureEntry.batch] enrich existing with references', { paperId: paper.paperId, refCount: refIds.length });
+                            if (refIds.length > 0) {
+                                try {
+                                    const result = await this.services.citation.parseAndStoreReferences(paper.paperId, refIds);
+                                    console.debug('[LiteratureEntry.batch] parseAndStoreReferences for existing result', result);
+                                } catch (e) {
+                                    console.warn('[LiteratureEntry.batch] parseAndStoreReferences for existing failed', e);
+                                }
+                            }
+                        }
+                    } catch { /* ignore enrich existing refs */ }
                     successful.push(existing as LibraryItem);
                     // 确保 membership 记录
                     try {
@@ -618,6 +637,21 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                 } else {
                     // 创建组合文献
                     const pc = paper?.parsedContent as any;
+                    try { console.debug('[LiteratureEntry.batch] creating composed for', { paperId: paper.paperId, title: paper.title }); } catch { }
+                    let enrichedPc: any = pc && typeof pc === 'object' ? { ...pc } : undefined;
+                    // 批量路径常见：后端批量接口未包含引用；必要时补拉引用用于后续引文解析
+                    if (!(enrichedPc?.extractedReferences && Array.isArray(enrichedPc.extractedReferences) && enrichedPc.extractedReferences.length > 0)) {
+                        try {
+                            const refs = await (this.services.backend as any).getPaperReferences(paper.paperId);
+                            const refIds = (refs || [])
+                                .map((r: any) => r?.targetPaperId)
+                                .filter((x: any) => typeof x === 'string' && x.length > 0);
+                            try { console.debug('[LiteratureEntry.batch] fetched references', { paperId: paper.paperId, refCount: refIds.length }); } catch { }
+                            if (refIds.length > 0) {
+                                enrichedPc = { ...(enrichedPc || {}), extractedReferences: refIds };
+                            }
+                        } catch { /* ignore */ }
+                    }
                     const created = await this.composition.createComposedLiterature({
                         literature: {
                             paperId: paper.paperId,
@@ -632,12 +666,13 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                             url: (paper as any).url || undefined,
                             pdfPath: (paper as any).pdfPath || undefined,
                             source: 'search',
-                            parsedContent: pc && typeof pc === 'object' ? pc : undefined,
+                            parsedContent: enrichedPc,
                         },
                         userMeta: entry.options?.userMeta
                             ? { ...entry.options.userMeta, tags: entry.options.userMeta.tags || entry.options.tags || [] }
                             : (entry.options?.tags && entry.options.tags.length ? { tags: entry.options.tags } : undefined),
                     });
+                    try { console.debug('[LiteratureEntry.batch] created composed', { paperId: created?.literature?.paperId, refs: (created as any)?.literature?.parsedContent?.extractedReferences?.length || 0 }); } catch { }
                     usePaperId = created.literature.paperId;
                     // membership 记录（幂等）
                     try {
@@ -945,7 +980,10 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
     async searchLiterature(query: string, options: any = {}): Promise<LibraryItem[]> {
         try {
             const backend = this.services.backend;
-            const res = await backend.searchPapers({ query, limit: options.limit || 20, offset: options.offset || 0 });
+            // 限制返回字段，减小传输体积；允许通过 options.fields 覆盖
+            const defaultFields = ['paperId', 'title', 'year', 'authors', 'publication', 'url'];
+            const fields = Array.isArray(options.fields) && options.fields.length ? options.fields : defaultFields;
+            const res = await backend.searchPapers({ query, limit: options.limit || 20, offset: options.offset || 0, fields });
             return res.results || [];
         } catch (error) {
             console.error('[LiteratureDataAccess] Search failed:', error);
