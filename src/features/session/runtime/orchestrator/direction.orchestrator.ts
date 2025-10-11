@@ -11,7 +11,7 @@ type DirState = StateFrom<typeof directionMachine>;
 
 const g_any: any = globalThis as any;
 if (!g_any.__directionInstances) g_any.__directionInstances = new Map<SessionId, { service: any; run: { abort(): void } | null; prev: any | null }>();
-type InstanceRec = { service: any; run: { abort(): void } | null; prev: any | null };
+type InstanceRec = { service: any; run: { abort(): void } | null; prev: any | null; runId?: string };
 const instances: Map<SessionId, InstanceRec> = g_any.__directionInstances;
 if (!g_any.__directionOrchId) g_any.__directionOrchId = `dir-orch:${Math.random().toString(36).slice(2, 7)}`;
 const ORCH_ID: string = g_any.__directionOrchId;
@@ -39,16 +39,18 @@ function ensureInstance(sessionId: SessionId): InstanceRec {
         if (state.matches('proposing')) {
             // 进入 proposing 由 orchestrator 启动执行器
             if (!curr.run) {
-                try { console.debug('[orch][direction][exec_start]', ORCH_ID, { sessionId, version: ctx.version }); } catch { }
+                const runId = crypto.randomUUID();
+                curr.runId = runId;
+                try { console.debug('[orch][direction][exec_start]', ORCH_ID, { sessionId, version: ctx.version, runId }); } catch { }
                 // streaming bridge to projection
-                void emit({ id: newId(), type: 'DirectionProposalStarted', ts: Date.now(), sessionId, payload: { version: ctx.version } });
+                void emit({ id: newId(), type: 'DirectionProposalStarted', ts: Date.now(), sessionId, payload: { runId, version: ctx.version } });
                 curr.run = directionExecutor.generateProposal({
                     userQuery: ctx.userQuery,
                     version: ctx.version,
                     feedback: ctx.feedback,
-                    onDelta: (delta: string) => { void emit({ id: newId(), type: 'DirectionProposalDelta', ts: Date.now(), sessionId, payload: { version: ctx.version, delta } }); },
+                    onDelta: (delta: string) => { void emit({ id: newId(), type: 'DirectionProposalDelta', ts: Date.now(), sessionId, payload: { runId, version: ctx.version, delta } }); },
                     onComplete: (text: string) => { try { curr.service.send({ type: 'PROPOSAL_DONE', text }); } catch { /* ignore */ } },
-                    onAborted: (reason: string) => { void emit({ id: newId(), type: 'DirectionProposalAborted', ts: Date.now(), sessionId, payload: { version: ctx.version, reason } }); },
+                    onAborted: (reason: string) => { void emit({ id: newId(), type: 'DirectionProposalAborted', ts: Date.now(), sessionId, payload: { runId, version: ctx.version, reason } }); },
                     onError: (message: string) => { try { curr.service.send({ type: 'PROPOSAL_ERROR', message }); } catch { /* ignore */ } }
                 } as any);
             }
@@ -60,15 +62,17 @@ function ensureInstance(sessionId: SessionId): InstanceRec {
         const enteredWaitDecision = state.matches('waitDecision') && !(prev && (prev as any).matches && (prev as any).matches('waitDecision'));
         if (enteredWaitDecision && ctx.lastProposal) {
             const version = ctx.version;
-            void emit({ id: newId(), type: 'DirectionProposed', ts: Date.now(), sessionId, payload: { proposalText: ctx.lastProposal, version } });
-            void emit({ id: newId(), type: 'DecisionRequested', ts: Date.now(), sessionId, payload: { kind: 'direction', version } });
+            const runId = curr.runId || crypto.randomUUID();
+            void emit({ id: newId(), type: 'DirectionProposed', ts: Date.now(), sessionId, payload: { runId, proposalText: ctx.lastProposal, version } });
+            void emit({ id: newId(), type: 'DecisionRequested', ts: Date.now(), sessionId, payload: { kind: 'direction', runId, version } });
         }
         const enteredDone = (state as any).status === 'done' && !(prev && (prev as any).status === 'done');
         if (enteredDone) {
             const version = ctx.version;
+            const runId = curr.runId || crypto.randomUUID();
             const spec = ctx.lastProposal || '';
-            void emit({ id: newId(), type: 'DirectionDecisionRecorded', ts: Date.now(), sessionId, payload: { action: 'confirm', version } });
-            void emit({ id: newId(), type: 'DirectionConfirmed', ts: Date.now(), sessionId, payload: { directionSpec: spec, version } });
+            void emit({ id: newId(), type: 'DirectionDecisionRecorded', ts: Date.now(), sessionId, payload: { runId, action: 'confirm', version } });
+            void emit({ id: newId(), type: 'DirectionConfirmed', ts: Date.now(), sessionId, payload: { runId, directionSpec: spec, version } });
             // 自动进入集合阶段：初始化集合
             void bus.dispatch({ id: newId(), type: 'InitCollection', ts: Date.now(), params: { sessionId } } as any);
         }
@@ -110,11 +114,11 @@ if (!g_any.__directionOrchestratorRegistered) {
             if (action === 'confirm') rec.service.send({ type: 'CONFIRM' });
             else if (action === 'refine') {
                 // record a refine decision event
-                await emit({ id: newId(), type: 'DirectionDecisionRecorded', ts: Date.now(), sessionId, payload: { action: 'refine', feedback, version: (rec.service.getSnapshot()?.context?.version || 1) } });
+                await emit({ id: newId(), type: 'DirectionDecisionRecorded', ts: Date.now(), sessionId, payload: { runId: rec.runId || crypto.randomUUID(), action: 'refine', feedback, version: (rec.service.getSnapshot()?.context?.version || 1) } });
                 rec.service.send({ type: 'REFINE' });
             }
             else if (action === 'cancel') {
-                await emit({ id: newId(), type: 'DirectionDecisionRecorded', ts: Date.now(), sessionId, payload: { action: 'cancel', version: (rec.service.getSnapshot()?.context?.version || 1) } });
+                await emit({ id: newId(), type: 'DirectionDecisionRecorded', ts: Date.now(), sessionId, payload: { runId: rec.runId || crypto.randomUUID(), action: 'cancel', version: (rec.service.getSnapshot()?.context?.version || 1) } });
                 rec.service.send({ type: 'CANCEL' });
             }
             return;
@@ -125,7 +129,7 @@ if (!g_any.__directionOrchestratorRegistered) {
             if (rec.run) {
                 try { rec.run.abort(); } catch { /* ignore */ }
                 const version = rec.service.getSnapshot()?.context?.version || 1;
-                void emit({ id: newId(), type: 'DirectionProposalAborted', ts: Date.now(), sessionId, payload: { version, reason: 'user' } });
+                void emit({ id: newId(), type: 'DirectionProposalAborted', ts: Date.now(), sessionId, payload: { runId: rec.runId || crypto.randomUUID(), version, reason: 'user' } });
                 try { rec.service.send({ type: 'PROPOSAL_ERROR', message: 'aborted' }); } catch { /* ignore */ }
             }
             return;

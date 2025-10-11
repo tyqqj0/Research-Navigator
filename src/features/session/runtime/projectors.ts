@@ -84,7 +84,7 @@ export function applyEventToProjection(e: SessionEvent) {
 
     // Direction phase projection additions (minimal):
     if (e.type === 'DirectionProposalStarted') {
-        const sid = e.sessionId!; const msgId = `proposal_${e.payload.version}`;
+        const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
         try {
             const list = (useSessionStore.getState() as any).messagesBySession.get(sid) || [];
             const exists = list.find((m: any) => m.id === msgId);
@@ -93,13 +93,13 @@ export function applyEventToProjection(e: SessionEvent) {
         return;
     }
     if (e.type === 'DirectionProposalDelta') {
-        const sid = e.sessionId!; const msgId = `proposal_${e.payload.version}`;
+        const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
         store.appendToMessage(msgId, sid, e.payload.delta);
         return;
     }
     if (e.type === 'DirectionProposed') {
         const sid = e.sessionId!;
-        const msgId = `proposal_${e.payload.version}`;
+        const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
         const content = extractDirectionText(e.payload.proposalText || '');
         // 如果已经开始了 streaming，则用提取后的文本覆盖并标记完成；否则直接新增
         try {
@@ -116,7 +116,7 @@ export function applyEventToProjection(e: SessionEvent) {
         return;
     }
     if (e.type === 'DirectionProposalAborted') {
-        const sid = e.sessionId!; const msgId = `proposal_${e.payload.version}`;
+        const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
         try { store.markMessage(msgId, sid, { status: 'aborted' }); } catch { }
         return;
     }
