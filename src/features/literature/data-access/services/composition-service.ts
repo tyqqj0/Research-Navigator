@@ -33,6 +33,7 @@ import { UserMetaService, userMetaService } from './user-meta-service';
 import { collectionService } from './collection-service';
 import { handleError } from '../../../../lib/errors';
 import { authStoreUtils, type AuthStoreState } from '../../../../stores/auth.store';
+import { ArchiveManager } from '@/lib/archive/manager';
 
 // 错误处理器别名
 const ErrorHandler = { handle: handleError };
@@ -155,6 +156,9 @@ export class CompositionService {
             }
 
             // 4. 返回组合结果
+            // 4. 写入档案级用户文库membership
+            try { await ArchiveManager.getServices().membershipRepository.add(userId, literature.paperId); } catch { }
+            // 5. 返回组合结果
             return this.buildEnhancedItem(literature, userMeta);
         } catch (error) {
             ErrorHandler.handle(error, {

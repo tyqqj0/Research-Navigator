@@ -204,7 +204,8 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
         private readonly services = require('./services').literatureDomainServices,
         // private readonly repositories = require('./repositories').literatureDomainRepositories,
         private readonly composition = require('./services').literatureDomainServices.composition,
-        private readonly authUtils = require('../../../stores/auth.store').authStoreUtils
+        private readonly authUtils = require('../../../stores/auth.store').authStoreUtils,
+        private readonly archiveManager = require('@/lib/archive/manager').ArchiveManager
     ) { }
 
     private normalizeIdentifier(raw: string): { normalized: string; encoded: string } {
@@ -348,10 +349,12 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                     ];
                     if (collectionIds.length) {
                         const userId = this.authUtils.getStoreInstance().requireAuth();
+                        // 确保 membership 记录
+                        try { await this.archiveManager.getServices().membershipRepository.add(userId, (existing as any).paperId); } catch { }
                         for (const cid of collectionIds) {
                             try {
                                 try { console.debug('[LiteratureEntry] add existing to collection', { cid, paperId: existing.paperId }); } catch { }
-                                await this.services.collection.addLiteratureToCollection(cid, [existing.paperId], userId);
+                                await this.archiveManager.getServices().collectionsRepository.addLiterature(cid, [existing.paperId]);
                                 // 本地 CollectionStore 同步
                                 try {
                                     const collectionStore = require('./stores').useCollectionStore;
@@ -413,10 +416,12 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
             ];
             if (collectionIds.length) {
                 const userId = this.authUtils.getStoreInstance().requireAuth();
+                // membership 记录（幂等）
+                try { await this.archiveManager.getServices().membershipRepository.add(userId, created.literature.paperId); } catch { }
                 for (const cid of collectionIds) {
                     try {
                         try { console.debug('[LiteratureEntry] add to collection', { cid, paperId: created.literature.paperId }); } catch { }
-                        await this.services.collection.addLiteratureToCollection(cid, [created.literature.paperId], userId);
+                        await this.archiveManager.getServices().collectionsRepository.addLiterature(cid, [created.literature.paperId]);
                         // 本地 CollectionStore 同步
                         try {
                             const collectionStore = require('./stores').useCollectionStore;
@@ -594,6 +599,11 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                         }
                     } catch { /* ignore */ }
                     successful.push(existing as LibraryItem);
+                    // 确保 membership 记录
+                    try {
+                        const userId = this.authUtils.getStoreInstance().requireAuth();
+                        await this.archiveManager.getServices().membershipRepository.add(userId, existing.paperId);
+                    } catch { }
                     // 即时更新集合：若指定集合，先本地写入，避免“等整批完成才出现”
                     try {
                         const collectionStore = require('./stores').useCollectionStore;
@@ -629,6 +639,11 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                             : (entry.options?.tags && entry.options.tags.length ? { tags: entry.options.tags } : undefined),
                     });
                     usePaperId = created.literature.paperId;
+                    // membership 记录（幂等）
+                    try {
+                        const userId = this.authUtils.getStoreInstance().requireAuth();
+                        await this.archiveManager.getServices().membershipRepository.add(userId, usePaperId);
+                    } catch { }
                     // 同步到本地 Store
                     try {
                         const literatureStore = require('./stores').useLiteratureStore;
@@ -670,7 +685,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                 try {
                     // 去重，避免重复加入
                     const unique = Array.from(new Set(paperIds));
-                    await this.services.collection.addLiteratureToCollection(cid, unique, userId);
+                    await this.archiveManager.getServices().collectionsRepository.addLiterature(cid, unique);
                     // 已在逐项阶段即时更新 CollectionStore；这里不再重复写入，避免重复 toast/闪烁
                     // 若当前会话绑定了该集合，尝试把节点加入现有图谱
                     try {
@@ -1029,7 +1044,8 @@ class CollectionDataAccessImpl implements CollectionDataAccessAPI {
     constructor(
         private readonly services = require('./services').literatureDomainServices,
         private readonly repositories = require('./repositories').literatureDomainRepositories,
-        private readonly authUtils = require('../../../stores/auth.store').authStoreUtils
+        private readonly authUtils = require('../../../stores/auth.store').authStoreUtils,
+        private readonly archiveManager = require('@/lib/archive/manager').ArchiveManager
     ) { }
 
     private requireUserId(): string {
@@ -1039,35 +1055,45 @@ class CollectionDataAccessImpl implements CollectionDataAccessAPI {
     async createCollection(input: CreateCollectionInput): Promise<Collection> {
         const userId = this.requireUserId();
         const payload: CreateCollectionInput = { ...input, ownerUid: input.ownerUid || userId } as CreateCollectionInput;
-        return await this.services.collection.createCollection(userId, payload);
+        const repo = this.archiveManager.getServices().collectionsRepository;
+        const id = await repo.createCollection(payload);
+        const created = await repo.findById(id);
+        return created!;
     }
 
     async updateCollection(id: string, input: UpdateCollectionInput): Promise<Collection> {
-        const userId = this.requireUserId();
-        return await this.services.collection.updateCollection(id, userId, input);
+        this.requireUserId();
+        const repo = this.archiveManager.getServices().collectionsRepository;
+        await repo.update(id, input as any);
+        const updated = await repo.findById(id);
+        return updated!;
     }
 
     async deleteCollection(id: string): Promise<void> {
-        const userId = this.requireUserId();
-        await this.services.collection.deleteCollection(id, userId);
+        this.requireUserId();
+        const repo = this.archiveManager.getServices().collectionsRepository;
+        await repo.delete(id);
     }
 
     async addItemsToCollection(collectionId: string, paperIds: string[]): Promise<void> {
-        const userId = this.requireUserId();
-        await this.services.collection.addLiteratureToCollection(collectionId, paperIds, userId);
+        this.requireUserId();
+        const repo = this.archiveManager.getServices().collectionsRepository;
+        await repo.addLiterature(collectionId, paperIds);
     }
 
     async removeItemsFromCollection(collectionId: string, paperIds: string[]): Promise<void> {
-        const userId = this.requireUserId();
-        await this.services.collection.removeLiteratureFromCollection(collectionId, paperIds, userId);
+        this.requireUserId();
+        const repo = this.archiveManager.getServices().collectionsRepository;
+        await repo.removeLiterature(collectionId, paperIds);
     }
 
     async getUserCollections(options: { page?: number; pageSize?: number } = {}): Promise<Collection[]> {
         const userId = this.requireUserId();
         const page = options.page || 1;
         const pageSize = options.pageSize || 100;
-        const result = await this.services.collection.queryCollections(
-            { ownerUid: userId },
+        const repo = this.archiveManager.getServices().collectionsRepository;
+        const result = await repo.searchWithFilters(
+            { ownerUid: userId } as any,
             { field: 'createdAt', order: 'desc' },
             page,
             pageSize
@@ -1076,7 +1102,8 @@ class CollectionDataAccessImpl implements CollectionDataAccessAPI {
     }
 
     async getCollection(id: string): Promise<Collection | null> {
-        const c = await this.repositories.collection.findById(id);
+        const repo = this.archiveManager.getServices().collectionsRepository;
+        const c = await repo.findById(id);
         return c || null;
     }
 
@@ -1092,14 +1119,15 @@ class CollectionDataAccessImpl implements CollectionDataAccessAPI {
         const page = params.page || 1;
         const pageSize = params.pageSize || 20;
 
-        const result = await this.services.collection.queryCollections(
+        const repo = this.archiveManager.getServices().collectionsRepository;
+        const result = await repo.searchWithFilters(
             {
                 ownerUid: userId,
                 type: params.type,
                 isPublic: params.isPublic,
                 hasItems: params.hasItems,
                 searchTerm: params.searchTerm,
-            },
+            } as any,
             { field: 'createdAt', order: 'desc' },
             page,
             pageSize
@@ -1116,7 +1144,9 @@ class CollectionDataAccessImpl implements CollectionDataAccessAPI {
 
 class LiteraturesDataAccessImpl implements LiteraturesDataAccessAPI {
     constructor(
-        private readonly services = require('./services').literatureDomainServices.composition
+        private readonly services = require('./services').literatureDomainServices.composition,
+        private readonly authUtils = require('../../../stores/auth.store').authStoreUtils,
+        private readonly archiveManager = require('@/lib/archive/manager').ArchiveManager
     ) { }
 
     async create(input: CreateComposedLiteratureInput): Promise<EnhancedLibraryItem> {
@@ -1129,14 +1159,37 @@ class LiteraturesDataAccessImpl implements LiteraturesDataAccessAPI {
 
     async delete(paperId: string, options: { deleteGlobally?: boolean } = {}): Promise<void> {
         await this.services.deleteComposedLiterature(paperId, options);
+        try {
+            const userId = this.authUtils.getStoreInstance().requireAuth();
+            await this.archiveManager.getServices().membershipRepository.remove(userId, paperId);
+        } catch { }
     }
 
     async deleteBatch(requests: Array<{ paperId: string; deleteGlobally?: boolean }>): Promise<{ success: string[]; failed: Array<{ paperId: string; error: string }>; total: number }> {
-        return await this.services.deleteComposedLiteratureBatch(requests);
+        const res = await this.services.deleteComposedLiteratureBatch(requests);
+        try {
+            const userId = this.authUtils.getStoreInstance().requireAuth();
+            for (const pid of res.success) {
+                try { await this.archiveManager.getServices().membershipRepository.remove(userId, pid); } catch { }
+            }
+        } catch { }
+        return res;
     }
 
     async getUserLiteratures(): Promise<EnhancedLibraryItem[]> {
-        return await this.services.getUserComposedLiteratures();
+        // 未登录直接返回空数组，避免登录页触发异常
+        let userId = '';
+        try { userId = this.authUtils.getStoreInstance().requireAuth(); } catch { return []; }
+        const membershipRepo = this.archiveManager.getServices().membershipRepository;
+        const list = await membershipRepo.listByUser(userId);
+        const results: EnhancedLibraryItem[] = [];
+        for (const m of list) {
+            try {
+                const enhanced = await this.services.getEnhancedLiterature(m.paperId);
+                if (enhanced) results.push(enhanced);
+            } catch { }
+        }
+        return results;
     }
 
     async getEnhanced(paperId: string): Promise<EnhancedLibraryItem | null> {

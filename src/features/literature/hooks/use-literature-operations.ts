@@ -17,6 +17,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useLiteratureStore } from '../data-access/stores';
 import { literatureDataAccess } from '../data-access';
+import { authStoreUtils } from '@/stores/auth.store';
 import type {
     EnhancedLibraryItem,
     LiteratureFilter,
@@ -333,6 +334,9 @@ export const useLiteratureOperations = (): UseLiteratureOperationsReturn => {
 
         // 如果已有数据且不强制刷新，则跳过
         if (!force && store.stats.total > 0) return;
+
+        // 未登录时跳过加载，避免 requireAuth 抛错
+        try { authStoreUtils.getStoreInstance().requireAuth(); } catch { return; }
 
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 

@@ -6,7 +6,8 @@
  */
 
 import { BaseRepository } from './base-repository';
-import { literatureDB, DatabaseUtils } from '../database';
+import { DatabaseUtils } from '../database';
+import type { CollectionsArchiveDatabase } from '../database/collections-database';
 import {
     Collection,
     CollectionType,
@@ -28,9 +29,9 @@ import type { Table } from 'dexie';
 export class CollectionRepository extends BaseRepository<Collection, string> {
     protected table: Table<Collection, string>;
 
-    constructor() {
+    constructor(db: CollectionsArchiveDatabase) {
         super();
-        this.table = literatureDB.collections;
+        this.table = db.collections;
     }
 
     protected generateId(): string {
@@ -143,11 +144,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                 collection = collection.filter(item => item.isArchived === query.isArchived);
             }
 
-            if (query.searchTerm) {
+            if (query.searchTerm && typeof query.searchTerm === 'string') {
                 const searchTerm = query.searchTerm.toLowerCase();
                 collection = collection.filter(item =>
-                    item.name.toLowerCase().includes(searchTerm) ||
-                    (!!item.description && item.description.toLowerCase().includes(searchTerm))
+                    (item.name || '').toLowerCase().includes(searchTerm) ||
+                    (!!item.description && (item.description || '').toLowerCase().includes(searchTerm))
                 );
             }
 
@@ -157,23 +158,21 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                 );
             }
 
-            // 排序与分页
-            // Dexie 的 toCollection().sortBy 返回 Promise，不能链式 reverse/offset
-            let items: Collection[] = [];
-            if (sort.field === 'name') {
-                items = await this.table.orderBy('name').toArray();
-            } else if (sort.field === 'itemCount') {
-                // itemCount 非索引字段时，退化为内存排序
-                items = await collection.toArray();
-                items.sort((a, b) => (a.itemCount || 0) - (b.itemCount || 0));
-            } else if (sort.field === 'updatedAt') {
-                items = await this.table.orderBy('updatedAt').toArray();
-            } else {
-                items = await this.table.orderBy('createdAt').toArray();
-            }
+            // 排序与分页：统一在内存中对已过滤结果排序，避免因不同 Dexie 对象混用导致的异常
+            let items: Collection[] = await collection.toArray();
 
-            if (sort.order === 'desc') {
-                items.reverse();
+            const direction = sort.order === 'desc' ? -1 : 1;
+            const safeDate = (d?: Date | null) => (d instanceof Date ? d.getTime() : 0);
+            const safeString = (s?: string | null) => (typeof s === 'string' ? s : '');
+
+            if (sort.field === 'name') {
+                items.sort((a, b) => safeString(a.name).localeCompare(safeString(b.name)) * direction);
+            } else if (sort.field === 'itemCount') {
+                items.sort((a, b) => (((a.itemCount || 0) - (b.itemCount || 0)) * direction));
+            } else if (sort.field === 'updatedAt') {
+                items.sort((a, b) => (safeDate(a.updatedAt) - safeDate(b.updatedAt)) * direction);
+            } else {
+                items.sort((a, b) => (safeDate(a.createdAt) - safeDate(b.createdAt)) * direction);
             }
 
             const total = items.length;
@@ -527,4 +526,6 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
 }
 
 // 🏪 单例导出
-export const collectionRepository = new CollectionRepository();
+export function createCollectionRepository(db: CollectionsArchiveDatabase) {
+    return new CollectionRepository(db);
+}

@@ -188,7 +188,7 @@ export function useArchiveServices(): ArchiveServices { /* ... */ }
 
 尚缺（按设计目标对齐）：
 
-- ArchiveServices 完整体：目前仅暴露 `sessionRepository`；待补充 `graphRepository/notesRepository/researchTreeRepository`，以及文库 `literatureGlobal`（全局）与可选 `literatureUser`（按档案）。
+- ArchiveServices 完整体：已暴露 `sessionRepository/graphRepository/notesRepository/researchTreeRepository`；后续补充文库 `literatureGlobal`（全局）与可选 `literatureUser`（按档案）。
 - Graph 域按档案改造：`graph-repository.ts` 仍为全局 DB（Dexie 名称固定）。需要：
   - 引入 `createGraphDatabase(archiveId)` 并使仓储按 `archiveId` 构造。
   - Zustand `graph-store.ts` 通过 `ArchiveServices` 获取仓储，并在档案切换事件中清空/重载。
@@ -204,8 +204,8 @@ export function useArchiveServices(): ArchiveServices { /* ... */ }
 - [x] 顶层挂载 `ArchiveProvider` 并随登录态切档
 - [x] `useSessionStore` 接入 `ArchiveManager`，切档清空投影
 - [x] Session 仓储支持 `userId` 维度与布局排序（v4 迁移）
-- [ ] `ArchiveServices` 扩充：`graphRepository/notesRepository/researchTreeRepository/literatureGlobal/literatureUser?`
-- [ ] Graph 仓储/Store 改为 per-archive DB，并对接切档事件
+- [x] `ArchiveServices` 扩充：`graphRepository/notesRepository/researchTreeRepository`（已完成）；`literatureGlobal/literatureUser?`（后续）
+- [x] Graph 仓储/Store 改为 per-archive DB，并对接切档事件
 - [ ] Literature 拆分 user 相关为 per-archive（保持 libraries/citations 全局）
-- [ ] ArchiveManager 切档时关闭旧 DB、重建新实例并缓存
+- [x] ArchiveManager 切档时关闭旧 DB、重建新实例并缓存
 - [ ] 为 Graph/Notes/ResearchTree 提供一次性迁移/导入脚手架（可选）

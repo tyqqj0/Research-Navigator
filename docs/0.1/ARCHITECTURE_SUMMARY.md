@@ -202,7 +202,8 @@ literature.addItem(newItem);
 
 // Research Tree操作  
 const tree = useResearchTreeStore();
-await researchTreeRepository.addNode(newNode);
+// 使用 ArchiveManager 提供的 researchTreeRepository（按档案）
+await ArchiveManager.getServices().researchTreeRepository.addNode(newNode);
 tree.addNode(newNode);
 
 // Session操作

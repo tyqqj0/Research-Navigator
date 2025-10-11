@@ -5,9 +5,14 @@
 
 export type ArchiveId = string;
 import type { SessionRepository } from '@/features/session/data-access/session-repository';
-import { sessionRepository } from '@/features/session/data-access/session-repository';
+import { createSessionRepository } from '@/features/session/data-access/session-repository';
 import type { GraphRepository } from '@/features/graph/data-access/graph-repository';
 import { createGraphRepository } from '@/features/graph/data-access/graph-repository';
+import type { NotesRepository } from '@/features/notes/data-access/notes-repository';
+import { createNotesRepository } from '@/features/notes/data-access/notes-repository';
+import { createCollectionsDatabase } from '@/features/literature/data-access/database/collections-database';
+import { createCollectionRepository } from '@/features/literature/data-access/repositories/collection-repository';
+import { createMembershipRepository } from '@/features/literature/data-access/repositories/membership-repository';
 
 type Listener = (archiveId: ArchiveId) => void;
 
@@ -16,12 +21,15 @@ export interface ArchiveServices {
     // Per-archive repositories/services
     sessionRepository: SessionRepository;
     graphRepository: GraphRepository;
+    notesRepository: NotesRepository;
+    collectionsRepository: ReturnType<typeof createCollectionRepository>;
+    membershipRepository: ReturnType<typeof createMembershipRepository>;
 }
 
 class ArchiveManagerImpl {
+    private disposableRepos: { graphRepository?: GraphRepository; notesRepository?: NotesRepository; sessionRepository?: SessionRepository; collectionsDb?: ReturnType<typeof createCollectionsDatabase>; } = {};
     private currentArchiveId: ArchiveId = 'anonymous';
     private services: ArchiveServices = this.buildServicesForArchive('anonymous');
-    private disposableRepos: { graphRepository?: GraphRepository } = {};
     private listeners = new Set<Listener>();
 
     getCurrentArchiveId(): ArchiveId {
@@ -40,10 +48,21 @@ class ArchiveManagerImpl {
     private buildServicesForArchive(_archiveId: ArchiveId): ArchiveServices {
         // Build per-archive repositories/services
         const graphRepository = createGraphRepository(_archiveId);
+        const notesRepository = createNotesRepository(_archiveId);
+        const sessionRepository = createSessionRepository(_archiveId);
+        const collectionsDb = createCollectionsDatabase(_archiveId);
+        const collectionsRepository = createCollectionRepository(collectionsDb);
+        const membershipRepository = createMembershipRepository(collectionsDb);
         this.disposableRepos.graphRepository = graphRepository;
+        this.disposableRepos.notesRepository = notesRepository;
+        this.disposableRepos.sessionRepository = sessionRepository;
+        this.disposableRepos.collectionsDb = collectionsDb;
         return {
             sessionRepository,
-            graphRepository
+            graphRepository,
+            notesRepository,
+            collectionsRepository,
+            membershipRepository,
         };
     }
 
@@ -52,6 +71,9 @@ class ArchiveManagerImpl {
 
         // Close old per-archive resources
         try { this.disposableRepos.graphRepository?.close(); } catch { /* ignore */ }
+        try { this.disposableRepos.notesRepository?.close(); } catch { /* ignore */ }
+        try { this.disposableRepos.sessionRepository?.close(); } catch { /* ignore */ }
+        try { this.disposableRepos.collectionsDb?.close(); } catch { /* ignore */ }
         this.disposableRepos = {};
 
         this.currentArchiveId = archiveId;

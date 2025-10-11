@@ -13,8 +13,8 @@ class SessionDatabase extends Dexie {
     // v4 layout table (scoped by user)
     sessionLayoutsV4!: Table<SessionLayout, [string, string, string]>; // [userId, viewId, sessionId]
 
-    constructor() {
-        super('ResearchNavigatorSession');
+    constructor(dbName: string = 'ResearchNavigatorSession') {
+        super(dbName);
         // v1 -> v2: add orderIndex to sessions for custom ordering
         this.version(1).stores({
             sessions: 'id, updatedAt',
@@ -99,8 +99,6 @@ class SessionDatabase extends Dexie {
     }
 }
 
-export const sessionDb = new SessionDatabase();
-
 // Simple fractional ranking utilities (base36 between)
 const MIN_CH = '0'.charCodeAt(0);
 const MAX_CH = 'z'.charCodeAt(0);
@@ -136,173 +134,181 @@ export const orderKeyUtils = {
     after: (a?: string) => keyBetween(a, undefined)
 };
 
-export const sessionRepository = {
-    _requireUserId(): string {
-        try { return authStoreUtils.getStoreInstance().requireAuth(); } catch { return 'anonymous'; }
-    },
-    async putSession(s: ChatSession) {
-        const userId = this._requireUserId();
-        await sessionDb.sessions.put({ ...s, userId });
-    },
-    async getSession(id: string) {
-        const userId = this._requireUserId();
-        const s = await sessionDb.sessions.get(id);
-        return s && (s as any).userId === userId ? s : null;
-    },
-    async listSessions() {
-        const userId = this._requireUserId();
-        // Prefer new table if present
-        const userLayoutsCountV4 = await (sessionDb as any).sessionLayoutsV4?.where('[userId+viewId]').equals([userId, 'default']).count().catch(() => 0);
-        if (userLayoutsCountV4 && userLayoutsCountV4 > 0) {
-            const layouts = await (sessionDb as any).sessionLayoutsV4.where('[userId+viewId]').equals([userId, 'default']).sortBy('orderKey');
-            const ids = layouts.map((l: any) => l.sessionId);
-            const list = (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
-            const map = new Map(list.filter(s => (s as any).userId === userId).map(s => [s.id, s]));
-            return ids.map((id: string) => map.get(id)!).filter(Boolean);
-        }
-        // fallback for callers not yet migrated (old table might exist)
-        const userLayoutsCount = await (sessionDb as any).sessionLayouts?.where('[userId+viewId]').equals([userId, 'default']).count().catch(() => 0);
-        if (userLayoutsCount > 0) {
-            const layouts = await (sessionDb as any).sessionLayouts.where('[userId+viewId]').equals([userId, 'default']).sortBy('orderKey');
-            const ids = layouts.map((l: any) => l.sessionId);
-            const list = (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
-            const map = new Map(list.filter(s => (s as any).userId === userId).map(s => [s.id, s]));
-            return ids.map((id: string) => map.get(id)!).filter(Boolean);
-        }
-        // pre-v3 behavior
-        const anyHasOrder = await sessionDb.sessions.where('orderIndex').aboveOrEqual(0).and((s: any) => s.userId === userId).count().then(c => c > 0).catch(() => false);
-        if (anyHasOrder) return await (sessionDb.sessions as any).where('userId').equals(userId).sortBy('orderIndex');
-        return await (sessionDb.sessions as any).where('userId').equals(userId).reverse().sortBy('updatedAt');
-    },
-    async bulkPutSessions(s: ChatSession[]) {
-        const userId = this._requireUserId();
-        await sessionDb.sessions.bulkPut(s.map(x => ({ ...x, userId })));
-    },
-    async deleteSession(id: string) {
-        // Best-effort: ensure only current user's session is deleted
-        const userId = this._requireUserId();
-        const s = await sessionDb.sessions.get(id);
-        if (s && (s as any).userId === userId) await sessionDb.sessions.delete(id);
-    },
-
-    // Layout APIs
-    async listLayouts(viewId = 'default') {
-        const userId = this._requireUserId();
-        const dbAny = sessionDb as any;
-        if (dbAny.sessionLayoutsV4) {
-            return await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey');
-        }
-        // Legacy (v3): no userId column — filter by viewId
-        return await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey');
-    },
-    async putLayout(layout: SessionLayout) {
-        const dbAny = sessionDb as any;
-        const payload = { ...layout, userId: this._requireUserId() } as any;
-        if (dbAny.sessionLayoutsV4) return await dbAny.sessionLayoutsV4.put(payload);
-        return await dbAny.sessionLayouts.put(payload);
-    },
-    async bulkPutLayouts(layouts: SessionLayout[]) {
-        const dbAny = sessionDb as any;
-        const userId = this._requireUserId();
-        const items = layouts.map(l => ({ ...l, userId } as any));
-        if (dbAny.sessionLayoutsV4) return await dbAny.sessionLayoutsV4.bulkPut(items);
-        return await dbAny.sessionLayouts.bulkPut(items);
-    },
-    async deleteLayout(viewId: string, sessionId: string) {
-        const dbAny = sessionDb as any;
-        if (dbAny.sessionLayoutsV4) return await dbAny.sessionLayoutsV4.delete([this._requireUserId(), viewId, sessionId]);
-        return await dbAny.sessionLayouts.delete([this._requireUserId(), viewId, sessionId]);
-    },
-    async ensureLayoutTop(viewId: string, sessionId: string) {
-        const userId = this._requireUserId();
-        const now = Date.now();
-        const dbAny = sessionDb as any;
-        let first: any | undefined;
-        if (dbAny.sessionLayoutsV4) {
-            first = (await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey'))[0];
-        } else {
-            first = (await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey'))[0];
-        }
-        const newKey = orderKeyUtils.before(first?.orderKey);
-        const layout: SessionLayout = { userId, viewId, sessionId, orderKey: newKey, updatedAt: now } as any;
-        if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.put(layout as any); else await dbAny.sessionLayouts.put(layout as any);
-        return layout;
-    },
-    async reorderSessions(viewId: string, moves: Array<{ sessionId: string; beforeId?: string; afterId?: string }>) {
-        const userId = this._requireUserId();
-        const now = Date.now();
-        const dbAny = sessionDb as any;
-        const current = dbAny.sessionLayoutsV4
-            ? await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey')
-            : await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey');
-        const idToKey: Map<string, string> = new Map<string, string>(current.map((l: any) => [String(l.sessionId), String(l.orderKey)]));
-        const order: string[] = current.map((l: any) => String(l.sessionId));
-        const getKey = (id?: string): string | undefined => (id ? idToKey.get(id) : undefined);
-        const applyMove = (id: string, beforeId?: string, afterId?: string) => {
-            const fromIdx = order.indexOf(id);
-            if (fromIdx >= 0) order.splice(fromIdx, 1);
-            let toIdx = 0;
-            if (beforeId) {
-                toIdx = order.indexOf(beforeId);
-                if (toIdx < 0) toIdx = 0;
-            } else if (afterId) {
-                toIdx = order.indexOf(afterId);
-                if (toIdx < 0) toIdx = order.length;
-                else toIdx = toIdx + 1;
+export function createSessionRepository(archiveId: string) {
+    const safeId = String(archiveId || 'anonymous').slice(0, 64);
+    const dbName = `ResearchNavigatorSession__${safeId}`;
+    const sessionDb = new SessionDatabase(dbName);
+    const repo = {
+        _requireUserId(): string {
+            try { return authStoreUtils.getStoreInstance().requireAuth(); } catch { return 'anonymous'; }
+        },
+        async putSession(s: ChatSession) {
+            const userId = this._requireUserId();
+            await sessionDb.sessions.put({ ...s, userId });
+        },
+        async getSession(id: string) {
+            const userId = this._requireUserId();
+            const s = await sessionDb.sessions.get(id);
+            return s && (s as any).userId === userId ? s : null;
+        },
+        async listSessions() {
+            const userId = this._requireUserId();
+            if (!userId || userId === 'anonymous') return [] as ChatSession[];
+            // Prefer new table if present
+            const userLayoutsCountV4 = await (sessionDb as any).sessionLayoutsV4?.where('[userId+viewId]').equals([userId, 'default']).count().catch(() => 0);
+            if (userLayoutsCountV4 && userLayoutsCountV4 > 0) {
+                const layouts = await (sessionDb as any).sessionLayoutsV4.where('[userId+viewId]').equals([userId, 'default']).sortBy('orderKey');
+                const ids = layouts.map((l: any) => l.sessionId);
+                const list = (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
+                const map = new Map(list.filter(s => (s as any).userId === userId).map(s => [s.id, s]));
+                return ids.map((id: string) => map.get(id)!).filter(Boolean);
             }
-            order.splice(toIdx, 0, id);
-            const leftId = order[toIdx - 1];
-            const rightId = order[toIdx + 1];
-            const newKey = orderKeyUtils.between(getKey(leftId), getKey(rightId));
-            idToKey.set(id, newKey);
-        };
-        for (const m of moves) applyMove(m.sessionId, m.beforeId, m.afterId);
-        const updated: SessionLayout[] = order.map((id: string) => ({ userId, viewId, sessionId: id, orderKey: idToKey.get(id)!, updatedAt: now } as any));
-        if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.bulkPut(updated as any); else await dbAny.sessionLayouts.bulkPut(updated as any);
-        return updated;
-    },
+            // fallback for callers not yet migrated (old table might exist)
+            const userLayoutsCount = await (sessionDb as any).sessionLayouts?.where('[userId+viewId]').equals([userId, 'default']).count().catch(() => 0);
+            if (userLayoutsCount > 0) {
+                const layouts = await (sessionDb as any).sessionLayouts.where('[userId+viewId]').equals([userId, 'default']).sortBy('orderKey');
+                const ids = layouts.map((l: any) => l.sessionId);
+                const list = (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
+                const map = new Map(list.filter(s => (s as any).userId === userId).map(s => [s.id, s]));
+                return ids.map((id: string) => map.get(id)!).filter(Boolean);
+            }
+            // pre-v3 behavior
+            const anyHasOrder = await sessionDb.sessions.where('orderIndex').aboveOrEqual(0).and((s: any) => s.userId === userId).count().then(c => c > 0).catch(() => false);
+            if (anyHasOrder) return await (sessionDb.sessions as any).where('userId').equals(userId).sortBy('orderIndex');
+            return await (sessionDb.sessions as any).where('userId').equals(userId).reverse().sortBy('updatedAt');
+        },
+        async bulkPutSessions(s: ChatSession[]) {
+            const userId = this._requireUserId();
+            await sessionDb.sessions.bulkPut(s.map(x => ({ ...x, userId })));
+        },
+        async deleteSession(id: string) {
+            // Best-effort: ensure only current user's session is deleted
+            const userId = this._requireUserId();
+            const s = await sessionDb.sessions.get(id);
+            if (s && (s as any).userId === userId) await sessionDb.sessions.delete(id);
+        },
 
-    async putMessage(m: ChatMessage) { await sessionDb.messages.put({ ...m, userId: this._requireUserId() } as any); },
-    async listMessages(sessionId: string) { return await (sessionDb.messages as any).where('[userId+sessionId]').equals([this._requireUserId(), sessionId]).sortBy('createdAt'); },
-    async getMessage(id: string) { const userId = this._requireUserId(); const m: any = await sessionDb.messages.get(id); return m && m.userId === userId ? m : null; },
+        // Layout APIs
+        async listLayouts(viewId = 'default') {
+            const userId = this._requireUserId();
+            const dbAny = sessionDb as any;
+            if (dbAny.sessionLayoutsV4) {
+                return await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey');
+            }
+            // Legacy (v3): no userId column — filter by viewId
+            return await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey');
+        },
+        async putLayout(layout: SessionLayout) {
+            const dbAny = sessionDb as any;
+            const payload = { ...layout, userId: this._requireUserId() } as any;
+            if (dbAny.sessionLayoutsV4) return await dbAny.sessionLayoutsV4.put(payload);
+            return await dbAny.sessionLayouts.put(payload);
+        },
+        async bulkPutLayouts(layouts: SessionLayout[]) {
+            const dbAny = sessionDb as any;
+            const userId = this._requireUserId();
+            const items = layouts.map(l => ({ ...l, userId } as any));
+            if (dbAny.sessionLayoutsV4) return await dbAny.sessionLayoutsV4.bulkPut(items);
+            return await dbAny.sessionLayouts.bulkPut(items);
+        },
+        async deleteLayout(viewId: string, sessionId: string) {
+            const dbAny = sessionDb as any;
+            if (dbAny.sessionLayoutsV4) return await dbAny.sessionLayoutsV4.delete([this._requireUserId(), viewId, sessionId]);
+            return await dbAny.sessionLayouts.delete([this._requireUserId(), viewId, sessionId]);
+        },
+        async ensureLayoutTop(viewId: string, sessionId: string) {
+            const userId = this._requireUserId();
+            const now = Date.now();
+            const dbAny = sessionDb as any;
+            let first: any | undefined;
+            if (dbAny.sessionLayoutsV4) {
+                first = (await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey'))[0];
+            } else {
+                first = (await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey'))[0];
+            }
+            const newKey = orderKeyUtils.before(first?.orderKey);
+            const layout: SessionLayout = { userId, viewId, sessionId, orderKey: newKey, updatedAt: now } as any;
+            if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.put(layout as any); else await dbAny.sessionLayouts.put(layout as any);
+            return layout;
+        },
+        async reorderSessions(viewId: string, moves: Array<{ sessionId: string; beforeId?: string; afterId?: string }>) {
+            const userId = this._requireUserId();
+            const now = Date.now();
+            const dbAny = sessionDb as any;
+            const current = dbAny.sessionLayoutsV4
+                ? await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey')
+                : await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey');
+            const idToKey: Map<string, string> = new Map<string, string>(current.map((l: any) => [String(l.sessionId), String(l.orderKey)]));
+            const order: string[] = current.map((l: any) => String(l.sessionId));
+            const getKey = (id?: string): string | undefined => (id ? idToKey.get(id) : undefined);
+            const applyMove = (id: string, beforeId?: string, afterId?: string) => {
+                const fromIdx = order.indexOf(id);
+                if (fromIdx >= 0) order.splice(fromIdx, 1);
+                let toIdx = 0;
+                if (beforeId) {
+                    toIdx = order.indexOf(beforeId);
+                    if (toIdx < 0) toIdx = 0;
+                } else if (afterId) {
+                    toIdx = order.indexOf(afterId);
+                    if (toIdx < 0) toIdx = order.length;
+                    else toIdx = toIdx + 1;
+                }
+                order.splice(toIdx, 0, id);
+                const leftId = order[toIdx - 1];
+                const rightId = order[toIdx + 1];
+                const newKey = orderKeyUtils.between(getKey(leftId), getKey(rightId));
+                idToKey.set(id, newKey);
+            };
+            for (const m of moves) applyMove(m.sessionId, m.beforeId, m.afterId);
+            const updated: SessionLayout[] = order.map((id: string) => ({ userId, viewId, sessionId: id, orderKey: idToKey.get(id)!, updatedAt: now } as any));
+            if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.bulkPut(updated as any); else await dbAny.sessionLayouts.bulkPut(updated as any);
+            return updated;
+        },
 
-    async appendEvent(e: EventEnvelope) { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); },
-    async listEvents(sessionId?: string) {
-        const userId = this._requireUserId();
-        return sessionId
-            ? await (sessionDb.events as any).where('[userId+sessionId]').equals([userId, sessionId]).sortBy('ts')
-            : await (sessionDb.events as any).where('userId').equals(userId).sortBy('ts');
-    },
+        async putMessage(m: ChatMessage) { await sessionDb.messages.put({ ...m, userId: this._requireUserId() } as any); },
+        async listMessages(sessionId: string) { return await (sessionDb.messages as any).where('[userId+sessionId]').equals([this._requireUserId(), sessionId]).sortBy('createdAt'); },
+        async getMessage(id: string) { const userId = this._requireUserId(); const m: any = await sessionDb.messages.get(id); return m && m.userId === userId ? m : null; },
 
-    async putArtifact(a: Artifact) { await sessionDb.artifacts.put({ ...a, userId: this._requireUserId() } as any); },
-    async getArtifact(id: string) { const userId = this._requireUserId(); const a: any = await sessionDb.artifacts.get(id); return a && a.userId === userId ? a : null; },
-    async listArtifacts(kind?: string) {
-        const userId = this._requireUserId();
-        return kind
-            ? await (sessionDb.artifacts as any).where('[userId+kind]').equals([userId, kind]).toArray()
-            : await (sessionDb.artifacts as any).where('userId').equals(userId).toArray();
-    },
+        async appendEvent(e: EventEnvelope) { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); },
+        async listEvents(sessionId?: string) {
+            const userId = this._requireUserId();
+            return sessionId
+                ? await (sessionDb.events as any).where('[userId+sessionId]').equals([userId, sessionId]).sortBy('ts')
+                : await (sessionDb.events as any).where('userId').equals(userId).sortBy('ts');
+        },
 
-    // Convenience: report artifacts
-    async listReports() { return await (sessionDb.artifacts as any).where('[userId+kind]').equals([this._requireUserId(), 'report_final']).reverse().sortBy('createdAt'); },
-    async searchReports(params: { query?: string; limit?: number }) {
-        const userId = this._requireUserId();
-        const { query, limit } = params || ({} as any);
-        const list: any[] = await (sessionDb.artifacts as any).where('[userId+kind]').equals([userId, 'report_final']).reverse().sortBy('createdAt');
-        if (!query || !query.trim()) return typeof limit === 'number' ? list.slice(0, Math.max(0, limit)) : list;
-        const q = query.trim().toLowerCase();
-        const filtered = list.filter(a => {
-            const title = String((a.meta as any)?.title || '').toLowerCase();
-            if (title.includes(q)) return true;
-            // fallback: search a short prefix of data
-            const head = String(a.data || '').slice(0, 512).toLowerCase();
-            return head.includes(q);
-        });
-        return typeof limit === 'number' ? filtered.slice(0, Math.max(0, limit)) : filtered;
-    }
-};
+        async putArtifact(a: Artifact) { await sessionDb.artifacts.put({ ...a, userId: this._requireUserId() } as any); },
+        async getArtifact(id: string) { const userId = this._requireUserId(); const a: any = await sessionDb.artifacts.get(id); return a && a.userId === userId ? a : null; },
+        async listArtifacts(kind?: string) {
+            const userId = this._requireUserId();
+            return kind
+                ? await (sessionDb.artifacts as any).where('[userId+kind]').equals([userId, kind]).toArray()
+                : await (sessionDb.artifacts as any).where('userId').equals(userId).toArray();
+        },
+
+        // Convenience: report artifacts
+        async listReports() { return await (sessionDb.artifacts as any).where('[userId+kind]').equals([this._requireUserId(), 'report_final']).reverse().sortBy('createdAt'); },
+        async searchReports(params: { query?: string; limit?: number }) {
+            const userId = this._requireUserId();
+            const { query, limit } = params || ({} as any);
+            const list: any[] = await (sessionDb.artifacts as any).where('[userId+kind]').equals([userId, 'report_final']).reverse().sortBy('createdAt');
+            if (!query || !query.trim()) return typeof limit === 'number' ? list.slice(0, Math.max(0, limit)) : list;
+            const q = query.trim().toLowerCase();
+            const filtered = list.filter(a => {
+                const title = String((a.meta as any)?.title || '').toLowerCase();
+                if (title.includes(q)) return true;
+                // fallback: search a short prefix of data
+                const head = String(a.data || '').slice(0, 512).toLowerCase();
+                return head.includes(q);
+            });
+            return typeof limit === 'number' ? filtered.slice(0, Math.max(0, limit)) : filtered;
+        },
+        close() { try { sessionDb.close(); } catch { /* ignore */ } }
+    };
+    return repo;
+}
 
 // Public type for dependency injection via ArchiveServices
-export type SessionRepository = typeof sessionRepository;
+export type SessionRepository = ReturnType<typeof createSessionRepository>;
 
 

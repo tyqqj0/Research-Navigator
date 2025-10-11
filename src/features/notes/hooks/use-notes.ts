@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { notesService } from '../data-access/notes-service';
+import { useEffect as useArchiveEffect } from 'react';
+import { ArchiveManager } from '@/lib/archive/manager';
 import type { NoteModel } from '../data-access/notes-types';
 
 export function useNotes(paperId?: string) {
@@ -24,6 +26,15 @@ export function useNotes(paperId?: string) {
     }, [paperId]);
 
     useEffect(() => { load(); }, [load]);
+
+    // Reload on archive switch
+    useArchiveEffect(() => {
+        const unsub = ArchiveManager.subscribe(() => {
+            setNotes([]);
+            load();
+        });
+        return unsub;
+    }, [load]);
 
     const create = useCallback(async (contentMarkdown: string, title?: string) => {
         if (!paperId) return;

@@ -218,13 +218,26 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
         },
 
         async loadAllSessions() {
-            const userId = (() => { try { return authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous'; } catch { return 'anonymous'; } })();
+            // Skip when unauthenticated to avoid requireAuth throws and Dexie errors
+            const isLoggedIn = (() => { try { return !!authStoreUtils.getStoreInstance().getCurrentUserId(); } catch { return false; } })();
+            if (!isLoggedIn) {
+                set(() => ({ sessions: new Map(), messagesBySession: new Map(), orderedSessionIds: undefined, __activeUserId: undefined } as Partial<SessionProjectionState & { __activeUserId?: string }>));
+                return;
+            }
+            const userId = authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
             // If switching user, clear store first to avoid mixed state and loops
             const prevUser = get().__activeUserId;
             if (prevUser && prevUser !== userId) {
                 set(() => ({ sessions: new Map(), messagesBySession: new Map(), orderedSessionIds: undefined } as Partial<SessionProjectionState>));
             }
-            const sessions = await getRepo().listSessions();
+            let sessions: ChatSession[] = [] as any;
+            try {
+                sessions = await getRepo().listSessions();
+            } catch (e) {
+                // Dexie closed or schema errors: reset archive services then retry once
+                try { await ArchiveManager.setCurrentArchive(userId); } catch { /* ignore */ }
+                try { sessions = await getRepo().listSessions(); } catch { sessions = []; }
+            }
             set(() => {
                 const map = new Map(sessions.map((s: ChatSession) => [s.id, s] as const));
                 const orderedSessionIds = sessions.map((s: ChatSession) => s.id);

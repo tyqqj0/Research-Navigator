@@ -6,9 +6,10 @@
  */
 
 import { citationRepository } from './citation-repository';
-import { collectionRepository } from './collection-repository';
+import type { CollectionRepository } from './collection-repository';
 import { literatureRepository } from './literature-repository';
 import { userMetaRepository } from './user-meta-repository';
+import { ArchiveManager } from '@/lib/archive/manager';
 
 // 🏗️ 基础仓储抽象
 export { BaseRepository, type IBaseRepository, QueryBuilder } from './base-repository';
@@ -30,7 +31,16 @@ export { UserMetaRepository, userMetaRepository } from './user-meta-repository';
 export { CitationRepository, citationRepository } from './citation-repository';
 
 // 📂 文献集合仓储
-export { CollectionRepository, collectionRepository } from './collection-repository';
+export { CollectionRepository } from './collection-repository';
+
+// 动态代理到当前档案上下文的集合仓储
+export const collectionRepository: CollectionRepository = new Proxy({} as any, {
+    get(_target, prop, _receiver) {
+        const instance = ArchiveManager.getServices().collectionsRepository as any;
+        const value = instance[prop];
+        return typeof value === 'function' ? value.bind(instance) : value;
+    }
+}) as unknown as CollectionRepository;
 
 // 🎯 仓储聚合类 - 提供统一的数据访问接口
 export class LiteratureDomainRepositories {

@@ -112,16 +112,48 @@ export const openAICompatibleAdapter: ProviderAdapter = {
                 : [{ role: 'user', content: input.prompt || '' }],
         } as any;
 
+        // Debug: request preview with redacted secrets
+        try {
+            const debugHeaders: Record<string, string> = { ...headers };
+            if (debugHeaders.Authorization) {
+                const v = debugHeaders.Authorization;
+                const tail = v.slice(Math.max(0, v.length - 6));
+                debugHeaders.Authorization = `Bearer ********${tail}`;
+            }
+            const firstMsg = Array.isArray(body.messages) && body.messages.length > 0 ? String(body.messages[0]?.content || '') : '';
+            console.debug('[AI][openai-compatible] request', {
+                url,
+                model: body.model,
+                temperature: body.temperature,
+                max_tokens: body.max_tokens,
+                messagesCount: Array.isArray(body.messages) ? body.messages.length : 0,
+                firstMessagePreview: firstMsg.slice(0, 80),
+                headers: debugHeaders,
+            });
+        } catch { /* ignore debug errors */ }
+
+        const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         const promise = fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal })
             .then(async (res) => {
+                try {
+                    const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                    const ctype = res.headers.get('content-type') || '';
+                    console.debug('[AI][openai-compatible] response', { status: res.status, ok: res.ok, contentType: ctype, ms: Math.round(t1 - t0) });
+                } catch { /* ignore */ }
                 if (!res.ok || !res.body) {
-                    const text = await res.text().catch(() => '');
-                    throw new Error(text || `HTTP ${res.status}`);
+                    let text = '';
+                    try { text = await res.text(); } catch { /* ignore */ }
+                    try {
+                        console.debug('[AI][openai-compatible] error body', (text || '').slice(0, 400));
+                    } catch { /* ignore */ }
+                    const reason = text || `HTTP ${res.status}`;
+                    throw new Error(reason);
                 }
                 const reader = res.body.getReader();
                 return makeTextStream(controller, reader, options.batchingIntervalMs);
             })
             .catch((e) => {
+                try { console.debug('[AI][openai-compatible] fetch error', { message: String(e?.message || e), name: e?.name }); } catch { /* ignore */ }
                 const isAbort = (e?.name === 'AbortError') || /abort|aborted/i.test(String(e?.message || ''));
                 const errStream: TextStream = {
                     [Symbol.asyncIterator]: async function* () {

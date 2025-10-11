@@ -1,6 +1,5 @@
-// Lightweight resolver to read AI settings from existing user settings store
-// Adjust the import path to your actual settings store
-import { useSettingsStore } from '@/features/user/settings/data-access/settings-store';
+// Centralized AI config resolver using hardcoded presets
+import { presets, ACTIVE_PRESET, resolveAIForPurpose, type AIPurpose } from './ai-presets';
 
 export interface ResolvedAIConfig {
     provider: string;
@@ -13,50 +12,38 @@ export interface ResolvedAIConfig {
 }
 
 export function resolveAIConfig(overrides?: { modelOverride?: string }): ResolvedAIConfig {
-    // Expect settings like: { ai: { provider, model, apiKey, baseURL, headers, temperature, maxTokens } }
-    const s = useSettingsStore.getState() as any;
-    const ai = (s?.ai) || (s?.settings?.ai) || {};
+    const preset = presets[ACTIVE_PRESET];
+    // Decide purpose by model override when provided; otherwise default to task
+    let purpose: AIPurpose = 'task';
+    const overrideModel = overrides?.modelOverride?.toLowerCase();
+    if (overrideModel) {
+        const thinkingModel = preset.credentials.thinking.model.toLowerCase();
+        const taskModel = preset.credentials.task.model.toLowerCase();
+        if (overrideModel === thinkingModel || overrideModel.includes('gemini')) purpose = 'thinking';
+        else if (overrideModel === taskModel) purpose = 'task';
+        else {
+            // Heuristic: gemini → thinking; otherwise task
+            purpose = overrideModel.includes('gemini') ? 'thinking' as AIPurpose : 'task';
+        }
+    }
+    const conf = resolveAIForPurpose(purpose);
+    const model = overrides?.modelOverride || conf.model;
     return {
-        provider: ai.provider || 'openAICompatible',
-        model: overrides?.modelOverride || ai.model || 'gpt-4o-mini',
-        apiKey: ai.apiKey || undefined,
-        baseURL: ai.apiProxy || ai.baseURL || undefined,
-        headers: ai.headers || undefined,
-        temperature: ai.temperature,
-        maxTokens: ai.maxTokens,
-    } as ResolvedAIConfig;
+        provider: conf.provider,
+        model,
+        apiKey: conf.apiKey,
+        baseURL: conf.baseURL,
+        headers: conf.headers,
+        temperature: conf.temperature,
+        maxTokens: conf.maxTokens,
+    };
 }
 
 // Purpose-based model resolver (Phase 1)
-export type AIPurpose = 'thinking' | 'task';
+export type { AIPurpose };
 
 export function resolveModelForPurpose(purpose: AIPurpose): string {
-    const s = useSettingsStore.getState() as any;
-    const ai = (s?.ai) || (s?.settings?.ai) || {};
-
-    const provider: string = String(ai.provider || '').toLowerCase();
-    const providerKey = provider === 'openrouter'
-        ? 'openRouter'
-        : provider === 'openai'
-            ? 'openAI'
-            : provider === 'xai'
-                ? 'xAI'
-                : provider === 'openaicompatible'
-                    ? 'openAICompatible'
-                    : provider;
-
-    const providerConf = (ai as any)?.[providerKey] || {};
-
-    const topLevelThinking = (ai as any).thinkingModel;
-    const topLevelTask = (ai as any).taskModel;
-    const providerThinking = (providerConf as any).thinkingModel;
-    const providerTask = (providerConf as any).taskModel;
-
-    // Fallback chain keeps backward compatibility with existing `taskModel` naming
-    if (purpose === 'thinking') {
-        return providerThinking || topLevelThinking || (ai as any).model || 'gpt-4o-mini';
-    }
-    return providerTask || topLevelTask || (ai as any).model || 'gpt-4o-mini';
+    return resolveAIForPurpose(purpose).model;
 }
 
 
