@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ResearchGraph, GraphNode, GraphEdge, PaperId, EdgeId, GraphDataSource, GraphSnapshot, GraphId } from './graph-types';
-import { graphRepository } from './graph-repository';
+import { ArchiveManager } from '@/lib/archive/manager';
 
 interface GraphStoreState {
     // in-memory cache of opened graphs keyed by id
@@ -46,6 +46,16 @@ export const useGraphStore = create<GraphStoreState>()(
         isLoading: false,
         error: null,
 
+        // clear in-memory projection when archive changes
+        ...(function () {
+            try {
+                ArchiveManager.subscribe(() => {
+                    set(() => ({ graphs: new Map(), currentGraphId: null }));
+                });
+            } catch { /* ignore */ }
+            return {} as Record<string, never>;
+        })(),
+
         getCurrentGraph: () => {
             const state = get();
             if (!state.currentGraphId) return null;
@@ -60,7 +70,7 @@ export const useGraphStore = create<GraphStoreState>()(
         createGraph: async (initial) => {
             set({ isLoading: true, error: null });
             try {
-                const graph = await graphRepository.createGraph(initial);
+                const graph = await ArchiveManager.getServices().graphRepository.createGraph(initial);
                 set((state) => {
                     const graphs = new Map(state.graphs);
                     graphs.set(graph.id, graph);
@@ -76,7 +86,7 @@ export const useGraphStore = create<GraphStoreState>()(
         loadGraph: async (graphId) => {
             set({ isLoading: true, error: null });
             try {
-                const graph = await graphRepository.getGraph(graphId);
+                const graph = await ArchiveManager.getServices().graphRepository.getGraph(graphId);
                 if (graph) {
                     set((state) => {
                         const graphs = new Map(state.graphs);
@@ -97,7 +107,7 @@ export const useGraphStore = create<GraphStoreState>()(
             const state = get();
             const graph = state.getCurrentGraph();
             if (!graph) return;
-            await graphRepository.saveGraph(graph);
+            await ArchiveManager.getServices().graphRepository.saveGraph(graph);
         },
 
         setCurrentGraphId: (graphId) => set({ currentGraphId: graphId }),
@@ -105,7 +115,7 @@ export const useGraphStore = create<GraphStoreState>()(
         deleteGraph: async (graphId) => {
             set({ isLoading: true, error: null });
             try {
-                await graphRepository.deleteGraph(graphId);
+                await ArchiveManager.getServices().graphRepository.deleteGraph(graphId);
                 set((state) => {
                     const graphs = new Map(state.graphs);
                     graphs.delete(graphId);
@@ -119,14 +129,14 @@ export const useGraphStore = create<GraphStoreState>()(
         },
 
         listGraphs: async () => {
-            return await graphRepository.listGraphs();
+            return await ArchiveManager.getServices().graphRepository.listGraphs();
         },
 
         addNode: async (node, opts) => {
             const state = get();
             const target = opts?.graphId ? state.graphs.get(opts.graphId) ?? null : state.getCurrentGraph();
             if (!target) throw new Error('No target graph');
-            const updated = await graphRepository.addNode(target.id, node);
+            const updated = await ArchiveManager.getServices().graphRepository.addNode(target.id, node);
             set((s) => {
                 const graphs = new Map(s.graphs);
                 const nextGraph = { ...updated, nodes: { ...updated.nodes }, edges: { ...updated.edges } };
@@ -139,7 +149,7 @@ export const useGraphStore = create<GraphStoreState>()(
             const state = get();
             const target = opts?.graphId ? state.graphs.get(opts.graphId) ?? null : state.getCurrentGraph();
             if (!target) throw new Error('No target graph');
-            const updated = await graphRepository.removeNode(target.id, paperId);
+            const updated = await ArchiveManager.getServices().graphRepository.removeNode(target.id, paperId);
             set((s) => {
                 const graphs = new Map(s.graphs);
                 const nextGraph = { ...updated, nodes: { ...updated.nodes }, edges: { ...updated.edges } };
@@ -152,7 +162,7 @@ export const useGraphStore = create<GraphStoreState>()(
             const state = get();
             const target = opts?.graphId ? state.graphs.get(opts.graphId) ?? null : state.getCurrentGraph();
             if (!target) throw new Error('No target graph');
-            const updated = await graphRepository.addEdge(target.id, edge);
+            const updated = await ArchiveManager.getServices().graphRepository.addEdge(target.id, edge);
             set((s) => {
                 const graphs = new Map(s.graphs);
                 const nextGraph = { ...updated, nodes: { ...updated.nodes }, edges: { ...updated.edges } };
@@ -165,7 +175,7 @@ export const useGraphStore = create<GraphStoreState>()(
             const state = get();
             const target = opts?.graphId ? state.graphs.get(opts.graphId) ?? null : state.getCurrentGraph();
             if (!target) throw new Error('No target graph');
-            const updated = await graphRepository.removeEdge(target.id, edgeId);
+            const updated = await ArchiveManager.getServices().graphRepository.removeEdge(target.id, edgeId);
             set((s) => {
                 const graphs = new Map(s.graphs);
                 const nextGraph = { ...updated, nodes: { ...updated.nodes }, edges: { ...updated.edges } };
@@ -178,11 +188,11 @@ export const useGraphStore = create<GraphStoreState>()(
             const state = get();
             const current = state.getCurrentGraph();
             if (!current) throw new Error('No current graph');
-            return await graphRepository.exportGraphToJson(current.id);
+            return await ArchiveManager.getServices().graphRepository.exportGraphToJson(current.id);
         },
 
         importGraphJson: async (json, opts) => {
-            const { graph } = await graphRepository.importGraphFromJson(json, opts);
+            const { graph } = await ArchiveManager.getServices().graphRepository.importGraphFromJson(json, opts);
             set((state) => {
                 const graphs = new Map(state.graphs);
                 graphs.set(graph.id, graph);

@@ -6,6 +6,8 @@
 export type ArchiveId = string;
 import type { SessionRepository } from '@/features/session/data-access/session-repository';
 import { sessionRepository } from '@/features/session/data-access/session-repository';
+import type { GraphRepository } from '@/features/graph/data-access/graph-repository';
+import { createGraphRepository } from '@/features/graph/data-access/graph-repository';
 
 type Listener = (archiveId: ArchiveId) => void;
 
@@ -13,11 +15,13 @@ type Listener = (archiveId: ArchiveId) => void;
 export interface ArchiveServices {
     // Per-archive repositories/services
     sessionRepository: SessionRepository;
+    graphRepository: GraphRepository;
 }
 
 class ArchiveManagerImpl {
     private currentArchiveId: ArchiveId = 'anonymous';
     private services: ArchiveServices = this.buildServicesForArchive('anonymous');
+    private disposableRepos: { graphRepository?: GraphRepository } = {};
     private listeners = new Set<Listener>();
 
     getCurrentArchiveId(): ArchiveId {
@@ -34,17 +38,21 @@ class ArchiveManagerImpl {
     }
 
     private buildServicesForArchive(_archiveId: ArchiveId): ArchiveServices {
-        // TODO: When per-archive DBs are implemented, construct services using _archiveId
+        // Build per-archive repositories/services
+        const graphRepository = createGraphRepository(_archiveId);
+        this.disposableRepos.graphRepository = graphRepository;
         return {
-            sessionRepository
+            sessionRepository,
+            graphRepository
         };
     }
 
     async setCurrentArchive(archiveId: ArchiveId): Promise<void> {
         if (!archiveId || archiveId === this.currentArchiveId) return;
 
-        // TODO: close old per-archive DB instances when added
-        // TODO: build new per-archive repositories here
+        // Close old per-archive resources
+        try { this.disposableRepos.graphRepository?.close(); } catch { /* ignore */ }
+        this.disposableRepos = {};
 
         this.currentArchiveId = archiveId;
         this.services = this.buildServicesForArchive(archiveId);

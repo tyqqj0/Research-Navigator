@@ -11,14 +11,14 @@ import type {
 } from './graph-types';
 
 /**
- * Dexie database for Research Graph
+ * Dexie database for Research Graph (per-archive)
  * Stores entire graph objects keyed by graph id for simplicity.
  */
 class GraphDatabase extends Dexie {
     graphs!: Table<ResearchGraph, string>;
 
-    constructor() {
-        super('ResearchNavigatorGraph');
+    constructor(dbName: string) {
+        super(dbName);
 
         this.version(1).stores({
             graphs: 'id'
@@ -27,7 +27,17 @@ class GraphDatabase extends Dexie {
     }
 }
 
-const db = new GraphDatabase();
+function sanitizeArchiveIdForDbName(archiveId: string): string {
+    // Only allow alphanumerics, dash and underscore; clamp length to avoid IndexedDB name issues
+    const safe = archiveId.replace(/[^a-zA-Z0-9-_]/g, '_');
+    return safe.slice(0, 48);
+}
+
+export function createGraphDatabase(archiveId: string): GraphDatabase {
+    const suffix = sanitizeArchiveIdForDbName(archiveId || 'anonymous');
+    const name = `ResearchNavigatorGraph__${suffix}`;
+    return new GraphDatabase(name);
+}
 
 // ========== Utility helpers ==========
 
@@ -58,6 +68,16 @@ function generateEdgeId(from: string, to: string, relation: string): EdgeId {
 // ========== Repository ==========
 
 export class GraphRepository {
+    private readonly db: GraphDatabase;
+
+    constructor(db: GraphDatabase) {
+        this.db = db;
+    }
+
+    close(): void {
+        try { this.db.close(); } catch { /* ignore */ }
+    }
+
     async createGraph(initial?: Partial<ResearchGraph>): Promise<ResearchGraph> {
         const id = initial?.id ?? crypto.randomUUID();
         const graph: ResearchGraph = {
@@ -66,46 +86,46 @@ export class GraphRepository {
             nodes: initial?.nodes ?? {},
             edges: initial?.edges ?? {}
         };
-        await db.graphs.put(graph);
+        await this.db.graphs.put(graph);
         return graph;
     }
 
     async getGraph(graphId: string): Promise<ResearchGraph | null> {
-        return await db.graphs.get(graphId) ?? null;
+        return await this.db.graphs.get(graphId) ?? null;
     }
 
     async saveGraph(graph: ResearchGraph): Promise<void> {
-        await db.graphs.put(graph);
+        await this.db.graphs.put(graph);
     }
 
     async deleteGraph(graphId: string): Promise<void> {
-        await db.graphs.delete(graphId);
+        await this.db.graphs.delete(graphId);
     }
 
     async listGraphs(): Promise<Pick<ResearchGraph, 'id' | 'name'>[]> {
-        const all = await db.graphs.toArray();
+        const all = await this.db.graphs.toArray();
         return all.map(g => ({ id: g.id, name: g.name }));
     }
 
     // ----- Node operations -----
 
     async addNode(graphId: string, node: GraphNode): Promise<ResearchGraph> {
-        return await db.transaction('rw', db.graphs, async () => {
-            const graph = await db.graphs.get(graphId);
+        return await this.db.transaction('rw', this.db.graphs, async () => {
+            const graph = await this.db.graphs.get(graphId);
             assert(graph, `Graph not found: ${graphId}`);
 
             const updated: ResearchGraph = {
                 ...graph,
                 nodes: { ...graph.nodes, [node.id]: node }
             };
-            await db.graphs.put(updated);
+            await this.db.graphs.put(updated);
             return updated;
         });
     }
 
     async removeNode(graphId: string, paperId: PaperId): Promise<ResearchGraph> {
-        return await db.transaction('rw', db.graphs, async () => {
-            const graph = await db.graphs.get(graphId);
+        return await this.db.transaction('rw', this.db.graphs, async () => {
+            const graph = await this.db.graphs.get(graphId);
             assert(graph, `Graph not found: ${graphId}`);
 
             if (!(paperId in graph.nodes)) return graph;
@@ -120,7 +140,7 @@ export class GraphRepository {
             }
 
             const updated: ResearchGraph = { ...graph, nodes, edges };
-            await db.graphs.put(updated);
+            await this.db.graphs.put(updated);
             return updated;
         });
     }
@@ -128,8 +148,8 @@ export class GraphRepository {
     // ----- Edge operations -----
 
     async addEdge(graphId: string, edge: Omit<GraphEdge, 'id'> & { id?: EdgeId }): Promise<ResearchGraph> {
-        return await db.transaction('rw', db.graphs, async () => {
-            const graph = await db.graphs.get(graphId);
+        return await this.db.transaction('rw', this.db.graphs, async () => {
+            const graph = await this.db.graphs.get(graphId);
             assert(graph, `Graph not found: ${graphId}`);
 
             // validate nodes exist
@@ -146,14 +166,14 @@ export class GraphRepository {
                 ...graph,
                 edges: { ...graph.edges, [id]: { id, ...edge } }
             };
-            await db.graphs.put(updated);
+            await this.db.graphs.put(updated);
             return updated;
         });
     }
 
     async removeEdge(graphId: string, edgeId: EdgeId): Promise<ResearchGraph> {
-        return await db.transaction('rw', db.graphs, async () => {
-            const graph = await db.graphs.get(graphId);
+        return await this.db.transaction('rw', this.db.graphs, async () => {
+            const graph = await this.db.graphs.get(graphId);
             assert(graph, `Graph not found: ${graphId}`);
             if (!(edgeId in graph.edges)) return graph;
 
@@ -161,13 +181,13 @@ export class GraphRepository {
             delete edges[edgeId];
 
             const updated: ResearchGraph = { ...graph, edges };
-            await db.graphs.put(updated);
+            await this.db.graphs.put(updated);
             return updated;
         });
     }
 
     async listNeighbors(graphId: string, paperId: PaperId): Promise<{ paper: GraphNode; via: GraphEdge }[]> {
-        const graph = await db.graphs.get(graphId);
+        const graph = await this.db.graphs.get(graphId);
         assert(graph, `Graph not found: ${graphId}`);
 
         const results: { paper: GraphNode; via: GraphEdge }[] = [];
@@ -186,7 +206,7 @@ export class GraphRepository {
     // ----- JSON Import/Export -----
 
     async exportGraphToJson(graphId: string): Promise<string> {
-        const graph = await db.graphs.get(graphId);
+        const graph = await this.db.graphs.get(graphId);
         assert(graph, `Graph not found: ${graphId}`);
         return JSON.stringify(graph, null, 2);
     }
@@ -230,17 +250,20 @@ export class GraphRepository {
         const graph: ResearchGraph = { id: graphId, name: (candidate as any).name, nodes, edges };
 
         if (options?.overwrite) {
-            await db.graphs.put(graph);
+            await this.db.graphs.put(graph);
         } else {
-            const exists = await db.graphs.get(graph.id);
+            const exists = await this.db.graphs.get(graph.id);
             if (exists) warnings.push(`Graph already exists: ${graph.id}`);
-            await db.graphs.put(graph);
+            await this.db.graphs.put(graph);
         }
 
         return { graph, warnings };
     }
 }
 
-export const graphRepository = new GraphRepository();
+export function createGraphRepository(archiveId: string): GraphRepository {
+    const db = createGraphDatabase(archiveId);
+    return new GraphRepository(db);
+}
 
 

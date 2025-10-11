@@ -1,22 +1,22 @@
 // Research Graph Domain - Public IO helpers (import/export only)
 
 import type { GraphImportResult, ResearchGraph, PaperId } from './graph-types';
-import { graphRepository } from './graph-repository';
+import { ArchiveManager } from '@/lib/archive/manager';
 import { literatureDataAccess } from '@/features/literature/data-access';
 
 export async function exportGraphToJson(graphId: string): Promise<string> {
-    return await graphRepository.exportGraphToJson(graphId);
+    return await ArchiveManager.getServices().graphRepository.exportGraphToJson(graphId);
 }
 
 export async function importGraphFromJson(json: string, options?: { overwrite?: boolean; generateNewId?: boolean }): Promise<GraphImportResult> {
-    return await graphRepository.importGraphFromJson(json, options);
+    return await ArchiveManager.getServices().graphRepository.importGraphFromJson(json, options);
 }
 
 export interface GraphBriefNode { id: string; title: string; firstAuthor?: string; year?: number; abstract?: string }
 export interface GraphBriefEdge { id: string; from: string; to: string; relation: string; fromTitle?: string; toTitle?: string }
 
 export async function exportGraphBriefDataset(graphId: string): Promise<{ nodes: GraphBriefNode[]; edges: GraphBriefEdge[] }> {
-    const graph: ResearchGraph | null = await graphRepository.getGraph(graphId);
+    const graph: ResearchGraph | null = await ArchiveManager.getServices().graphRepository.getGraph(graphId);
     if (!graph) throw new Error('Graph not found');
     const nodeIds: string[] = Object.keys(graph.nodes);
     const extractFirstAuthor = (authors: any): string | undefined => {
