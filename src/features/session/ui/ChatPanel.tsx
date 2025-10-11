@@ -174,7 +174,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                                 ) : m.id.startsWith('graph_thinking_') ? (
                                     <GraphThinkingCard status={m.status} content={m.content} />
                                 ) : m.id.startsWith('plan_') ? (
-                                    <SearchThinkingCard status={m.status} content={m.content} />
+                                    <SearchThinkingCard sessionId={sessionId} status={m.status} content={m.content} />
                                 ) : m.id.startsWith('cands_') ? (
                                     <SearchCandidatesCard sessionId={sessionId} artifactId={m.id.replace('cands_', '')} />
                                 ) : m.id.startsWith('graph_decision_') ? (
@@ -217,12 +217,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
 
 export default ChatPanel;
 
-const SearchThinkingCard: React.FC<{ status: any; content: string }> = ({ status, content }) => {
+const SearchThinkingCard: React.FC<{ sessionId: SessionId; status: any; content: string }> = ({ sessionId, status, content }) => {
+    const onRetry = async () => {
+        try {
+            await commandBus.dispatch({ id: crypto.randomUUID(), type: 'StartExpansion', ts: Date.now(), params: { sessionId } } as any);
+        } catch { /* ignore */ }
+    };
     return (
         <StreamCard
             title="思考"
             status={status}
             headerVariant="purple"
+            headerRight={(status === 'error' || status === 'aborted') ? (
+                <Button size="sm" variant="secondary" onClick={onRetry}>重试</Button>
+            ) : undefined}
             contentClassName="space-y-2"
         >
             <Markdown text={content} />
@@ -332,8 +340,8 @@ const SearchCandidatesCard: React.FC<{ sessionId: SessionId; artifactId: string 
                         {data.candidates.map((c: any) => (
                             <div key={c.id} className="p-2 border rounded flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
-                                    <div className="text-sm font-medium truncate">{c.title || c.sourceUrl}</div>
-                                    <div className="text-[11px] text-muted-foreground truncate">{c.site}</div>
+                                    <div className="text-sm font-medium truncate"><b>{c.title || c.sourceUrl}</b></div>
+                                    <div className="text-[11px] text-muted-foreground truncate">{c.venue}</div>
                                     {/* <div className="text-[12px] line-clamp-2 mt-1">{c.snippet}</div> */}
                                     <div className="text-[11px] mt-1 flex items-center gap-2 flex-wrap">
                                         {c.bestIdentifier && (

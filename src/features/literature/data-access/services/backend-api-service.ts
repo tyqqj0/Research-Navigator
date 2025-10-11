@@ -179,7 +179,8 @@ export class BackendApiService {
             }
 
             const response = await this.apiRequest('GET', `/api/v1/paper/${paperId}/citations`);
-            const arr = (response.citations || response.items || response || []) as any[];
+            const raw = (response?.citations ?? response?.items ?? response ?? []);
+            const arr: any[] = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? [raw] : []);
             const result = arr.map((c: any) => ({
                 sourcePaperId: c.paperId || c.paper_id || c.sourcePaperId || c.source_paper_id || c.sourceId || c.source_id,
                 citationType: c.type || c.citationType,
@@ -206,7 +207,8 @@ export class BackendApiService {
             }
 
             const response = await this.apiRequest('GET', `/api/v1/paper/${paperId}/references`);
-            const arr = (response.references || response.items || response || []) as any[];
+            const raw = (response?.references ?? response?.items ?? response ?? []);
+            const arr: any[] = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? [raw] : []);
             const result = arr.map((c: any) => ({
                 targetPaperId: c.paperId || c.paper_id || c.targetPaperId || c.target_paper_id || c.targetId || c.target_id,
                 citationType: c.type || c.citationType,
@@ -296,16 +298,42 @@ export class BackendApiService {
             if (query.query) params.set('query', query.query);
             if (typeof query.offset === 'number') params.set('offset', String(query.offset));
             if (typeof query.limit === 'number') params.set('limit', String(query.limit));
-            if (query.fields && query.fields.length > 0) params.set('fields', query.fields.join(','));
+            if (query.fields && query.fields.length > 0) {
+                // 后端要求传 venue，否则 500；同时我们仍会在响应映射时容忍 publication/venue
+                const sanitized = query.fields.map(f => f === 'publication' ? 'venue' : f);
+                // 去重，避免重复字段
+                const unique = Array.from(new Set(sanitized));
+                params.set('fields', unique.join(','));
+            }
 
-            const response = await this.apiRequest('GET', `/api/v1/paper/search?${params.toString()}`);
-
-            return {
-                results: (response.data || response.results || []).map((item: any) => this.mapBackendToFrontend(item)),
-                total: response.total || response.total_results || (response.data ? response.data.length : 0),
-                query: response.query || { query: query.query },
-                searchTime: response.search_time_ms || response.searchTime || 0
-            };
+            // 带指数退避的轻量重试（最多 3 次），仅针对网络/超时类错误
+            let lastError: any;
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+                try {
+                    const response = await this.apiRequest('GET', `/api/v1/paper/search?${params.toString()}`);
+                    return {
+                        results: (response.data || response.results || []).map((item: any) => this.mapBackendToFrontend(item)),
+                        total: response.total || response.total_results || (response.data ? response.data.length : 0),
+                        query: response.query || { query: query.query },
+                        searchTime: response.search_time_ms || response.searchTime || 0
+                    };
+                } catch (err: any) {
+                    lastError = err;
+                    const msg = String(err?.message || '');
+                    const isRetryable = msg.includes('Network timeout') || msg.includes('Network error');
+                    if (attempt < 3 && isRetryable) {
+                        // 200ms 基础 + 抖动的指数退避
+                        const base = 200;
+                        const backoff = base * Math.pow(2, attempt - 1);
+                        const jitter = Math.floor(Math.random() * 120);
+                        try { await new Promise(r => setTimeout(r, backoff + jitter)); } catch { /* noop */ }
+                        continue;
+                    }
+                    break;
+                }
+            }
+            console.error('[BackendAPI] Paper search failed after retries:', lastError);
+            throw new Error('Failed to search papers');
         } catch (error) {
             console.error('[BackendAPI] Paper search failed:', error);
             throw new Error('Failed to search papers');

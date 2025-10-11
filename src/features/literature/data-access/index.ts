@@ -981,7 +981,7 @@ export class LiteratureDataAccess implements LiteratureDataAccessAPI {
         try {
             const backend = this.services.backend;
             // 限制返回字段，减小传输体积；允许通过 options.fields 覆盖
-            const defaultFields = ['paperId', 'title', 'year', 'authors', 'publication', 'url'];
+            const defaultFields = ['paperId', 'title', 'year', 'authors', 'venue', 'url'];
             const fields = Array.isArray(options.fields) && options.fields.length ? options.fields : defaultFields;
             const res = await backend.searchPapers({ query, limit: options.limit || 20, offset: options.offset || 0, fields });
             return res.results || [];

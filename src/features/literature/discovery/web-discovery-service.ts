@@ -9,7 +9,7 @@ export const webDiscovery: WebDiscoveryAPI = {
         // 优先走后端搜索（无需 Tavily Key），失败时回退 Tavily
         const limit = Math.max(1, Math.min(opts?.limit || 8, 50));
         try {
-            // 请求 publication 字段（后端 mapper 会将 venue 归一到 publication）
+            // 请求 venue 字段（后端 mapper 会将 venue 归一到 publication）
             const fields = ['paperId', 'title', 'year', 'authors', 'venue', 'url'];
             const res = await backendApiService.searchPapers({ query, limit, offset: 0, fields });
             const candidates: DiscoveryCandidate[] = (res.results || []).map((it: any, idx: number) => {
@@ -20,13 +20,14 @@ export const webDiscovery: WebDiscoveryAPI = {
                     { kind: 'S2', value: paperId } as const,
                     ...(it.doi ? ([{ kind: 'DOI', value: String(it.doi) }] as const) : [])
                 ] as unknown as DiscoveryCandidate['extracted'];
+                console.log('it', it);
                 return {
                     id: `s_${paperId || idx}`,
                     title: it.title,
                     // 简短片段：仅作者，避免与 venue/year 重复
                     snippet: (Array.isArray(it.authors) && it.authors.length) ? it.authors.join(', ') : undefined,
-                    publication: it.publication || it.venue,
-                    venue: it.venue || it.publication,
+                    // 统一使用 publication 作为展示用 venue
+                    venue: (it as any).publication || (it as any).venue,
                     year: it.year,
                     sourceUrl: url,
                     site,

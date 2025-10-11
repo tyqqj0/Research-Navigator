@@ -120,6 +120,14 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
         totalPages: number;
     }> {
         try {
+            // Dexie reopen guard: if DB was closed (e.g., hot reload), recreate collection reference
+            if ((this.table as any)?.db?.isOpen && typeof (this.table as any).db.isOpen === 'function') {
+                const isOpen = (this.table as any).db.isOpen();
+                if (!isOpen) {
+                    // attempt to reopen database
+                    try { (this.table as any).db.open(); } catch { /* noop */ }
+                }
+            }
             let collection = this.table.toCollection();
 
             // 应用筛选条件
