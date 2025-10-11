@@ -9,7 +9,8 @@ import { aiQueryGeneratorExecutor } from '../executors/ai-query-generator-execut
 import { pruneExecutor } from '../executors/prune-executor';
 import { paperMetadataExecutor } from '../executors/paper-metadata-executor';
 import { graphBuilderExecutor } from '../executors/graph-builder-executor';
-import { sessionRepository } from '../../data-access/session-repository';
+import { ArchiveManager } from '@/lib/archive/manager';
+const getRepo = () => ArchiveManager.getServices().sessionRepository;
 import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { literatureDataAccess } from '@/features/literature/data-access';
 import { interpret, StateFrom } from 'xstate';
@@ -114,7 +115,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                     return;
                 }
                 // 附加元数据：会话/集合/轮次
-                await sessionRepository.putArtifact({ ...(candArtifact as any), meta: { sessionId, collectionId, round } } as Artifact);
+                await getRepo().putArtifact({ ...(candArtifact as any), meta: { sessionId, collectionId, round } } as Artifact);
                 await emit({ id: newId(), type: 'SearchCandidatesReady', ts: Date.now(), sessionId, payload: { round, artifactId: candArtifact.id } as any });
 
                 // 模拟用户可见时间（避免“瞬间几十篇”），并给 Tavily/后端一些响应时间
@@ -171,14 +172,14 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                     return;
                 }
                 const batch: Artifact<{ paperIds: string[]; query: string }> = { id: newId(), kind: 'search_batch', version: 1, data: { paperIds: ingested, query }, meta: { sessionId, collectionId, round }, createdAt: Date.now() } as any;
-                await sessionRepository.putArtifact(batch as Artifact);
+                await getRepo().putArtifact(batch as Artifact);
                 await emit({ id: newId(), type: 'SearchExecuted', ts: Date.now(), sessionId, payload: { batchId: batch.id, count: ingested.length } });
 
                 // 合并到集合产物（本地不可变产物），并追加到 Literature 集合
                 // 从会话仓库读取上一版集合产物以实现累积
                 let prev: Artifact<any> | null = null;
                 try {
-                    const all = await sessionRepository.listArtifacts('literature_collection');
+                    const all = await getRepo().listArtifacts('literature_collection');
                     const scoped = (all || []).filter((a: any) => (a?.meta?.sessionId === sessionId) && (!a?.meta?.collectionId || a?.meta?.collectionId === collectionId));
                     prev = (scoped && scoped.length > 0) ? scoped.sort((a: any, b: any) => (a.createdAt || 0) - (b.createdAt || 0)).at(-1) as any : null;
                 } catch { prev = null; }
@@ -186,7 +187,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 // 以实际加入集合的新增为准，避免跨会话产物导致的误判
                 lastAdded = ingested.length;
                 total = (currentCollectionIds && currentCollectionIds.length > 0) ? currentCollectionIds.length : merged.data.paperIds.length;
-                await sessionRepository.putArtifact({ ...(merged as any), meta: { sessionId, collectionId, round } } as unknown as Artifact);
+                await getRepo().putArtifact({ ...(merged as any), meta: { sessionId, collectionId, round } } as unknown as Artifact);
 
                 // 入库已经同时加入集合，此处无需重复
 
@@ -331,7 +332,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
             // Phase 1: semantic grouping & storyline
             const briefs = await paperMetadataExecutor.fetchBriefs(papers.map(p => p.id));
             const p1 = await graphBuilderExecutor.thinkingPhase1(briefs, { onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 1, delta: d } as any }) });
-            await sessionRepository.putArtifact(p1 as Artifact);
+            await getRepo().putArtifact(p1 as Artifact);
             // Phase 2: Title-based natural language relations with rationale/tags/evidence
             // Optionally prime with Phase 1 storyline by sending a short intro delta before streaming
             try {
@@ -339,7 +340,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 await emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 2, delta: intro } as any });
             } catch { /* noop */ }
             const p2 = await graphBuilderExecutor.thinkingPhase2TextTitles(briefs, { onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 2, delta: d } as any }) });
-            await sessionRepository.putArtifact(p2 as Artifact);
+            await getRepo().putArtifact(p2 as Artifact);
             await emit({ id: newId(), type: 'GraphThinkingCompleted', ts: Date.now(), sessionId, payload: { version, phase1ArtifactId: p1.id, phase2ArtifactId: p2.id } as any });
             // Backward compatibility event
             await emit({ id: newId(), type: 'GraphRelationsProposed', ts: Date.now(), sessionId, payload: { textArtifactId: p2.id } });
@@ -363,7 +364,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 idMap,
                 { titles, maxEdges: (runtimeConfig as any).GRAPH_JSONL_MAX_EDGES ?? 300 }
             );
-            await sessionRepository.putArtifact(edges as Artifact);
+            await getRepo().putArtifact(edges as Artifact);
             await emit({ id: newId(), type: 'GraphEdgesStructured', ts: Date.now(), sessionId, payload: { edgeArtifactId: edges.id, size: edges.data.length } });
             // 将边写入图
             try {

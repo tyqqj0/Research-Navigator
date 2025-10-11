@@ -1,12 +1,13 @@
 import type { SessionId, ArtifactRef } from '../../data-access/types';
-import { sessionRepository } from '../../data-access/session-repository';
+import { ArchiveManager } from '@/lib/archive/manager';
 import { useSessionStore } from '../../data-access/session-store';
 import { literatureDataAccess } from '@/features/literature/data-access';
+const getRepo = () => ArchiveManager.getServices().sessionRepository;
 
 function sliceLast<T>(arr: T[], k: number): T[] { const n = Math.max(0, arr.length - k); return arr.slice(n); }
 
 export async function buildAssistantMessages(sessionId: SessionId, userText: string, recentK: number = 6, inputRefs?: ArtifactRef[] | null): Promise<string[]> {
-    const msgs = await sessionRepository.listMessages(sessionId);
+    const msgs = await getRepo().listMessages(sessionId);
     const session = (useSessionStore.getState() as any).sessions.get(sessionId) as any;
     const spec = session?.meta?.direction?.confirmed ? (session.meta.direction.spec || '') : '';
 
@@ -61,7 +62,7 @@ async function buildRefsMemoryBlock(refs: ArtifactRef[]): Promise<string> {
         const blocks = await Promise.all(repRefs.map(async r => {
             const id = String(r.id);
             try {
-                const a = await sessionRepository.getArtifact(id);
+                const a = await getRepo().getArtifact(id);
                 if (!a) return `- [报告] ${id}`;
                 const title = String((a.meta as any)?.title || '').trim();
                 const header = `- [报告] ${title || id}`;

@@ -4,17 +4,20 @@
  */
 
 export type ArchiveId = string;
+import type { SessionRepository } from '@/features/session/data-access/session-repository';
+import { sessionRepository } from '@/features/session/data-access/session-repository';
 
 type Listener = (archiveId: ArchiveId) => void;
 
 // Placeholder service types to be replaced as we wire real repositories
 export interface ArchiveServices {
-    // per-archive services (to be filled in later)
+    // Per-archive repositories/services
+    sessionRepository: SessionRepository;
 }
 
 class ArchiveManagerImpl {
     private currentArchiveId: ArchiveId = 'anonymous';
-    private services: ArchiveServices = {} as ArchiveServices;
+    private services: ArchiveServices = this.buildServicesForArchive('anonymous');
     private listeners = new Set<Listener>();
 
     getCurrentArchiveId(): ArchiveId {
@@ -30,6 +33,13 @@ class ArchiveManagerImpl {
         return () => this.listeners.delete(listener);
     }
 
+    private buildServicesForArchive(_archiveId: ArchiveId): ArchiveServices {
+        // TODO: When per-archive DBs are implemented, construct services using _archiveId
+        return {
+            sessionRepository
+        };
+    }
+
     async setCurrentArchive(archiveId: ArchiveId): Promise<void> {
         if (!archiveId || archiveId === this.currentArchiveId) return;
 
@@ -37,7 +47,7 @@ class ArchiveManagerImpl {
         // TODO: build new per-archive repositories here
 
         this.currentArchiveId = archiveId;
-        this.services = {} as ArchiveServices; // rebuild later when repositories are wired
+        this.services = this.buildServicesForArchive(archiveId);
 
         for (const cb of Array.from(this.listeners)) {
             try { cb(this.currentArchiveId); } catch { /* no-op */ }

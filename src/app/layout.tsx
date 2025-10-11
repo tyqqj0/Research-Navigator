@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 import { ThemeProvider } from "@/providers";
+import { ArchiveProvider } from "@/lib/archive/provider";
 import "@/lib/immer-config";
 import { Toaster } from "@/components/ui";
 
@@ -33,9 +34,11 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <ThemeProvider defaultTheme="dark">
-          {children}
-          {/* Global toast portal */}
-          <Toaster richColors expand />
+          <ArchiveProvider>
+            {children}
+            {/* Global toast portal */}
+            <Toaster richColors expand />
+          </ArchiveProvider>
         </ThemeProvider>
       </body>
     </html>

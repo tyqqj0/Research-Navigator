@@ -11,8 +11,9 @@ import { useSessionStore } from '../data-access/session-store';
 import type { SessionId, ArtifactRef } from '../data-access/types';
 import { commandBus } from '@/features/session/runtime/command-bus';
 import { Markdown } from '@/components/ui/markdown';
-import { sessionRepository } from '../data-access/session-repository';
+import { ArchiveManager } from '@/lib/archive/manager';
 import { useLiteratureStore } from '@/features/literature/data-access/stores';
+const getRepo = () => ArchiveManager.getServices().sessionRepository;
 import { DirectionProposalCard } from './DirectionProposalCard';
 // import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { StreamCard } from '@/components/ui';
@@ -283,7 +284,7 @@ const SearchCandidatesCard: React.FC<{ sessionId: SessionId; artifactId: string 
         const run = async () => {
             setLoading(true);
             try {
-                const a = await sessionRepository.getArtifact(artifactId);
+                const a = await getRepo().getArtifact(artifactId);
                 if (!cancelled) setData(a?.data || null);
             } finally { if (!cancelled) setLoading(false); }
         };
@@ -396,7 +397,7 @@ const ComposerBar: React.FC<{
                 const key = String(r.id);
                 if (reportTitles[key]) return;
                 try {
-                    const a = await sessionRepository.getArtifact(key);
+                    const a = await getRepo().getArtifact(key);
                     if (!cancelled) setReportTitles(prev => ({ ...prev, [key]: String((a?.meta || {}).title || '') }));
                 } catch { /* ignore */ }
             });
@@ -419,7 +420,7 @@ const ComposerBar: React.FC<{
                     literatureDataAccess.literatures
                         .search({ searchTerm: q }, { field: 'createdAt', order: 'desc' }, 1, 8)
                         .catch(() => ({ items: [] })),
-                    sessionRepository.searchReports({ query: q, limit: 8 }).catch(() => [])
+                    getRepo().searchReports({ query: q, limit: 8 }).catch(() => [])
                 ]);
                 const friendly = Array.isArray(litPage?.items)
                     ? (litPage.items as any[]).map((it: any) => it?.literature || it).filter(Boolean)
@@ -907,7 +908,7 @@ const ReportsViewer: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         const run = async () => {
             setLoading(true);
             try {
-                const list = await sessionRepository.listReports();
+                const list = await getRepo().listReports();
                 if (cancelled) return;
                 setReports(list || []);
                 const first = list && list[0];
@@ -924,7 +925,7 @@ const ReportsViewer: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
     const onPick = async (id: string) => {
         setActiveId(id);
         try {
-            const a = await sessionRepository.getArtifact(id);
+            const a = await getRepo().getArtifact(id);
             setActiveContent(String(a?.data || ''));
         } catch { /* ignore */ }
     };

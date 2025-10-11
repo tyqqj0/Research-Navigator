@@ -302,4 +302,7 @@ export const sessionRepository = {
     }
 };
 
+// Public type for dependency injection via ArchiveServices
+export type SessionRepository = typeof sessionRepository;
+
 

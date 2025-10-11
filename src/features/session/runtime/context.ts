@@ -1,6 +1,7 @@
-import { sessionRepository } from '../data-access/session-repository';
+import { ArchiveManager } from '@/lib/archive/manager';
 import { useSessionStore } from '../data-access/session-store';
 import type { SessionId } from '../data-access/types';
+const getRepo = () => ArchiveManager.getServices().sessionRepository;
 
 function sliceLast<T>(arr: T[], k: number): T[] {
     const n = Math.max(0, arr.length - k);
@@ -9,7 +10,7 @@ function sliceLast<T>(arr: T[], k: number): T[] {
 
 export async function buildChatMessages(sessionId: SessionId, userText: string, recentK: number = 6): Promise<string[]> {
     const [msgs] = await Promise.all([
-        sessionRepository.listMessages(sessionId)
+        getRepo().listMessages(sessionId)
     ]);
 
     const session = (useSessionStore.getState() as any).sessions.get(sessionId) as any;

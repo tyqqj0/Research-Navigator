@@ -172,3 +172,40 @@ export function useArchiveServices(): ArchiveServices { /* ... */ }
 
 
 
+
+---
+
+## 12）当前实现进展与差距（v0.8 快照）
+
+已完成（核心路径已可运行）：
+
+- ArchiveProvider：在 `src/app/layout.tsx` 顶层挂载，自动根据 `useAuthStore.currentUser?.id` 推导并调用 `ArchiveManager.setCurrentArchive()`；通过 Context 暴露 `useArchiveServices()`。
+- ArchiveManager：具备 `archiveId` 管理与订阅能力，`getServices()` 作为统一入口；可在切换时通知监听者。
+- Session 域接入：
+  - `useSessionStore` 改为通过 `ArchiveManager.getServices().sessionRepository` 访问仓储，并在档案切换时清空内存投影（`sessions/messagesBySession/orderedSessionIds`）。
+  - Session 仓储（`session-repository.ts`）已完成 v4 升级：表结构带 `userId` 维度；读写接口均按当前用户隔离，并提供布局排序/重排能力（fractional key）。
+- 运行态/编排层：各 orchestrator/executor 与 UI 面板（`ChatPanel.tsx`）已切换为经 `ArchiveManager` 访问 session 仓储。
+
+尚缺（按设计目标对齐）：
+
+- ArchiveServices 完整体：目前仅暴露 `sessionRepository`；待补充 `graphRepository/notesRepository/researchTreeRepository`，以及文库 `literatureGlobal`（全局）与可选 `literatureUser`（按档案）。
+- Graph 域按档案改造：`graph-repository.ts` 仍为全局 DB（Dexie 名称固定）。需要：
+  - 引入 `createGraphDatabase(archiveId)` 并使仓储按 `archiveId` 构造。
+  - Zustand `graph-store.ts` 通过 `ArchiveServices` 获取仓储，并在档案切换事件中清空/重载。
+- Literature 按设计拆分：
+  - 保持 `libraries/citations` 使用全局库（已满足）。
+  - 将 `userMetas/collections/collectionItems` 拆至 per-archive DB，形成 `literatureUser`（第二阶段）。
+- ArchiveManager 切档资源管理：切换时关闭旧 Dexie 实例，重建并缓存新实例；当前仍为 TODO 占位。
+
+---
+
+## 13）v0.8 实施清单（可勾选）
+
+- [x] 顶层挂载 `ArchiveProvider` 并随登录态切档
+- [x] `useSessionStore` 接入 `ArchiveManager`，切档清空投影
+- [x] Session 仓储支持 `userId` 维度与布局排序（v4 迁移）
+- [ ] `ArchiveServices` 扩充：`graphRepository/notesRepository/researchTreeRepository/literatureGlobal/literatureUser?`
+- [ ] Graph 仓储/Store 改为 per-archive DB，并对接切档事件
+- [ ] Literature 拆分 user 相关为 per-archive（保持 libraries/citations 全局）
+- [ ] ArchiveManager 切档时关闭旧 DB、重建新实例并缓存
+- [ ] 为 Graph/Notes/ResearchTree 提供一次性迁移/导入脚手架（可选）

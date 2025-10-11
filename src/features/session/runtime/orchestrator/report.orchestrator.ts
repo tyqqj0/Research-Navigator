@@ -5,7 +5,8 @@ import type { Artifact, ChatSession, SessionCommand, SessionEvent } from '../../
 import { startTextStream } from '@/lib/ai/streaming/start';
 import { resolveModelForPurpose } from '@/lib/settings/ai';
 import { buildReportOutlineMessages } from '@/features/session/runtime/prompts/report';
-import { sessionRepository } from '../../data-access/session-repository';
+import { ArchiveManager } from '@/lib/archive/manager';
+const getRepo = () => ArchiveManager.getServices().sessionRepository;
 
 function newId() { return crypto.randomUUID(); }
 async function emit(e: SessionEvent) { await eventBus.publish(e); applyEventToProjection(e); }
@@ -78,7 +79,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
                 }
             }
             const outlineArtifact: Artifact<string> = { id: newId(), kind: 'report_outline', version: 1, data: outline.trim(), meta: { sessionId }, createdAt: Date.now() } as any;
-            await sessionRepository.putArtifact(outlineArtifact);
+            await getRepo().putArtifact(outlineArtifact);
             await emit({ id: newId(), type: 'ReportOutlineCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, outlineArtifactId: outlineArtifact.id } as any });
 
             // Expansion stage
@@ -111,7 +112,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
                 }
             }
             const draftArtifact: Artifact<string> = { id: newId(), kind: 'report_draft', version: 1, data: draft.trim(), meta: { sessionId }, createdAt: Date.now() } as any;
-            await sessionRepository.putArtifact(draftArtifact);
+            await getRepo().putArtifact(draftArtifact);
             await emit({ id: newId(), type: 'ReportExpandCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, draftArtifactId: draftArtifact.id } as any });
 
             // Abstract stage
@@ -131,7 +132,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
                 }
             }
             const abstractArtifact: Artifact<string> = { id: newId(), kind: 'report_abstract', version: 1, data: abstract.trim(), meta: { sessionId }, createdAt: Date.now() } as any;
-            await sessionRepository.putArtifact(abstractArtifact);
+            await getRepo().putArtifact(abstractArtifact);
             await emit({ id: newId(), type: 'ReportAbstractCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, abstractArtifactId: abstractArtifact.id } as any });
 
             // Assemble final
@@ -139,7 +140,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
 
             // Heuristic title generation (no extra LLM call)
             let session: ChatSession | null = null;
-            try { session = await sessionRepository.getSession(sessionId); } catch { }
+            try { session = await getRepo().getSession(sessionId); } catch { }
             const title = deriveReportTitle(draft, finalText, session || undefined);
 
             const finalArtifact: Artifact<string> = {
@@ -150,7 +151,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
                 meta: { sessionId, title },
                 createdAt: Date.now()
             } as any;
-            await sessionRepository.putArtifact(finalArtifact);
+            await getRepo().putArtifact(finalArtifact);
             await emit({ id: newId(), type: 'ReportFinalAssembled', ts: Date.now(), sessionId, payload: { messageId: reportMid, finalArtifactId: finalArtifact.id, citeKeys, bibtexByKey } as any });
 
             // Emit final outline rendering for UI (derived from outline text)

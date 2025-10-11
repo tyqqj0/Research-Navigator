@@ -1,3 +1,4 @@
+"use client";
 import React, { useEffect, useMemo } from 'react';
 import { ArchiveManager, type ArchiveId, type ArchiveServices } from './manager';
 import { useAuthStore } from '@/stores/auth.store';

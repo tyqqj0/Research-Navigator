@@ -1,6 +1,7 @@
 import { literatureDataAccess } from '@/features/literature/data-access';
-import { sessionRepository } from '../../data-access/session-repository';
+import { ArchiveManager } from '@/lib/archive/manager';
 import type { Artifact, SessionEvent } from '../../data-access/types';
+const getRepo = () => ArchiveManager.getServices().sessionRepository;
 
 export interface BriefPaperMeta { id: string; title: string; firstAuthor?: string; year?: number; publicationDate?: string; abstract?: string }
 
@@ -26,13 +27,13 @@ export const paperMetadataExecutor = {
 
     async fetchLastRoundBrief(sessionId: string, limit: number = 8): Promise<BriefPaperMeta[]> {
         try {
-            const events = await sessionRepository.listEvents(sessionId);
+            const events = await getRepo().listEvents(sessionId);
             const searchExecuted = [...(events as SessionEvent[])].filter(e => e.type === 'SearchExecuted');
             if (!searchExecuted.length) return [];
             const last = searchExecuted[searchExecuted.length - 1] as any;
             const batchId = last?.payload?.batchId as string | undefined;
             if (!batchId) return [];
-            const artifact = await sessionRepository.getArtifact(batchId) as Artifact | null;
+            const artifact = await getRepo().getArtifact(batchId) as Artifact | null;
             const paperIds: string[] = (artifact as any)?.data?.paperIds || [];
             if (!paperIds.length) return [];
             return await this.fetchBriefs(paperIds.slice(0, Math.max(0, limit)));
