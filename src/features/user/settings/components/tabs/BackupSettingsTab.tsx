@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 import { useSettingsStore } from '../../data-access';
+import { downloadArchiveJson, uploadAndImportArchiveJson } from '@/lib/archive/backup';
 import { settingsRepository } from '../../data-access/settings-repository';
 
 interface BackupInfo {
@@ -132,6 +133,32 @@ export function BackupSettingsTab() {
             await settingsRepository.exportToFile(settings);
         } catch (error) {
             console.error('Failed to export settings:', error);
+        }
+    };
+
+    // New: full archive export/import (sessions/messages/events/artifacts/graphs/collections/settings)
+    const handleExportArchive = async () => {
+        setIsLoading(true);
+        try {
+            await downloadArchiveJson();
+        } catch (error) {
+            console.error('Failed to export archive:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleImportArchive = async () => {
+        setIsLoading(true);
+        try {
+            const res = await uploadAndImportArchiveJson();
+            if (res?.warnings?.length) {
+                console.warn('[BackupSettings] import warnings:', res.warnings);
+            }
+        } catch (error) {
+            console.error('Failed to import archive:', error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -338,15 +365,27 @@ export function BackupSettingsTab() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="flex gap-2">
-                        <Button onClick={handleExportSettings} className="flex-1">
-                            <Download className="w-4 h-4 mr-2" />
-                            导出设置
-                        </Button>
-                        <Button onClick={handleImportSettings} variant="outline" className="flex-1">
-                            <Upload className="w-4 h-4 mr-2" />
-                            导入设置
-                        </Button>
+                    <div className="flex flex-col gap-3">
+                        <div className="flex gap-2">
+                            <Button onClick={handleExportSettings} className="flex-1">
+                                <Download className="w-4 h-4 mr-2" />
+                                导出设置
+                            </Button>
+                            <Button onClick={handleImportSettings} variant="outline" className="flex-1">
+                                <Upload className="w-4 h-4 mr-2" />
+                                导入设置
+                            </Button>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button onClick={handleExportArchive} disabled={isLoading} className="flex-1">
+                                <Download className="w-4 h-4 mr-2" />
+                                导出应用数据（JSON）
+                            </Button>
+                            <Button onClick={handleImportArchive} disabled={isLoading} variant="outline" className="flex-1">
+                                <Upload className="w-4 h-4 mr-2" />
+                                导入应用数据（JSON）
+                            </Button>
+                        </div>
                     </div>
 
                     <Alert>

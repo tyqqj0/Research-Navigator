@@ -211,8 +211,6 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
             const newItem = LibraryItemFactory.createLibraryItem(input);
             await literatureDB.ensureOpen();
             await this.table.add(newItem);
-            await literatureDB.ensureOpen();
-            await this.table.add(newItem);
 
             return {
                 paperId: newItem.paperId,
