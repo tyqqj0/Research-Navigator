@@ -1,6 +1,6 @@
 // Hardcoded presets for ZJU API (OpenAI-compatible)
 
-export type AIPurpose = 'thinking' | 'task';
+export type AIPurpose = 'thinking' | 'task' | 'summary';
 
 export type AIPresetName = 'zju_default' | 'zju_test';
 
@@ -18,10 +18,12 @@ export const presets: Record<AIPresetName, AIPresetConfig> = {
         provider: 'openAICompatible',
         baseURL: 'https://zjuapi.com/v1/chat/completions',
         credentials: {
-            // task → gpt5 with key sk-h23...
+            // task → gpt-5
             task: { apiKey: 'sk-h23ccKj22huAfX2VRE3SKg8Dz3Y2Jterhjbcpu5jczf5421w', model: 'gpt-5' },
-            // thinking → gemini-2.5-pro with key sk-ObU...
-            thinking: { apiKey: 'sk-ObUPynbwDvm3o7s1JZLbmKnRv88x3P0LOPYYtv0iNhp0ebn4', model: 'gemini-2.5-pro' },
+            // thinking → gemini-2.5-flash
+            thinking: { apiKey: 'sk-ObUPynbwDvm3o7s1JZLbmKnRv88x3P0LOPYYtv0iNhp0ebn4', model: 'gemini-2.5-flash' },
+            // summary → gemini-2.5-pro
+            summary: { apiKey: 'sk-ObUPynbwDvm3o7s1JZLbmKnRv88x3P0LOPYYtv0iNhp0ebn4', model: 'gemini-2.5-pro' },
         },
         temperature: 0.4
     },
@@ -33,12 +35,14 @@ export const presets: Record<AIPresetName, AIPresetConfig> = {
             task: { apiKey: 'sk-h23ccKj22huAfX2VRE3SKg8Dz3Y2Jterhjbcpu5jczf5421w', model: 'gpt-4o' },
             // thinking-test → gemini-2.5-flash with key sk-ObU...
             thinking: { apiKey: 'sk-ObUPynbwDvm3o7s1JZLbmKnRv88x3P0LOPYYtv0iNhp0ebn4', model: 'gemini-2.5-flash' },
+            // summary-test → gemini-2.5-pro
+            summary: { apiKey: 'sk-ObUPynbwDvm3o7s1JZLbmKnRv88x3P0LOPYYtv0iNhp0ebn4', model: 'gemini-2.5-flash' },
         },
         temperature: 0.5
     }
 };
 
-export const ACTIVE_PRESET: AIPresetName = 'zju_test';
+export const ACTIVE_PRESET: AIPresetName = 'zju_default';
 
 export function resolveAIForPurpose(purpose: AIPurpose): { provider: string; baseURL: string; apiKey: string; model: string; headers?: Record<string, string>; temperature?: number; maxTokens?: number } {
     const conf = presets[ACTIVE_PRESET];

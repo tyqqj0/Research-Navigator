@@ -19,11 +19,15 @@ export function resolveAIConfig(overrides?: { modelOverride?: string }): Resolve
     if (overrideModel) {
         const thinkingModel = preset.credentials.thinking.model.toLowerCase();
         const taskModel = preset.credentials.task.model.toLowerCase();
-        if (overrideModel === thinkingModel || overrideModel.includes('gemini')) purpose = 'thinking';
+        const summaryModel = (preset.credentials as any).summary?.model?.toLowerCase?.() || '';
+        if (summaryModel && overrideModel === summaryModel) purpose = 'summary';
         else if (overrideModel === taskModel) purpose = 'task';
+        else if (overrideModel === thinkingModel) purpose = 'thinking';
         else {
-            // Heuristic: gemini → thinking; otherwise task
-            purpose = overrideModel.includes('gemini') ? 'thinking' as AIPurpose : 'task';
+            // Heuristics: gemini+pro → summary; gemini → thinking; otherwise task
+            if (overrideModel.includes('gemini') && overrideModel.includes('pro')) purpose = 'summary' as AIPurpose;
+            else if (overrideModel.includes('gemini')) purpose = 'thinking' as AIPurpose;
+            else purpose = 'task';
         }
     }
     const conf = resolveAIForPurpose(purpose);

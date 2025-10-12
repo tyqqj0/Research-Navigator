@@ -54,6 +54,8 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             await emit({ id: newId(), type: 'ReportGenerationStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid, citeKeys, bibtexByKey } as any });
 
             const thinkingModel = resolveModelForPurpose('thinking');
+            const taskModel = resolveModelForPurpose('task');
+            const summaryModel = resolveModelForPurpose('summary');
 
             // install abort handle for this session
             let currentController: AbortController | null = null;
@@ -102,7 +104,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             currentController = new AbortController();
             const expandStream = startTextStream(
                 { prompt: expandPrompt },
-                { modelOverride: thinkingModel, temperature: 0.55, signal: currentController.signal, batchingIntervalMs: 80 }
+                { modelOverride: summaryModel, temperature: 0.55, signal: currentController.signal, batchingIntervalMs: 80 }
             );
             let draft = '';
             for await (const ev of expandStream) {
