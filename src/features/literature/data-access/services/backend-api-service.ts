@@ -125,11 +125,24 @@ export class BackendApiService {
             // 批量获取未缓存的文献
             let fetched: LibraryItem[] = [];
             if (needFetch.length > 0) {
+                try { console.debug('[BackendAPI] getPapersBatch request body preview', { idsPreview: needFetch.slice(0, 5), idsCount: needFetch.length }); } catch { /* noop */ }
                 const response = await this.apiRequest('POST', '/api/v1/paper/batch', {
                     ids: needFetch
                 });
 
                 const items = Array.isArray(response) ? response : (response.papers || response.items || []);
+                try {
+                    const refsInBatch = (items || []).filter((it: any) =>
+                        (Array.isArray(it?.references) && it.references.length > 0)
+                        || (Array.isArray(it?.reference_list) && it.reference_list.length > 0)
+                        || (Array.isArray(it?.refs) && it.refs.length > 0)
+                    ).length;
+                    console.debug('[BackendAPI] getPapersBatch response summary', {
+                        fetchedCount: (items || []).length,
+                        withReferences: refsInBatch,
+                        firstItemKeys: items && items[0] ? Object.keys(items[0]) : []
+                    });
+                } catch { /* noop */ }
                 const valid: LibraryItem[] = [];
                 (items || []).forEach((item: any, idx: number) => {
                     if (!item) return; // 后端可能返回 null 占位，直接跳过
@@ -182,7 +195,7 @@ export class BackendApiService {
             const raw = (response?.citations ?? response?.items ?? response ?? []);
             const arr: any[] = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? [raw] : []);
             const result = arr.map((c: any) => ({
-                sourcePaperId: c.paperId || c.paper_id || c.sourcePaperId || c.source_paper_id || c.sourceId || c.source_id,
+                sourcePaperId: c.paperId || c.paper_id || c.sourcePaperId || c.source_paper_id || c.sourceId || c.source_id || c.id,
                 citationType: c.type || c.citationType,
                 confidence: c.confidence || c.score || 1
             })).filter(x => !!x.sourcePaperId);
@@ -206,14 +219,39 @@ export class BackendApiService {
                 return cached.data;
             }
 
+            try { console.debug('[BackendAPI] getPaperReferences request', { paperId }); } catch { /* noop */ }
             const response = await this.apiRequest('GET', `/api/v1/paper/${paperId}/references`);
-            const raw = (response?.references ?? response?.items ?? response ?? []);
+            const raw = (response?.references
+                ?? response?.referenceIds
+                ?? response?.outboundCitations
+                ?? response?.items
+                ?? response
+                ?? []);
             const arr: any[] = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? [raw] : []);
-            const result = arr.map((c: any) => ({
-                targetPaperId: c.paperId || c.paper_id || c.targetPaperId || c.target_paper_id || c.targetId || c.target_id,
-                citationType: c.type || c.citationType,
-                confidence: c.confidence || c.score || 1
-            })).filter(x => !!x.targetPaperId);
+            try {
+                const first: any = arr && arr.length > 0 ? arr[0] : undefined;
+                console.debug('[BackendAPI] getPaperReferences raw summary', {
+                    paperId,
+                    rawType: Array.isArray(raw) ? 'array' : typeof raw,
+                    rawLength: Array.isArray(raw) ? raw.length : (raw ? 1 : 0),
+                    firstItemKeys: first && typeof first === 'object' ? Object.keys(first) : undefined,
+                    firstItemIdFields: first && typeof first === 'object' ? {
+                        paperId: first.paperId, paper_id: first.paper_id, targetPaperId: first.targetPaperId,
+                        target_paper_id: first.target_paper_id, targetId: first.targetId, target_id: first.target_id, id: first.id
+                    } : undefined
+                });
+            } catch { /* noop */ }
+            const result = arr.map((c: any) => {
+                if (typeof c === 'string') {
+                    return { targetPaperId: c, citationType: 'reference', confidence: 1 };
+                }
+                return {
+                    targetPaperId: c.paperId || c.paper_id || c.targetPaperId || c.target_paper_id || c.targetId || c.target_id || c.id,
+                    citationType: c.type || c.citationType,
+                    confidence: c.confidence || c.score || 1
+                };
+            }).filter(x => !!x.targetPaperId);
+            try { console.debug('[BackendAPI] getPaperReferences mapped', { paperId, count: result.length, firstTarget: result[0]?.targetPaperId }); } catch { /* noop */ }
 
             this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
             return result;
@@ -377,7 +415,20 @@ export class BackendApiService {
     ): Promise<any> {
         const url = `${this.baseUrl}${endpoint}`;
 
-        // console.log('[BackendAPI] API Request:', url, method, data);
+        try {
+            const bodyPreview = data && typeof data === 'object'
+                ? (() => {
+                    try {
+                        const shaped = Array.isArray((data as any).ids)
+                            ? { ...data, idsPreview: ((data as any).ids as any[]).slice(0, 5), idsCount: ((data as any).ids as any[]).length }
+                            : data;
+                        const s = JSON.stringify(shaped);
+                        return s.length > 800 ? s.slice(0, 800) + '…' : s;
+                    } catch { return undefined; }
+                })()
+                : undefined;
+            console.debug('[BackendAPI][request]', { method, url, hasBody: !!data, bodyPreview });
+        } catch { /* noop */ }
 
         const config: RequestInit = {
             method,
@@ -403,9 +454,24 @@ export class BackendApiService {
                 throw new Error(`API Error ${response.status}: ${errorData.message || response.statusText}`);
             }
 
-            // console.log('[BackendAPI] API Response:', response);
+            let json: any;
+            try {
+                json = await response.json();
+            } catch (e) {
+                json = null;
+            }
+            try {
+                const topKeys = json && typeof json === 'object' && !Array.isArray(json) ? Object.keys(json) : undefined;
+                const length = Array.isArray(json)
+                    ? json.length
+                    : (json?.items?.length || json?.papers?.length || json?.data?.length || undefined);
+                const sample = Array.isArray(json)
+                    ? json.slice(0, 1)
+                    : (Array.isArray(json?.items) ? json.items.slice(0, 1) : undefined);
+                console.debug('[BackendAPI][response]', { method, url, status: response.status, length, topKeys, sample });
+            } catch { /* noop */ }
 
-            return await response.json();
+            return json;
         } catch (error: any) {
             if (error?.name === 'AbortError') {
                 throw new Error('Network timeout: Backend service did not respond in time');

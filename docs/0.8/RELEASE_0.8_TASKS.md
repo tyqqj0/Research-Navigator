@@ -132,3 +132,40 @@
 
 ### 补充
 1. 卡片统一提供可收缩的模板
+2. 当会话为空的时候，第一次会话消息发出去很慢，会报这个：hook.js:608  [CollectionRepository] searchWithFilters failed: DexieError
+overrideMethod @ hook.js:608
+session-repository.ts:176 DexieError
+overrideMethod @ hook.js:608
+(匿名) @ table.ts:73
+(匿名) @ promise.js:723
+(匿名) @ promise.js:428
+callListener @ promise.js:428
+endMicroTickScope @ promise.js:477
+Table._trans @ table.ts:79
+Collection._read @ collection.ts:50
+Collection.count @ collection.ts:112
+listSessions @ session-repository.ts:176
+session-repository.ts:178 DexieError
+overrideMethod @ hook.js:608
+(匿名) @ table.ts:73
+(匿名) @ promise.js:723
+(匿名) @ promise.js:428
+callListener @ promise.js:428
+endMicroTickScope @ promise.js:477
+Table._trans @ table.ts:79
+Collection._read @ collection.ts:50
+Collection.toArray @ collection.ts:166
+Collection.sortBy @ collection.ts:155
+listSessions @ session-repository.ts:178
+collection-repository.ts:199  Uncaught (in promise) Error: Failed to search collections with filters
+    at CollectionRepository.searchWithFilters (collection-repository.ts:199:19)
+    at async CollectionDataAccessImpl.getUserCollections (index.ts:1133:24)
+    at async useCollectionOperations.useCallback[loadCollections] (use-collection-operations.ts:395:28)
+use-literature-operations.ts:359  Uncaught (in promise) DexieError
+use-literature-operations.ts:359  Uncaught (in promise) DexieError
+collection-repository.ts:199  Uncaught (in promise) Error: Failed to search collections with filters
+    at CollectionRepository.searchWithFilters (collection-repository.ts:199:19)
+    at async CollectionDataAccessImpl.getUserCollections (index.ts:1133:24)
+    at async useCollectionOperations.useCallback[loadCollections] (use-collection-operations.ts:395:28)
+2b782960-a0fe-4fab-bcbb-8de320cea33b:1  Uncaught (in promise) DexieError
+turbopack-hot-reloader-common.ts:41 [Fast Refresh] rebuilding

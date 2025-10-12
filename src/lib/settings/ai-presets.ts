@@ -38,7 +38,7 @@ export const presets: Record<AIPresetName, AIPresetConfig> = {
     }
 };
 
-export const ACTIVE_PRESET: AIPresetName = 'zju_test';
+export const ACTIVE_PRESET: AIPresetName = 'zju_default';
 
 export function resolveAIForPurpose(purpose: AIPurpose): { provider: string; baseURL: string; apiKey: string; model: string; headers?: Record<string, string>; temperature?: number; maxTokens?: number } {
     const conf = presets[ACTIVE_PRESET];
