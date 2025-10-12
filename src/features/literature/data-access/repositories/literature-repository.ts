@@ -108,6 +108,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
         }
 
         try {
+            await literatureDB.ensureOpen();
             const item = await this.table.get(paperId);
             return item || null;
         } catch (error) {
@@ -141,6 +142,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
         }
 
         try {
+            await literatureDB.ensureOpen();
             const items = await this.table.where('paperId').anyOf(validPaperIds).toArray();
             return items || [];
         } catch (error) {
@@ -170,6 +172,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
 
             // 2. 先检查主键是否存在，避免 Dexie ConstraintError
             try {
+                await literatureDB.ensureOpen();
                 const exists = await this.table.get(input.paperId);
                 if (exists) {
                     // 对已存在记录执行智能合并（补全缺失字段）
@@ -206,6 +209,9 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
 
             // 4. 创建新文献
             const newItem = LibraryItemFactory.createLibraryItem(input);
+            await literatureDB.ensureOpen();
+            await this.table.add(newItem);
+            await literatureDB.ensureOpen();
             await this.table.add(newItem);
 
             return {
@@ -250,6 +256,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
                 const batch = inputs.slice(i, i + batchSize);
 
                 // 使用事务处理每个批次
+                await literatureDB.ensureOpen();
                 await literatureDB.transaction('rw', this.table, async (tx) => {
                     for (let j = 0; j < batch.length; j++) {
                         const input = batch[j];
@@ -340,6 +347,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
         limit: number = 10
     ): Promise<LibraryItem[]> {
         try {
+            await literatureDB.ensureOpen();
             const allItems = await this.table.toArray();
             const similarItems: Array<{ item: LibraryItem; score: number }> = [];
 
@@ -379,6 +387,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
         limit: number = 10
     ): Promise<SimilarityResult[]> {
         try {
+            await literatureDB.ensureOpen();
             const allItems = await this.table.toArray();
             const similarities: SimilarityResult[] = [];
 
@@ -415,6 +424,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
      */
     async getStatistics(): Promise<LiteratureStatistics> {
         try {
+            await literatureDB.ensureOpen();
             const allItems = await this.table.toArray();
             const now = new Date();
             const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -518,6 +528,7 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
         mergedItems: number;
     }> {
         try {
+            await literatureDB.ensureOpen();
             const allItems = await this.table.toArray();
             const duplicateGroups: LibraryItem[][] = [];
             const processedIds = new Set<string>();

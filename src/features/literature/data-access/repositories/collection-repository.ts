@@ -34,6 +34,32 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
         this.table = db.collections;
     }
 
+    private async ensureDbOpen(): Promise<void> {
+        const anyTable: any = this.table as any;
+        const db = anyTable?.db;
+        if (db && typeof db.isOpen === 'function' && !db.isOpen()) {
+            try { await db.open(); } catch { /* noop */ }
+        }
+    }
+
+    private async withDexieRetry<T>(op: () => Promise<T>, attempts = 2): Promise<T> {
+        let lastErr: unknown = null;
+        for (let i = 0; i < Math.max(1, attempts); i++) {
+            try {
+                await this.ensureDbOpen();
+                return await op();
+            } catch (e: any) {
+                lastErr = e;
+                const msg = String(e?.message || e || '');
+                const transient = msg.includes('DatabaseClosedError') || msg.includes('InvalidState') || msg.includes('VersionChangeError');
+                if (!transient || i === attempts - 1) break;
+                // brief backoff then retry
+                try { await new Promise(r => setTimeout(r, 40 + i * 40)); } catch { /* noop */ }
+            }
+        }
+        throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+    }
+
     protected generateId(): string {
         return DatabaseUtils.generateId();
     }
@@ -43,6 +69,9 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async findByOwnerId(ownerUid: string): Promise<Collection[]> {
         try {
+            const anyTable: any = this.table as any;
+            const db = anyTable?.db;
+            try { await db?.open?.(); } catch { /* ignore */ }
             return await this.table.where('ownerUid').equals(ownerUid).toArray();
         } catch (error) {
             console.error('[CollectionRepository] findByOwnerId failed:', error);
@@ -55,6 +84,9 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async findByType(type: CollectionType): Promise<Collection[]> {
         try {
+            const anyTable: any = this.table as any;
+            const db = anyTable?.db;
+            try { await db?.open?.(); } catch { /* ignore */ }
             return await this.table.where('type').equals(type).toArray();
         } catch (error) {
             console.error('[CollectionRepository] findByType failed:', error);
@@ -67,6 +99,9 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async findChildren(parentId: string): Promise<Collection[]> {
         try {
+            const anyTable: any = this.table as any;
+            const db = anyTable?.db;
+            try { await db?.open?.(); } catch { /* ignore */ }
             return await this.table.where('parentId').equals(parentId).toArray();
         } catch (error) {
             console.error('[CollectionRepository] findChildren failed:', error);
@@ -79,6 +114,9 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
      */
     async getCollectionTree(ownerUid: string): Promise<Collection[]> {
         try {
+            const anyTable: any = this.table as any;
+            const db = anyTable?.db;
+            try { await db?.open?.(); } catch { /* ignore */ }
             const allCollections = await this.findByOwnerId(ownerUid);
 
             // 构建层次结构
@@ -120,80 +158,75 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
         totalPages: number;
     }> {
         try {
-            // Dexie reopen guard: if DB was closed (e.g., hot reload), recreate collection reference
-            if ((this.table as any)?.db?.isOpen && typeof (this.table as any).db.isOpen === 'function') {
-                const isOpen = (this.table as any).db.isOpen();
-                if (!isOpen) {
-                    // attempt to reopen database
-                    try { (this.table as any).db.open(); } catch { /* noop */ }
+            return await this.withDexieRetry(async () => {
+                await this.ensureDbOpen();
+                let collection = this.table.toCollection();
+
+                // 应用筛选条件
+                if (query.ownerUid) {
+                    collection = this.table.where('ownerUid').equals(query.ownerUid);
                 }
-            }
-            let collection = this.table.toCollection();
 
-            // 应用筛选条件
-            if (query.ownerUid) {
-                collection = this.table.where('ownerUid').equals(query.ownerUid);
-            }
+                if (query.type) {
+                    collection = collection.filter(item => item.type === query.type);
+                }
 
-            if (query.type) {
-                collection = collection.filter(item => item.type === query.type);
-            }
+                if (query.isPublic !== undefined) {
+                    collection = collection.filter(item => item.isPublic === query.isPublic);
+                }
 
-            if (query.isPublic !== undefined) {
-                collection = collection.filter(item => item.isPublic === query.isPublic);
-            }
+                if (query.parentId !== undefined) {
+                    const pid = query.parentId;
+                    collection = collection.filter(item => (item.parentId ?? null) === pid);
+                }
 
-            if (query.parentId !== undefined) {
-                const pid = query.parentId;
-                collection = collection.filter(item => (item.parentId ?? null) === pid);
-            }
+                if (query.isArchived !== undefined) {
+                    collection = collection.filter(item => item.isArchived === query.isArchived);
+                }
 
-            if (query.isArchived !== undefined) {
-                collection = collection.filter(item => item.isArchived === query.isArchived);
-            }
+                if (query.searchTerm && typeof query.searchTerm === 'string') {
+                    const searchTerm = query.searchTerm.toLowerCase();
+                    collection = collection.filter(item =>
+                        (item.name || '').toLowerCase().includes(searchTerm) ||
+                        (!!item.description && (item.description || '').toLowerCase().includes(searchTerm))
+                    );
+                }
 
-            if (query.searchTerm && typeof query.searchTerm === 'string') {
-                const searchTerm = query.searchTerm.toLowerCase();
-                collection = collection.filter(item =>
-                    (item.name || '').toLowerCase().includes(searchTerm) ||
-                    (!!item.description && (item.description || '').toLowerCase().includes(searchTerm))
-                );
-            }
+                if (query.hasItems !== undefined) {
+                    collection = collection.filter(item =>
+                        query.hasItems ? item.itemCount > 0 : item.itemCount === 0
+                    );
+                }
 
-            if (query.hasItems !== undefined) {
-                collection = collection.filter(item =>
-                    query.hasItems ? item.itemCount > 0 : item.itemCount === 0
-                );
-            }
+                // 排序与分页：统一在内存中对已过滤结果排序，避免因不同 Dexie 对象混用导致的异常
+                let items: Collection[] = await collection.toArray();
 
-            // 排序与分页：统一在内存中对已过滤结果排序，避免因不同 Dexie 对象混用导致的异常
-            let items: Collection[] = await collection.toArray();
+                const direction = sort.order === 'desc' ? -1 : 1;
+                const safeDate = (d?: Date | null) => (d instanceof Date ? d.getTime() : 0);
+                const safeString = (s?: string | null) => (typeof s === 'string' ? s : '');
 
-            const direction = sort.order === 'desc' ? -1 : 1;
-            const safeDate = (d?: Date | null) => (d instanceof Date ? d.getTime() : 0);
-            const safeString = (s?: string | null) => (typeof s === 'string' ? s : '');
+                if (sort.field === 'name') {
+                    items.sort((a, b) => safeString(a.name).localeCompare(safeString(b.name)) * direction);
+                } else if (sort.field === 'itemCount') {
+                    items.sort((a, b) => (((a.itemCount || 0) - (b.itemCount || 0)) * direction));
+                } else if (sort.field === 'updatedAt') {
+                    items.sort((a, b) => (safeDate(a.updatedAt) - safeDate(b.updatedAt)) * direction);
+                } else {
+                    items.sort((a, b) => (safeDate(a.createdAt) - safeDate(b.createdAt)) * direction);
+                }
 
-            if (sort.field === 'name') {
-                items.sort((a, b) => safeString(a.name).localeCompare(safeString(b.name)) * direction);
-            } else if (sort.field === 'itemCount') {
-                items.sort((a, b) => (((a.itemCount || 0) - (b.itemCount || 0)) * direction));
-            } else if (sort.field === 'updatedAt') {
-                items.sort((a, b) => (safeDate(a.updatedAt) - safeDate(b.updatedAt)) * direction);
-            } else {
-                items.sort((a, b) => (safeDate(a.createdAt) - safeDate(b.createdAt)) * direction);
-            }
+                const total = items.length;
+                const start = (page - 1) * pageSize;
+                const paged = items.slice(start, start + pageSize);
 
-            const total = items.length;
-            const start = (page - 1) * pageSize;
-            const paged = items.slice(start, start + pageSize);
-
-            return {
-                items: paged,
-                total,
-                page,
-                pageSize,
-                totalPages: Math.ceil(total / pageSize)
-            };
+                return {
+                    items: paged,
+                    total,
+                    page,
+                    pageSize,
+                    totalPages: Math.ceil(total / pageSize)
+                };
+            });
         } catch (error) {
             console.error('[CollectionRepository] searchWithFilters failed:', error);
             throw new Error('Failed to search collections with filters');

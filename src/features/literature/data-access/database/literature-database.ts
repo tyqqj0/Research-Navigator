@@ -222,6 +222,19 @@ export class literatureDatabase extends Dexie {
         console.log('✨ Enhanced Literature Database initialized');
     }
 
+    // Ensure DB is open before operations that might be invoked early after HMR/tab restore
+    public async ensureOpen(): Promise<void> {
+        try {
+            const anyDb: any = this as any;
+            const isOpen = typeof anyDb?.isOpen === 'function' ? anyDb.isOpen() : true;
+            if (!isOpen && typeof anyDb?.open === 'function') {
+                await anyDb.open();
+            }
+        } catch {
+            // no-op, Dexie will throw again if truly unusable
+        }
+    }
+
     /**
      * 🔧 设置数据库钩子
      */
