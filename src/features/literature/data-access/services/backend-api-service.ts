@@ -104,7 +104,7 @@ export class BackendApiService {
     /**
      * 📦 批量获取论文
      */
-    async getPapersBatch(paperIds: string[]): Promise<LibraryItem[]> {
+    async getPapersBatch(paperIds: string[], options?: { includeReferences?: boolean }): Promise<LibraryItem[]> {
         try {
             console.log(`[BackendAPI] Fetching ${paperIds.length} papers`);
 
@@ -127,7 +127,9 @@ export class BackendApiService {
             if (needFetch.length > 0) {
                 try { console.debug('[BackendAPI] getPapersBatch request body preview', { idsPreview: needFetch.slice(0, 5), idsCount: needFetch.length }); } catch { /* noop */ }
                 const response = await this.apiRequest('POST', '/api/v1/paper/batch', {
-                    ids: needFetch
+                    ids: needFetch,
+                    // Some backends require explicit request to include references to save rate limits
+                    includeReferences: options?.includeReferences === true
                 });
 
                 const items = Array.isArray(response) ? response : (response.papers || response.items || []);

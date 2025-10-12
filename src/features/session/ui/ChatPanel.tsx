@@ -11,6 +11,7 @@ import { useSessionStore } from '../data-access/session-store';
 import type { SessionId, ArtifactRef } from '../data-access/types';
 import { commandBus } from '@/features/session/runtime/command-bus';
 import { Markdown } from '@/components/ui/markdown';
+import { StreamMarkdown } from '@/components/ui/StreamMarkdown';
 import { ArchiveManager } from '@/lib/archive/manager';
 import { useLiteratureStore } from '@/features/literature/data-access/stores';
 const getRepo = () => ArchiveManager.getServices().sessionRepository;
@@ -181,6 +182,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                                     <GraphDecisionCard sessionId={sessionId} />
                                 ) : m.id.startsWith('report_') ? (
                                     <ReportCard sessionId={sessionId} messageId={m.id} status={m.status} content={m.content} />
+                                ) : m.role === 'assistant' ? (
+                                    <StreamMarkdown source={{ type: 'message', sessionId, messageId: m.id }} />
                                 ) : (
                                     <Markdown text={m.content} />
                                 )}
@@ -848,21 +851,30 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                 status={(outlineStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
                 headerVariant="purple"
             >
-                <Markdown text={outlineText || (status !== 'done' ? '⏳ 正在生成大纲…' : '')} />
+                <StreamMarkdown
+                    source={{ type: 'selector', get: () => ({ text: outlineText || '', running: status === 'streaming' || outlineStatus === 'streaming' }) }}
+                    pendingHint="⏳ 正在生成大纲…"
+                />
             </StreamCard>
             <StreamCard
                 title="报告 · 扩写"
                 status={(expandStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
                 headerVariant="purple"
             >
-                <Markdown text={draftText || (status !== 'done' ? '⏳ 正在扩写…' : '')} />
+                <StreamMarkdown
+                    source={{ type: 'selector', get: () => ({ text: draftText || '', running: status === 'streaming' || expandStatus === 'streaming' }) }}
+                    pendingHint="⏳ 正在扩写…"
+                />
             </StreamCard>
             <StreamCard
                 title="报告 · 摘要"
                 status={(abstractStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
                 headerVariant="purple"
             >
-                <Markdown text={abstractText || (status !== 'done' ? '⏳ 正在生成摘要…' : '')} />
+                <StreamMarkdown
+                    source={{ type: 'selector', get: () => ({ text: abstractText || '', running: status === 'streaming' || abstractStatus === 'streaming' }) }}
+                    pendingHint="⏳ 正在生成摘要…"
+                />
             </StreamCard>
 
             <StreamCard
@@ -889,7 +901,9 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                     </div>
                 ) : undefined}
             >
-                <Markdown text={rendered} />
+                <StreamMarkdown
+                    source={{ type: 'inline', text: rendered || '', running: status === 'streaming' }}
+                />
             </StreamCard>
 
             {/* {(finalOutlineText && status === 'done') ? (

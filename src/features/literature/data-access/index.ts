@@ -527,7 +527,8 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
         const backend = this.services.backend as import('./services/backend-api-service').BackendApiService;
         let batchItems: Array<LibraryItem> = [];
         try {
-            const res = await backend.getPapersBatch(uniqueNormalized);
+            const needReferences = idEntries.some(e => e?.options?.autoExtractCitations === true);
+            const res = await backend.getPapersBatch(uniqueNormalized, { includeReferences: needReferences });
             batchItems = Array.isArray(res) ? res : [];
         } catch (e) {
             console.warn('[LiteratureEntry] batch getPapersBatch failed, will fallback to singles', e);
@@ -599,24 +600,6 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                             (literatureStore as any).getState().addLiterature(enhanced as EnhancedLibraryItem);
                         }
                     } catch { /* ignore */ }
-                    // 若增强项缺少引用，尝试补齐引用并触发解析
-                    try {
-                        const enhanced = await this.composition.getEnhancedLiterature(paper.paperId);
-                        const hasRefs = Array.isArray((enhanced as any)?.literature?.parsedContent?.extractedReferences) && (enhanced as any).literature.parsedContent.extractedReferences.length > 0;
-                        if (!hasRefs) {
-                            const refs = await (this.services.backend as any).getPaperReferences(paper.paperId);
-                            const refIds = (refs || []).map((r: any) => r?.targetPaperId).filter((x: any) => typeof x === 'string' && x.length > 0);
-                            console.debug('[LiteratureEntry.batch] enrich existing with references', { paperId: paper.paperId, refCount: refIds.length });
-                            if (refIds.length > 0) {
-                                try {
-                                    const result = await this.services.citation.parseAndStoreReferences(paper.paperId, refIds);
-                                    console.debug('[LiteratureEntry.batch] parseAndStoreReferences for existing result', result);
-                                } catch (e) {
-                                    console.warn('[LiteratureEntry.batch] parseAndStoreReferences for existing failed', e);
-                                }
-                            }
-                        }
-                    } catch { /* ignore enrich existing refs */ }
                     successful.push(existing as LibraryItem);
                     // 确保 membership 记录
                     try {
@@ -639,19 +622,6 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
                     const pc = paper?.parsedContent as any;
                     try { console.debug('[LiteratureEntry.batch] creating composed for', { paperId: paper.paperId, title: paper.title }); } catch { }
                     let enrichedPc: any = pc && typeof pc === 'object' ? { ...pc } : undefined;
-                    // 批量路径常见：后端批量接口未包含引用；必要时补拉引用用于后续引文解析
-                    if (!(enrichedPc?.extractedReferences && Array.isArray(enrichedPc.extractedReferences) && enrichedPc.extractedReferences.length > 0)) {
-                        try {
-                            const refs = await (this.services.backend as any).getPaperReferences(paper.paperId);
-                            const refIds = (refs || [])
-                                .map((r: any) => r?.targetPaperId)
-                                .filter((x: any) => typeof x === 'string' && x.length > 0);
-                            try { console.debug('[LiteratureEntry.batch] fetched references', { paperId: paper.paperId, refCount: refIds.length }); } catch { }
-                            if (refIds.length > 0) {
-                                enrichedPc = { ...(enrichedPc || {}), extractedReferences: refIds };
-                            }
-                        } catch { /* ignore */ }
-                    }
                     const created = await this.composition.createComposedLiterature({
                         literature: {
                             paperId: paper.paperId,

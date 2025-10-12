@@ -12,7 +12,10 @@ export const assistantExecutor = {
             try {
                 opts.onStart();
                 const model = resolveModelForPurpose('thinking');
-                const stream = startTextStream({ messages: opts.messages }, { signal: ctr.signal, modelOverride: model, temperature: 0.6 });
+                const stream = startTextStream(
+                    { messages: opts.messages },
+                    { signal: ctr.signal, modelOverride: model, temperature: 0.6, batchingIntervalMs: 80 }
+                );
                 for await (const ev of stream) {
                     if (ev.type === 'delta') opts.onDelta(ev.text);
                     else if (ev.type === 'done') opts.onDone();

@@ -63,7 +63,10 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             // Outline stage
             await emit({ id: newId(), type: 'ReportOutlineStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
             currentController = new AbortController();
-            const outlineStream = startTextStream({ messages }, { modelOverride: thinkingModel, temperature: 0.6, signal: currentController.signal });
+            const outlineStream = startTextStream(
+                { messages },
+                { modelOverride: thinkingModel, temperature: 0.6, signal: currentController.signal, batchingIntervalMs: 80 }
+            );
             let outline = '';
             for await (const ev of outlineStream) {
                 if (ev.type === 'start') emit({ id: newId(), type: 'AssistantMessageStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } });
@@ -97,7 +100,10 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
                 outline
             ].join('\n');
             currentController = new AbortController();
-            const expandStream = startTextStream({ prompt: expandPrompt }, { modelOverride: thinkingModel, temperature: 0.55, signal: currentController.signal });
+            const expandStream = startTextStream(
+                { prompt: expandPrompt },
+                { modelOverride: thinkingModel, temperature: 0.55, signal: currentController.signal, batchingIntervalMs: 80 }
+            );
             let draft = '';
             for await (const ev of expandStream) {
                 if (ev.type === 'delta') {
@@ -123,7 +129,10 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
                 draft.slice(0, 8000)
             ].join('\n');
             currentController = new AbortController();
-            const abstractStream = startTextStream({ prompt: abstractPrompt }, { modelOverride: thinkingModel, temperature: 0.5, signal: currentController.signal });
+            const abstractStream = startTextStream(
+                { prompt: abstractPrompt },
+                { modelOverride: thinkingModel, temperature: 0.5, signal: currentController.signal, batchingIntervalMs: 80 }
+            );
             let abstract = '';
             for await (const ev of abstractStream) {
                 if (ev.type === 'delta') {
