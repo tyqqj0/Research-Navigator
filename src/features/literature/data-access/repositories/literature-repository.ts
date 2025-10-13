@@ -108,8 +108,10 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
         }
 
         try {
-            await literatureDB.ensureOpen();
-            const item = await this.table.get(paperId);
+            const item = await literatureDB.withDexieRetry(async () => {
+                await literatureDB.ensureOpen();
+                return await this.table.get(paperId);
+            });
             return item || null;
         } catch (error) {
             const appError = new AppError(
@@ -142,8 +144,10 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
         }
 
         try {
-            await literatureDB.ensureOpen();
-            const items = await this.table.where('paperId').anyOf(validPaperIds).toArray();
+            const items = await literatureDB.withDexieRetry(async () => {
+                await literatureDB.ensureOpen();
+                return await this.table.where('paperId').anyOf(validPaperIds).toArray();
+            });
             return items || [];
         } catch (error) {
             const appError = new AppError(
@@ -172,8 +176,10 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
 
             // 2. 先检查主键是否存在，避免 Dexie ConstraintError
             try {
-                await literatureDB.ensureOpen();
-                const exists = await this.table.get(input.paperId);
+                const exists = await literatureDB.withDexieRetry(async () => {
+                    await literatureDB.ensureOpen();
+                    return await this.table.get(input.paperId);
+                });
                 if (exists) {
                     // 对已存在记录执行智能合并（补全缺失字段）
                     return await this.intelligentMerge(exists as LibraryItem, input);
@@ -209,8 +215,10 @@ export class LiteratureRepositoryClass extends BaseRepository<LibraryItem & { id
 
             // 4. 创建新文献
             const newItem = LibraryItemFactory.createLibraryItem(input);
-            await literatureDB.ensureOpen();
-            await this.table.add(newItem);
+            await literatureDB.withDexieRetry(async () => {
+                await literatureDB.ensureOpen();
+                await this.table.add(newItem);
+            });
 
             return {
                 paperId: newItem.paperId,

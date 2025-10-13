@@ -97,6 +97,33 @@ class SessionDatabase extends Dexie {
             } catch { /* ignore */ }
         });
     }
+
+    public async ensureOpen(): Promise<void> {
+        try {
+            const anyDb: any = this as any;
+            const isOpen = typeof anyDb?.isOpen === 'function' ? anyDb.isOpen() : true;
+            if (!isOpen && typeof anyDb?.open === 'function') {
+                await anyDb.open();
+            }
+        } catch { /* noop */ }
+    }
+
+    public async withDexieRetry<T>(op: () => Promise<T>, attempts = 2): Promise<T> {
+        let lastErr: unknown = null;
+        for (let i = 0; i < Math.max(1, attempts); i++) {
+            try {
+                await this.ensureOpen();
+                return await op();
+            } catch (e: any) {
+                lastErr = e;
+                const msg = String(e?.message || e || '');
+                const transient = msg.includes('Database has been closed') || msg.includes('DatabaseClosedError') || msg.includes('InvalidState') || msg.includes('VersionChangeError');
+                if (!transient || i === attempts - 1) break;
+                try { await new Promise(r => setTimeout(r, 40 + i * 40)); } catch { /* noop */ }
+            }
+        }
+        throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+    }
 }
 
 // Simple fractional ranking utilities (base36 between)
@@ -144,48 +171,84 @@ export function createSessionRepository(archiveId: string) {
         },
         async putSession(s: ChatSession) {
             const userId = this._requireUserId();
-            await sessionDb.sessions.put({ ...s, userId });
+            await sessionDb.withDexieRetry(async () => {
+                await sessionDb.sessions.put({ ...s, userId });
+            });
         },
         async getSession(id: string) {
             const userId = this._requireUserId();
-            const s = await sessionDb.sessions.get(id);
+            const s = await sessionDb.withDexieRetry(async () => {
+                return await sessionDb.sessions.get(id);
+            });
             return s && (s as any).userId === userId ? s : null;
         },
         async listSessions() {
             const userId = this._requireUserId();
             if (!userId || userId === 'anonymous') return [] as ChatSession[];
             // Prefer new table if present
-            const userLayoutsCountV4 = await (sessionDb as any).sessionLayoutsV4?.where('[userId+viewId]').equals([userId, 'default']).count().catch(() => 0);
+            let userLayoutsCountV4 = 0;
+            try {
+                userLayoutsCountV4 = await sessionDb.withDexieRetry(async () => {
+                    const dbAny: any = sessionDb as any;
+                    if (!dbAny.sessionLayoutsV4) return 0;
+                    return await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, 'default']).count();
+                });
+            } catch { userLayoutsCountV4 = 0; }
             if (userLayoutsCountV4 && userLayoutsCountV4 > 0) {
-                const layouts = await (sessionDb as any).sessionLayoutsV4.where('[userId+viewId]').equals([userId, 'default']).sortBy('orderKey');
+                const layouts = await sessionDb.withDexieRetry(async () => {
+                    return await (sessionDb as any).sessionLayoutsV4.where('[userId+viewId]').equals([userId, 'default']).sortBy('orderKey');
+                });
                 const ids = layouts.map((l: any) => l.sessionId);
-                const list = (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
+                const list = await sessionDb.withDexieRetry(async () => {
+                    return (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
+                });
                 const map = new Map(list.filter(s => (s as any).userId === userId).map(s => [s.id, s]));
                 return ids.map((id: string) => map.get(id)!).filter(Boolean);
             }
             // fallback for callers not yet migrated (old table might exist)
-            const userLayoutsCount = await (sessionDb as any).sessionLayouts?.where('[userId+viewId]').equals([userId, 'default']).count().catch(() => 0);
+            let userLayoutsCount = 0;
+            try {
+                userLayoutsCount = await sessionDb.withDexieRetry(async () => {
+                    const dbAny: any = sessionDb as any;
+                    if (!dbAny.sessionLayouts) return 0;
+                    return await dbAny.sessionLayouts.where('[userId+viewId]').equals([userId, 'default']).count();
+                });
+            } catch { userLayoutsCount = 0; }
             if (userLayoutsCount > 0) {
-                const layouts = await (sessionDb as any).sessionLayouts.where('[userId+viewId]').equals([userId, 'default']).sortBy('orderKey');
+                const layouts = await sessionDb.withDexieRetry(async () => {
+                    return await (sessionDb as any).sessionLayouts.where('[userId+viewId]').equals([userId, 'default']).sortBy('orderKey');
+                });
                 const ids = layouts.map((l: any) => l.sessionId);
-                const list = (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
+                const list = await sessionDb.withDexieRetry(async () => {
+                    return (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
+                });
                 const map = new Map(list.filter(s => (s as any).userId === userId).map(s => [s.id, s]));
                 return ids.map((id: string) => map.get(id)!).filter(Boolean);
             }
             // pre-v3 behavior
-            const anyHasOrder = await sessionDb.sessions.where('orderIndex').aboveOrEqual(0).and((s: any) => s.userId === userId).count().then(c => c > 0).catch(() => false);
-            if (anyHasOrder) return await (sessionDb.sessions as any).where('userId').equals(userId).sortBy('orderIndex');
-            return await (sessionDb.sessions as any).where('userId').equals(userId).reverse().sortBy('updatedAt');
+            const anyHasOrder = await sessionDb.withDexieRetry(async () => {
+                return await sessionDb.sessions.where('orderIndex').aboveOrEqual(0).and((s: any) => s.userId === userId).count().then(c => c > 0).catch(() => false);
+            });
+            if (anyHasOrder) return await sessionDb.withDexieRetry(async () => {
+                return await (sessionDb.sessions as any).where('userId').equals(userId).sortBy('orderIndex');
+            });
+            return await sessionDb.withDexieRetry(async () => {
+                return await (sessionDb.sessions as any).where('userId').equals(userId).reverse().sortBy('updatedAt');
+            });
         },
         async bulkPutSessions(s: ChatSession[]) {
             const userId = this._requireUserId();
-            await sessionDb.sessions.bulkPut(s.map(x => ({ ...x, userId })));
+            await sessionDb.withDexieRetry(async () => {
+                await sessionDb.sessions.bulkPut(s.map(x => ({ ...x, userId })));
+            });
         },
         async deleteSession(id: string) {
             // Best-effort: ensure only current user's session is deleted
             const userId = this._requireUserId();
-            const s = await sessionDb.sessions.get(id);
-            if (s && (s as any).userId === userId) await sessionDb.sessions.delete(id);
+            await sessionDb.withDexieRetry(async () => {
+                const s = await sessionDb.sessions.get(id);
+                if (s && (s as any).userId === userId) await sessionDb.sessions.delete(id);
+            });
         },
 
         // Layout APIs
@@ -193,51 +256,56 @@ export function createSessionRepository(archiveId: string) {
             const userId = this._requireUserId();
             const dbAny = sessionDb as any;
             if (dbAny.sessionLayoutsV4) {
-                return await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey');
+                return await sessionDb.withDexieRetry(async () => {
+                    return await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey');
+                });
             }
-            // Legacy (v3): no userId column — filter by viewId
-            return await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey');
+            return await sessionDb.withDexieRetry(async () => {
+                return await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey');
+            });
         },
         async putLayout(layout: SessionLayout) {
             const dbAny = sessionDb as any;
             const payload = { ...layout, userId: this._requireUserId() } as any;
-            if (dbAny.sessionLayoutsV4) return await dbAny.sessionLayoutsV4.put(payload);
-            return await dbAny.sessionLayouts.put(payload);
+            if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.put(payload));
+            return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.put(payload));
         },
         async bulkPutLayouts(layouts: SessionLayout[]) {
             const dbAny = sessionDb as any;
             const userId = this._requireUserId();
             const items = layouts.map(l => ({ ...l, userId } as any));
-            if (dbAny.sessionLayoutsV4) return await dbAny.sessionLayoutsV4.bulkPut(items);
-            return await dbAny.sessionLayouts.bulkPut(items);
+            if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.bulkPut(items));
+            return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.bulkPut(items));
         },
         async deleteLayout(viewId: string, sessionId: string) {
             const dbAny = sessionDb as any;
-            if (dbAny.sessionLayoutsV4) return await dbAny.sessionLayoutsV4.delete([this._requireUserId(), viewId, sessionId]);
-            return await dbAny.sessionLayouts.delete([this._requireUserId(), viewId, sessionId]);
+            if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.delete([this._requireUserId(), viewId, sessionId]));
+            return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.delete([this._requireUserId(), viewId, sessionId]));
         },
         async ensureLayoutTop(viewId: string, sessionId: string) {
             const userId = this._requireUserId();
             const now = Date.now();
             const dbAny = sessionDb as any;
-            let first: any | undefined;
-            if (dbAny.sessionLayoutsV4) {
-                first = (await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey'))[0];
-            } else {
-                first = (await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey'))[0];
-            }
-            const newKey = orderKeyUtils.before(first?.orderKey);
-            const layout: SessionLayout = { userId, viewId, sessionId, orderKey: newKey, updatedAt: now } as any;
-            if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.put(layout as any); else await dbAny.sessionLayouts.put(layout as any);
-            return layout;
+            return await sessionDb.withDexieRetry(async () => {
+                let first: any | undefined;
+                if (dbAny.sessionLayoutsV4) {
+                    first = (await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey'))[0];
+                } else {
+                    first = (await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey'))[0];
+                }
+                const newKey = orderKeyUtils.before(first?.orderKey);
+                const layout: SessionLayout = { userId, viewId, sessionId, orderKey: newKey, updatedAt: now } as any;
+                if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.put(layout as any); else await dbAny.sessionLayouts.put(layout as any);
+                return layout;
+            });
         },
         async reorderSessions(viewId: string, moves: Array<{ sessionId: string; beforeId?: string; afterId?: string }>) {
             const userId = this._requireUserId();
             const now = Date.now();
             const dbAny = sessionDb as any;
-            const current = dbAny.sessionLayoutsV4
+            const current = await sessionDb.withDexieRetry(async () => dbAny.sessionLayoutsV4
                 ? await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey')
-                : await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey');
+                : await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey'));
             const idToKey: Map<string, string> = new Map<string, string>(current.map((l: any) => [String(l.sessionId), String(l.orderKey)]));
             const order: string[] = current.map((l: any) => String(l.sessionId));
             const getKey = (id?: string): string | undefined => (id ? idToKey.get(id) : undefined);
@@ -261,37 +329,39 @@ export function createSessionRepository(archiveId: string) {
             };
             for (const m of moves) applyMove(m.sessionId, m.beforeId, m.afterId);
             const updated: SessionLayout[] = order.map((id: string) => ({ userId, viewId, sessionId: id, orderKey: idToKey.get(id)!, updatedAt: now } as any));
-            if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.bulkPut(updated as any); else await dbAny.sessionLayouts.bulkPut(updated as any);
+            await sessionDb.withDexieRetry(async () => {
+                if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.bulkPut(updated as any); else await dbAny.sessionLayouts.bulkPut(updated as any);
+            });
             return updated;
         },
 
-        async putMessage(m: ChatMessage) { await sessionDb.messages.put({ ...m, userId: this._requireUserId() } as any); },
-        async listMessages(sessionId: string) { return await (sessionDb.messages as any).where('[userId+sessionId]').equals([this._requireUserId(), sessionId]).sortBy('createdAt'); },
-        async getMessage(id: string) { const userId = this._requireUserId(); const m: any = await sessionDb.messages.get(id); return m && m.userId === userId ? m : null; },
+        async putMessage(m: ChatMessage) { await sessionDb.withDexieRetry(async () => { await sessionDb.messages.put({ ...m, userId: this._requireUserId() } as any); }); },
+        async listMessages(sessionId: string) { return await sessionDb.withDexieRetry(async () => (sessionDb.messages as any).where('[userId+sessionId]').equals([this._requireUserId(), sessionId]).sortBy('createdAt')); },
+        async getMessage(id: string) { const userId = this._requireUserId(); const m: any = await sessionDb.withDexieRetry(async () => await sessionDb.messages.get(id)); return m && m.userId === userId ? m : null; },
 
-        async appendEvent(e: EventEnvelope) { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); },
+        async appendEvent(e: EventEnvelope) { await sessionDb.withDexieRetry(async () => { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); }); },
         async listEvents(sessionId?: string) {
             const userId = this._requireUserId();
-            return sessionId
+            return await sessionDb.withDexieRetry(async () => sessionId
                 ? await (sessionDb.events as any).where('[userId+sessionId]').equals([userId, sessionId]).sortBy('ts')
-                : await (sessionDb.events as any).where('userId').equals(userId).sortBy('ts');
+                : await (sessionDb.events as any).where('userId').equals(userId).sortBy('ts'));
         },
 
-        async putArtifact(a: Artifact) { await sessionDb.artifacts.put({ ...a, userId: this._requireUserId() } as any); },
-        async getArtifact(id: string) { const userId = this._requireUserId(); const a: any = await sessionDb.artifacts.get(id); return a && a.userId === userId ? a : null; },
+        async putArtifact(a: Artifact) { await sessionDb.withDexieRetry(async () => { await sessionDb.artifacts.put({ ...a, userId: this._requireUserId() } as any); }); },
+        async getArtifact(id: string) { const userId = this._requireUserId(); const a: any = await sessionDb.withDexieRetry(async () => await sessionDb.artifacts.get(id)); return a && a.userId === userId ? a : null; },
         async listArtifacts(kind?: string) {
             const userId = this._requireUserId();
-            return kind
+            return await sessionDb.withDexieRetry(async () => kind
                 ? await (sessionDb.artifacts as any).where('[userId+kind]').equals([userId, kind]).toArray()
-                : await (sessionDb.artifacts as any).where('userId').equals(userId).toArray();
+                : await (sessionDb.artifacts as any).where('userId').equals(userId).toArray());
         },
 
         // Convenience: report artifacts
-        async listReports() { return await (sessionDb.artifacts as any).where('[userId+kind]').equals([this._requireUserId(), 'report_final']).reverse().sortBy('createdAt'); },
+        async listReports() { return await sessionDb.withDexieRetry(async () => (sessionDb.artifacts as any).where('[userId+kind]').equals([this._requireUserId(), 'report_final']).reverse().sortBy('createdAt')); },
         async searchReports(params: { query?: string; limit?: number }) {
             const userId = this._requireUserId();
             const { query, limit } = params || ({} as any);
-            const list: any[] = await (sessionDb.artifacts as any).where('[userId+kind]').equals([userId, 'report_final']).reverse().sortBy('createdAt');
+            const list: any[] = await sessionDb.withDexieRetry(async () => (sessionDb.artifacts as any).where('[userId+kind]').equals([userId, 'report_final']).reverse().sortBy('createdAt'));
             if (!query || !query.trim()) return typeof limit === 'number' ? list.slice(0, Math.max(0, limit)) : list;
             const q = query.trim().toLowerCase();
             const filtered = list.filter(a => {

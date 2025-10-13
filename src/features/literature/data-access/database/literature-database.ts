@@ -235,6 +235,24 @@ export class literatureDatabase extends Dexie {
         }
     }
 
+    // Lightweight helper for transient Dexie errors
+    public async withDexieRetry<T>(op: () => Promise<T>, attempts = 2): Promise<T> {
+        let lastErr: unknown = null;
+        for (let i = 0; i < Math.max(1, attempts); i++) {
+            try {
+                await this.ensureOpen();
+                return await op();
+            } catch (e: any) {
+                lastErr = e;
+                const msg = String(e?.message || e || '');
+                const transient = msg.includes('Database has been closed') || msg.includes('DatabaseClosedError') || msg.includes('InvalidState') || msg.includes('VersionChangeError');
+                if (!transient || i === attempts - 1) break;
+                try { await new Promise(r => setTimeout(r, 40 + i * 40)); } catch { /* noop */ }
+            }
+        }
+        throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+    }
+
     /**
      * 🔧 设置数据库钩子
      */

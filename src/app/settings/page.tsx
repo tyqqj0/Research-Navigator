@@ -49,30 +49,30 @@ export default function SettingsPage() {
                             <div className="sticky top-6">
                                 <ScrollArea className="h-[calc(100vh-12rem)]">
                                     <TabsList className="w-full flex-col h-auto p-1 bg-muted/50">
-                                        <TabsTrigger
+                                        {/* <TabsTrigger
                                             value="ai"
                                             className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             🤖 AI设置
-                                        </TabsTrigger>
-                                        <TabsTrigger
+                                        </TabsTrigger> */}
+                                        {/* <TabsTrigger
                                             value="search"
                                             className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             🔍 搜索设置
-                                        </TabsTrigger>
+                                        </TabsTrigger> */}
                                         <TabsTrigger
                                             value="ui"
                                             className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             🎨 界面设置
                                         </TabsTrigger>
-                                        <TabsTrigger
+                                        {/* <TabsTrigger
                                             value="research"
                                             className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             📚 研究设置
-                                        </TabsTrigger>
+                                        </TabsTrigger> */}
                                         <TabsTrigger
                                             value="dataset"
                                             className="w-full justify-start px-3 py-2 text-left theme-text"
