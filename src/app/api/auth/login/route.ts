@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { findUserByEmail, updateUser } from '@/lib/auth/mock-user-db';
+import { dbFindUserByEmail as findUserByEmail, dbUpdateUser as updateUser } from '@/lib/auth/runtime-user-db';
 
 export async function POST(req: Request) {
     try {

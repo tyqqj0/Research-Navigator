@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readAllUsers } from '@/lib/auth/mock-user-db';
+import { dbReadAllUsers as readAllUsers } from '@/lib/auth/runtime-user-db';
 
 export async function GET(req: Request) {
     try {
