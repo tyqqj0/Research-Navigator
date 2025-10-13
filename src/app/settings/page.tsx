@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { AISettingsTab, SearchSettingsTab, UISettingsTab, ResearchSettingsTab, BackupSettingsTab, DatasetSettingsTab } from '@/features/user/settings';
 
 export default function SettingsPage() {
-    const [activeTab, setActiveTab] = useState('ai');
+    const [activeTab, setActiveTab] = useState('ui');
     const router = useRouter();
 
     return (
@@ -95,13 +95,13 @@ export default function SettingsPage() {
                         <div className="flex-1 min-w-0">
                             <ScrollArea className="h-[calc(100vh-12rem)]">
                                 <div className="pr-4">
-                                    <TabsContent value="ai" className="mt-0">
+                                    {/* <TabsContent value="ai" className="mt-0">
                                         <AISettingsTab />
                                     </TabsContent>
 
                                     <TabsContent value="search" className="mt-0">
                                         <SearchSettingsTab />
-                                    </TabsContent>
+                                    </TabsContent> */}
 
                                     <TabsContent value="ui" className="mt-0">
                                         <UISettingsTab />

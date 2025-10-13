@@ -42,7 +42,13 @@ export const presets: Record<AIPresetName, AIPresetConfig> = {
     }
 };
 
-export const ACTIVE_PRESET: AIPresetName = 'zju_default';
+// Allow overriding active preset via env; default to 'zju_default' when empty/invalid
+const RAW_ACTIVE_PRESET = (process.env.NEXT_PUBLIC_ACTIVE_PRESET || '').trim();
+export const ACTIVE_PRESET: AIPresetName = (
+    (RAW_ACTIVE_PRESET === 'zju_default' || RAW_ACTIVE_PRESET === 'zju_test')
+        ? RAW_ACTIVE_PRESET
+        : 'zju_default'
+) as AIPresetName;
 
 export function resolveAIForPurpose(purpose: AIPurpose): { provider: string; baseURL: string; apiKey: string; model: string; headers?: Record<string, string>; temperature?: number; maxTokens?: number } {
     const conf = presets[ACTIVE_PRESET];
