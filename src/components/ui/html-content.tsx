@@ -7,7 +7,7 @@ const dompurify = ((): ReturnType<typeof createDOMPurify> | null => {
     if (typeof window === 'undefined') {
         return null;
     }
-    return createDOMPurify(window);
+    return createDOMPurify(window as any);
 })();
 
 type HtmlContentProps = {

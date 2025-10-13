@@ -33,7 +33,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased ui-compact`}
         suppressHydrationWarning
       >
-        <ThemeProvider defaultTheme="dark">
+        <ThemeProvider>
           <ArchiveProvider>
             {children}
             {/* Global toast portal */}

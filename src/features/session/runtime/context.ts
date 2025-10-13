@@ -16,8 +16,8 @@ export async function buildChatMessages(sessionId: SessionId, userText: string, 
     const session = (useSessionStore.getState() as any).sessions.get(sessionId) as any;
     const directionSpec = session?.meta?.direction?.confirmed ? (session.meta.direction.spec || '') : '';
 
-    const recent = sliceLast(msgs, recentK)
-        .map(m => `${m.role === 'user' ? 'U' : m.role === 'assistant' ? 'A' : 'S'}: ${m.content}`)
+    const recent = sliceLast(msgs || [], recentK)
+        .map((m: any) => `${m.role === 'user' ? 'U' : m.role === 'assistant' ? 'A' : 'S'}: ${m.content}`)
         .join('\n');
 
     const header = [

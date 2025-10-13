@@ -489,6 +489,64 @@ export class CitationRepository {
     async calculateDegreeForLid(paperId: string) { return this.calculateDegreeForPaperId(paperId); }
     async deleteAllCitationsByLid(paperId: string) { return this.deleteAllCitationsByPaperId(paperId); }
 
+    /**
+     * 📊 统计引文关系总数
+     */
+    async count(): Promise<number> {
+        try {
+            return await this.table.count();
+        } catch (error) {
+            console.error('[CitationRepository] count failed:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * 📊 获取引文统计信息
+     */
+    async getStatistics(): Promise<{
+        totalCitations: number;
+        averageDegree: number;
+        maxDegree: number;
+    }> {
+        try {
+            const totalCitations = await this.count();
+
+            // 获取所有引文关系
+            const citations = await this.table.toArray();
+
+            // 计算每个节点的度数
+            const degreeMap = new Map<string, number>();
+            citations.forEach(citation => {
+                const sourceDegree = degreeMap.get(citation.sourceItemId) || 0;
+                const targetDegree = degreeMap.get(citation.targetItemId) || 0;
+                degreeMap.set(citation.sourceItemId, sourceDegree + 1);
+                degreeMap.set(citation.targetItemId, targetDegree + 1);
+            });
+
+            const degrees = Array.from(degreeMap.values());
+            const averageDegree = degrees.length > 0
+                ? degrees.reduce((sum, d) => sum + d, 0) / degrees.length
+                : 0;
+            const maxDegree = degrees.length > 0
+                ? Math.max(...degrees)
+                : 0;
+
+            return {
+                totalCitations,
+                averageDegree,
+                maxDegree
+            };
+        } catch (error) {
+            console.error('[CitationRepository] getStatistics failed:', error);
+            return {
+                totalCitations: 0,
+                averageDegree: 0,
+                maxDegree: 0
+            };
+        }
+    }
+
 }
 
 // 🏪 单例导出

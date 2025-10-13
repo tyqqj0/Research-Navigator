@@ -13,11 +13,11 @@ export interface LiteratureViewActions {
 
 export const useLiteratureViewStore = create<LiteratureViewState & LiteratureViewActions>()(
     devtools(
-        subscribeWithSelector((set: any) => ({
-            visiblePaperIds: [],
-            activePaperId: null,
-            setVisiblePaperIds: (ids: any) => set({ visiblePaperIds: Array.isArray(ids) ? ids : [] }),
-            setActivePaperId: (paperId: any) => set({ activePaperId: paperId }),
+        subscribeWithSelector((set) => ({
+            visiblePaperIds: [] as string[],
+            activePaperId: null as string | null,
+            setVisiblePaperIds: (ids: string[]) => set({ visiblePaperIds: Array.isArray(ids) ? ids : [] }),
+            setActivePaperId: (paperId: string | null) => set({ activePaperId: paperId }),
         })),
         { name: 'literature-view-store' }
     )

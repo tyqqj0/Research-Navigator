@@ -79,7 +79,7 @@ export const DatabaseUtils = {
      * 🔄 标准化输入数据
      */
     normalizeInput<T extends Record<string, any>>(input: T): T {
-        const normalized = { ...input };
+        const normalized = { ...input } as Record<string, any>;
 
         // 确保字符串字段被trim
         Object.keys(normalized).forEach(key => {
@@ -88,7 +88,7 @@ export const DatabaseUtils = {
             }
         });
 
-        return normalized;
+        return normalized as T;
     }
 };
 

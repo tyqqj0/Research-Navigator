@@ -167,10 +167,7 @@ export class CitationService {
             const citation = await this.citationRepo.createCitation({
                 sourceItemId,
                 targetItemId,
-                citationType: 'direct' as any,
-                discoveryMethod: 'manual',
-                isVerified: metadata?.verified ?? false,
-                confidence: 1.0,
+                context: metadata?.context,
             });
 
             // 4. 清理相关缓存
@@ -431,9 +428,9 @@ export class CitationService {
             // 3. 计算概览统计
             const overview = {
                 totalCitations: filteredCitations.length,
-                verifiedCitations: filteredCitations.filter(c => c.isVerified).length,
-                pendingCitations: filteredCitations.filter(c => !c.isVerified && !c.verifiedBy).length,
-                rejectedCitations: filteredCitations.filter(c => !c.isVerified && c.verifiedBy).length,
+                verifiedCitations: 0, // Simplified citation model doesn't have verification
+                pendingCitations: 0,
+                rejectedCitations: 0,
             };
 
             // 4. 计算网络统计
@@ -510,9 +507,9 @@ export class CitationService {
                 edges.push({
                     source: id,
                     target: outgoing.targetItemId,
-                    type: outgoing.citationType,
-                    weight: outgoing.confidence ?? 1.0,
-                    verified: outgoing.isVerified,
+                    type: 'direct', // Simplified citation model
+                    weight: 1.0,
+                    verified: false,
                 });
 
                 if (currentDepth < depth) {
@@ -525,9 +522,9 @@ export class CitationService {
                 edges.push({
                     source: incoming.sourceItemId,
                     target: id,
-                    type: incoming.citationType,
-                    weight: incoming.confidence ?? 1.0,
-                    verified: incoming.isVerified,
+                    type: 'direct', // Simplified citation model
+                    weight: 1.0,
+                    verified: false,
                 });
 
                 if (currentDepth < depth) {

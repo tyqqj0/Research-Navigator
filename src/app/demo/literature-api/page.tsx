@@ -243,14 +243,10 @@ export default function LiteratureAPIDemo() {
                                     <Badge>{literatureStore.getAllLiteratures().length}</Badge>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span>加载状态:</span>
-                                    <Badge variant={literatureStore.isLoading ? "secondary" : "default"}>
-                                        {literatureStore.isLoading ? "加载中" : "就绪"}
+                                    <span>最后更新:</span>
+                                    <Badge variant="outline">
+                                        {literatureStore.stats.lastUpdated?.toLocaleString() || "从未"}
                                     </Badge>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>当前用户:</span>
-                                    <Badge variant="outline">{literatureStore.currentUser || "未设置"}</Badge>
                                 </div>
                             </div>
                         </CardContent>

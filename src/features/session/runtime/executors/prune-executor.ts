@@ -2,7 +2,7 @@ import { literatureDataAccess } from '@/features/literature/data-access';
 
 export const pruneExecutor = {
     async pruneToMax(collectionId: string, targetMax: number, criterion: 'citation_low_first' | 'random' = 'citation_low_first') {
-        const collection = await literatureDataAccess.getCollection(collectionId as any);
+        const collection = await literatureDataAccess.collections.getCollection(collectionId);
         const allIds: string[] = (collection as any)?.paperIds || [];
         if (allIds.length <= targetMax) return { removed: 0, from: allIds.length, to: allIds.length };
 
@@ -14,7 +14,7 @@ export const pruneExecutor = {
             removeIds = [...allIds].slice(0, allIds.length - targetMax);
         }
         if (removeIds.length > 0) {
-            await literatureDataAccess.collections.removeItemsFromCollection(collectionId as any, removeIds);
+            await literatureDataAccess.collections.removeItemsFromCollection(collectionId, removeIds);
         }
         const to = allIds.length - removeIds.length;
         return { removed: removeIds.length, from: allIds.length, to };
