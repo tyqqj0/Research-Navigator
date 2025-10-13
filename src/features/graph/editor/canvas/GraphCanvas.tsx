@@ -8,7 +8,7 @@ import { useGraphStore } from '@/features/graph/data-access/graph-store';
 import type { GraphDataSource, GraphSnapshot } from '@/features/graph/data-access';
 import { graphStoreDataSource } from '@/features/graph/data-access/graph-store';
 import type { PaperSummary } from '../paper-catalog';
-import { ALLOWED_RELATIONS, RELATION_LABELS } from '@/features/graph/config/relations';
+import { ALLOWED_RELATIONS, RELATION_LABELS, RELATION_COLORS } from '@/features/graph/config/relations';
 
 interface GraphCanvasProps {
     graphId: string;
@@ -87,6 +87,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     // RAF throttle for free-mode dragging updates
     const dragRafRef = useRef<number | null>(null);
     const pendingDragRef = useRef<{ id: string; x: number; y: number } | null>(null);
+    const nodeDownRef = useRef<{ id: string; x: number; y: number; t: number } | null>(null);
 
     // timeline zoom scale (affects vertical mapping granularity)
     const [timelineScale, setTimelineScale] = useState<number>(1);
@@ -509,6 +510,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
         draggingRef.current = { id };
         setSelectedNodeId(id);
         setSelectedEdgeId(null);
+        nodeDownRef.current = { id, x: pos.x, y: pos.y, t: Date.now() };
 
         // 拖动开始：解锁其他节点的显式 Y 锁，允许纵向排斥生效；被拖动节点跟随指针
         if (internalLayoutMode === 'timeline' && simRef.current) {
@@ -840,6 +842,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                 {/* edges */}
                 <svg className="absolute inset-0 w-full h-full">
                     <defs>
+                        {/* base plain markers (kept for fallback) */}
                         <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-foreground-tertiary)" />
                         </marker>
@@ -853,6 +856,18 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                         <marker id="arrow-active-small" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                             <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-primary)" />
                         </marker>
+
+                        {/* per-relation colored markers */}
+                        {ALLOWED_RELATIONS.map((r) => (
+                            <marker key={`arrow-${r}`} id={`arrow-${r}`} viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill={RELATION_COLORS[r]} />
+                            </marker>
+                        ))}
+                        {ALLOWED_RELATIONS.map((r) => (
+                            <marker key={`arrow-${r}-small`} id={`arrow-${r}-small`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill={RELATION_COLORS[r]} />
+                            </marker>
+                        ))}
                     </defs>
                     {edges.map((e) => {
                         const p1 = nodePos[e.from];
@@ -864,14 +879,16 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                         const my = (sy + ty) / 2;
                         const d = `M ${sx} ${sy} C ${sx} ${my} ${tx} ${my} ${tx} ${ty}`;
                         const active = selectedEdgeId === e.id;
-                        const marker = nodeUi.mode === 'nano' ? (active ? 'arrow-active-small' : 'arrow-small') : (active ? 'arrow-active' : 'arrow');
+                        const rel = (e.relation as keyof typeof RELATION_COLORS) || 'related';
+                        const color = RELATION_COLORS[rel] || 'var(--color-foreground-tertiary)';
+                        const marker = nodeUi.mode === 'nano' ? `arrow-${rel}-small` : `arrow-${rel}`;
                         return (
                             <g key={e.id}>
                                 {/* visible stroke */}
                                 <path
                                     d={d}
                                     fill="none"
-                                    stroke={active ? 'var(--color-primary)' : 'var(--color-foreground-tertiary)'}
+                                    stroke={active ? 'var(--color-primary)' : color}
                                     strokeWidth={active ? 3 : 2}
                                     markerEnd={`url(#${marker})`}
                                     pointerEvents="none"
@@ -924,8 +941,27 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                             className="absolute select-none"
                             style={{ left: pos.x, top: pos.y, transform: `translate(-50%, -50%) scale(${nodeUi.scale})`, transition: 'transform 120ms ease' }}
                             onMouseDown={(e) => { onMouseDownNode(n.id, e); onNodeSelect?.(n.id); }}
-                            onDoubleClick={() => { onNodeOpenDetail?.(n.id); }}
-                            onMouseUp={() => completeLink(n.id)}
+                            onMouseUp={(e) => {
+                                // complete linking first
+                                completeLink(n.id);
+                                // click-to-open with drag guard
+                                const down = nodeDownRef.current;
+                                nodeDownRef.current = null;
+                                if (!down || down.id !== n.id) return;
+                                const container = containerRef.current as HTMLDivElement | null;
+                                if (!container) return;
+                                const rect = container.getBoundingClientRect();
+                                const upX = e.clientX - rect.left + container.scrollLeft;
+                                const upY = e.clientY - rect.top + container.scrollTop;
+                                const dx = upX - down.x;
+                                const dy = upY - down.y;
+                                const dt = Date.now() - down.t;
+                                const moveDist = Math.hypot(dx, dy);
+                                // thresholds: small movement and quick release -> treat as click
+                                if (moveDist <= 4 && dt <= 500) {
+                                    onNodeOpenDetail?.(n.id);
+                                }
+                            }}
                         >
                             {nodeRenderer ? (
                                 nodeRenderer({ nodeId: n.id, title: nodeUi.mode === 'full' ? title : shortTitle, dateStr, scale: nodeUi.scale, selected: selectedNodeId === n.id })
@@ -979,6 +1015,19 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                         </div>
                     );
                 })()}
+
+                {/* in-canvas mini legend for edge colors */}
+                <div className="absolute right-2 top-2 bg-white/80 backdrop-blur rounded border px-2 py-1 z-40">
+                    <div className="text-[10px] text-muted-foreground mb-1">关系图例</div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                        {ALLOWED_RELATIONS.map(r => (
+                            <div key={r} className="flex items-center gap-1">
+                                <span className="inline-block w-3 h-0.5" style={{ backgroundColor: RELATION_COLORS[r] }} />
+                                <span className="text-[11px] whitespace-nowrap">{RELATION_LABELS[r as keyof typeof RELATION_LABELS] || r}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
 
                 {/* edge context menu / editor */}
                 {(edgeMenu || edgeEdit) && (

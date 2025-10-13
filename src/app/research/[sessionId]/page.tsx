@@ -8,6 +8,7 @@ import { Button } from '@/components/ui';
 import { ChatPanel } from '@/features/session/ui/ChatPanel';
 import { SessionCollectionPanel } from '@/features/session/ui/SessionCollectionPanel';
 import { GraphCanvas } from '@/features/graph/editor/canvas/GraphCanvas';
+import { GraphToolbar } from '@/features/graph/editor/canvas/GraphToolbar';
 import { LiteratureDetailPanel } from '@/features/literature/management/components/LiteratureDetailPanel';
 import { usePaperCatalog } from '@/features/graph/editor/paper-catalog';
 // 激活 orchestrators
@@ -160,13 +161,18 @@ function DynamicSessionBody({ sessionId, getPaperSummary, graphId, onOpenDetail 
                     aria-hidden={!open}
                 >
                     {graphId ? (
-                        <GraphCanvas
-                            graphId={graphId}
-                            getPaperSummary={getPaperSummary}
-                            layoutMode="timeline"
-                            height={'calc(100vh - 5rem)'}
-                            onNodeOpenDetail={(pid) => onOpenDetail(pid)}
-                        />
+                        <>
+                            <div className="p-2">
+                                <GraphToolbar graphId={graphId || undefined} />
+                            </div>
+                            <GraphCanvas
+                                graphId={graphId}
+                                getPaperSummary={getPaperSummary}
+                                layoutMode="timeline"
+                                height={'calc(100vh - 5rem - 40px)'}
+                                onNodeOpenDetail={(pid) => onOpenDetail(pid)}
+                            />
+                        </>
                     ) : (
                         <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
                     )}

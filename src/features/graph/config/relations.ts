@@ -58,3 +58,15 @@ export function normalizeRelation(input: unknown): Relation {
 }
 
 
+// Suggested UI colors for relation types (soft, high-contrast palette)
+export const RELATION_COLORS: Record<Relation, string> = {
+    citation: '#64748B',   // slate-500
+    extends: '#16A34A',    // green-600
+    contrasts: '#EF4444',  // red-500
+    same_topic: '#0EA5E9', // sky-500
+    applies: '#F59E0B',    // amber-500
+    influences: '#8B5CF6', // violet-500
+    related: '#94A3B8'     // slate-400
+};
+
+

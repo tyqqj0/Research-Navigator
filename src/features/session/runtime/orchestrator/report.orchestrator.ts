@@ -27,12 +27,18 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
         if (cmd.type === 'StopReport') {
             const run = running.get(cmd.params.sessionId);
             if (run) { try { run.abort(); } catch { } }
+            // Clear running flag immediately to avoid stale lock preventing retries
+            try { running.delete(cmd.params.sessionId); } catch { }
             return;
         }
 
         if (cmd.type === 'GenerateReport') {
             const sessionId = cmd.params.sessionId;
-            if (running.has(sessionId)) { try { console.warn('[report][running_exists_skip]', sessionId); } catch { } return; }
+            if (running.has(sessionId)) {
+                try { console.warn('[report][running_abort_prev]', sessionId); } catch { }
+                try { running.get(sessionId)?.abort(); } catch { }
+                try { running.delete(sessionId); } catch { }
+            }
 
             // Prepare prompt (includes cite map and bibtex)
             let messages: string[] = [];

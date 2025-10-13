@@ -173,6 +173,7 @@ export type SessionEvent =
     | EventEnvelope<'ReportAbstractDelta', { messageId: MessageId; delta: string }>
     | EventEnvelope<'ReportAbstractCompleted', { messageId: MessageId; abstractArtifactId: ArtifactId }>
     | EventEnvelope<'ReportFinalAssembled', { messageId: MessageId; finalArtifactId: ArtifactId; citeKeys: Array<{ paperId: string; key: string }>; bibtexByKey: Record<string, string> }>
+    | EventEnvelope<'ReportOutlineRendered', { messageId: MessageId; outlineText: string }>
     // Session-Collection binding
     | EventEnvelope<'SessionCollectionBound', { collectionId: string; created?: boolean }>;
 

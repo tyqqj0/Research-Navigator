@@ -155,12 +155,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                         已生成“研究方向提案”，请在下方“需要决定”卡片中确认或细化，以继续下一步。
                     </div>
                 )}
-                {!awaitingDecision && canResumeProposal && (
+                {/* {!awaitingDecision && canResumeProposal && (
                     <div className="px-2 py-1 text-[12px] rounded bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-between">
                         <div>Deep 模式开启：可基于上次消息恢复“方向提案”。</div>
                         <Button size="sm" variant="secondary" onClick={onResumeProposal}>恢复提案</Button>
                     </div>
-                )}
+                )} */}
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
                 <div className="flex-1 overflow-auto">
@@ -900,10 +900,16 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                 title="报告"
                 status={status}
                 headerVariant="blue"
-                headerRight={status === 'streaming' ? (
+                headerRight={(status === 'streaming' || status === 'error' || status === 'aborted') ? (
                     <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">大纲 / 扩写 / 摘要</span>
-                        <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopReport', ts: Date.now(), params: { sessionId } } as any)}>停止</Button>
+                        {status === 'streaming' ? (
+                            <>
+                                <span className="text-xs text-muted-foreground">大纲 / 扩写 / 摘要</span>
+                                <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopReport', ts: Date.now(), params: { sessionId } } as any)}>停止</Button>
+                            </>
+                        ) : (
+                            <Button size="sm" variant="secondary" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any)}>重试生成</Button>
+                        )}
                     </div>
                 ) : undefined}
                 contentClassName="space-y-3"

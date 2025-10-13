@@ -15,6 +15,7 @@ import '../runtime/orchestrator/report.orchestrator';
 import { startDirectionSupervisor } from '@/features/session/runtime/orchestrator/direction.supervisor';
 import { startCollectionSupervisor } from '@/features/session/runtime/orchestrator/collection.supervisor';
 import { startTitleSupervisor } from '@/features/session/runtime/orchestrator/title.supervisor';
+import GraphToolbar from '@/features/graph/editor/canvas/GraphToolbar';
 
 export const SessionPage: React.FC<{ sessionId: string }> = ({ sessionId }) => {
     React.useEffect(() => { startDirectionSupervisor(); startCollectionSupervisor(); startTitleSupervisor(); }, []);
@@ -30,7 +31,12 @@ export const SessionPage: React.FC<{ sessionId: string }> = ({ sessionId }) => {
                 </div>
                 <div className="col-span-12 md:col-span-6 h-[70vh]">
                     {graphId ? (
-                        <GraphCanvas graphId={graphId} getPaperSummary={getPaperSummary} layoutMode="timeline" />
+                        <>
+                            <div className="p-2">
+                                <GraphToolbar graphId={graphId || undefined} />
+                            </div>
+                            <GraphCanvas graphId={graphId} getPaperSummary={getPaperSummary} layoutMode="timeline" />
+                        </>
                     ) : (
                         <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
                     )}
