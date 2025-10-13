@@ -351,11 +351,25 @@ export class BackendApiService {
             for (let attempt = 1; attempt <= 3; attempt += 1) {
                 try {
                     const response = await this.apiRequest('GET', `/api/v1/paper/search?${params.toString()}`);
+                    // 兼容空响应或非 JSON 响应
+                    const list = Array.isArray(response)
+                        ? response
+                        : (Array.isArray(response?.data)
+                            ? response.data
+                            : (Array.isArray(response?.results) ? response.results : []));
+
+                    const total = typeof response?.total === 'number'
+                        ? response.total
+                        : (typeof response?.total_results === 'number'
+                            ? response.total_results
+                            : (Array.isArray(list) ? list.length : 0));
+
+                    const mapped = (list || []).map((item: any) => this.mapBackendToFrontend(item));
                     return {
-                        results: (response.data || response.results || []).map((item: any) => this.mapBackendToFrontend(item)),
-                        total: response.total || response.total_results || (response.data ? response.data.length : 0),
-                        query: response.query || { query: query.query },
-                        searchTime: response.search_time_ms || response.searchTime || 0
+                        results: mapped,
+                        total,
+                        query: (response && (response as any).query) || { query: query.query },
+                        searchTime: (response && ((response as any).search_time_ms || (response as any).searchTime)) || 0
                     };
                 } catch (err: any) {
                     lastError = err;
@@ -456,22 +470,37 @@ export class BackendApiService {
                 throw new Error(`API Error ${response.status}: ${errorData.message || response.statusText}`);
             }
 
+            const contentType = response.headers.get('content-type') || undefined;
+            const contentLengthHeader = response.headers.get('content-length');
+            const contentLength = contentLengthHeader ? Number(contentLengthHeader) : undefined;
+
             let json: any;
+            let rawPreview: string | undefined;
             try {
+                // 使用 clone 以便在 JSON 解析失败时读取原始文本
+                const clone = response.clone();
                 json = await response.json();
+                try {
+                    const topKeys = json && typeof json === 'object' && !Array.isArray(json) ? Object.keys(json) : undefined;
+                    const length = Array.isArray(json)
+                        ? json.length
+                        : (json?.items?.length || json?.papers?.length || json?.data?.length || undefined);
+                    const sample = Array.isArray(json)
+                        ? json.slice(0, 1)
+                        : (Array.isArray(json?.items) ? json.items.slice(0, 1) : undefined);
+                    console.debug('[BackendAPI][response]', { method, url, status: response.status, contentType, contentLength, length, topKeys, sample });
+                } catch { /* noop */ }
             } catch (e) {
                 json = null;
+                try {
+                    const clone = (e && typeof (e as any) === 'object' && 'stack' in (e as any)) ? response.clone() : response.clone();
+                    const text = await clone.text();
+                    rawPreview = (text || '').slice(0, 200);
+                } catch { /* noop */ }
+                try {
+                    console.debug('[BackendAPI][response-nonjson]', { method, url, status: response.status, contentType, contentLength, rawPreview });
+                } catch { /* noop */ }
             }
-            try {
-                const topKeys = json && typeof json === 'object' && !Array.isArray(json) ? Object.keys(json) : undefined;
-                const length = Array.isArray(json)
-                    ? json.length
-                    : (json?.items?.length || json?.papers?.length || json?.data?.length || undefined);
-                const sample = Array.isArray(json)
-                    ? json.slice(0, 1)
-                    : (Array.isArray(json?.items) ? json.items.slice(0, 1) : undefined);
-                console.debug('[BackendAPI][response]', { method, url, status: response.status, length, topKeys, sample });
-            } catch { /* noop */ }
 
             return json;
         } catch (error: any) {
