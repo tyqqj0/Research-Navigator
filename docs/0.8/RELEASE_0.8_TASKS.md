@@ -169,3 +169,4 @@ collection-repository.ts:199  Uncaught (in promise) Error: Failed to search coll
     at async useCollectionOperations.useCallback[loadCollections] (use-collection-operations.ts:395:28)
 2b782960-a0fe-4fab-bcbb-8de320cea33b:1  Uncaught (in promise) DexieError
 turbopack-hot-reloader-common.ts:41 [Fast Refresh] rebuilding
+3. 解决批量添加的问题

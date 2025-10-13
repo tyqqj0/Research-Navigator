@@ -95,6 +95,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
         return '';
     }, [messages]);
     const hasQuery = (userInput.trim() || lastUserText.trim()).length > 0;
+    const directionConfirmed = Boolean(meta?.direction?.confirmed);
+    const canResumeProposal = Boolean(deep && !directionConfirmed && !Boolean(meta?.direction?.awaitingDecision) && lastUserText.trim());
+    const onResumeProposal = async () => {
+        if (!canResumeProposal) return;
+        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: lastUserText } } as any);
+    };
+    const awaitingDecision = Boolean(meta?.direction?.awaitingDecision);
     return (
         // <div></div>
         <Card className="relative h-[calc(100vh-5rem)] flex flex-col">
@@ -142,8 +149,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                         <SessionStageIndicator sessionId={sessionId} />
                     </div>
                 </div>
-                {/* <SessionStatusStrip sessionId={sessionId} /> */}
-                {/* <DeepResearchPill enabled={deep} onToggle={toggleDeep} /> */}
+                {/* Awaiting decision hint */}
+                {awaitingDecision && (
+                    <div className="px-2 py-1 text-[12px] rounded bg-blue-50 text-blue-700 border border-blue-200">
+                        已生成“研究方向提案”，请在下方“需要决定”卡片中确认或细化，以继续下一步。
+                    </div>
+                )}
+                {!awaitingDecision && canResumeProposal && (
+                    <div className="px-2 py-1 text-[12px] rounded bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-between">
+                        <div>Deep 模式开启：可基于上次消息恢复“方向提案”。</div>
+                        <Button size="sm" variant="secondary" onClick={onResumeProposal}>恢复提案</Button>
+                    </div>
+                )}
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
                 <div className="flex-1 overflow-auto">
@@ -192,7 +209,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                     })}
                     {/* 操作按钮已上移到头部 */}
                     {/* 决策任务卡：当等待决定时渲染卡片 */}
-                    {!!(session as any)?.meta?.direction?.awaitingDecision && (
+                    {awaitingDecision && (
                         <div className="p-3">
                             <DecisionCard sessionId={sessionId} />
                         </div>
@@ -209,6 +226,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                     onSend={sendUserMessage}
                     deep={deep}
                     onToggleDeep={toggleDeep}
+                    awaitingDecision={awaitingDecision}
                     selectedRefs={selectedRefs}
                     onRefsChange={setSelectedRefs}
                     onOpenDetail={onOpenDetail}
@@ -384,10 +402,11 @@ const ComposerBar: React.FC<{
     onSend: () => void;
     deep: boolean;
     onToggleDeep: (b: boolean) => void;
+    awaitingDecision?: boolean;
     selectedRefs: ArtifactRef[];
     onRefsChange: (refs: ArtifactRef[]) => void;
     onOpenDetail?: (paperId: string) => void;
-}> = ({ value, onChange, onSend, deep, onToggleDeep, selectedRefs, onRefsChange, onOpenDetail }) => {
+}> = ({ value, onChange, onSend, deep, onToggleDeep, awaitingDecision, selectedRefs, onRefsChange, onOpenDetail }) => {
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
     };
@@ -531,7 +550,7 @@ const ComposerBar: React.FC<{
                 </button>
                 <Input
                     className="pl-32 pr-28"
-                    placeholder="输入你的问题（普通对话）或让我们找到研究方向"
+                    placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认/细化方向…' : '输入你的问题（普通对话）或让我们找到研究方向'}
                     value={value}
                     onChange={(e) => handleInputChange(e.target.value)}
                     onKeyDown={onKeyDown}

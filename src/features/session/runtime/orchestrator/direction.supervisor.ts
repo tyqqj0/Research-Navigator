@@ -30,20 +30,21 @@ export function startDirectionSupervisor() {
             }
             return;
         }
-        // 2) 如果报告已完成，用户切换开启 Deep 时，立即用最近一条用户消息触发一轮提案，避免需要再发一条消息
+        // 2) 当用户开启 Deep 时，若方向未确认且当前不在等待决定，则用最近一条用户消息自动触发一轮提案（支持刷新后的恢复）
         if (e.type === 'DeepResearchModeChanged' && (e as any).payload.enabled) {
             try {
                 const { useSessionStore } = await import('../../data-access/session-store');
                 const s = (useSessionStore.getState() as any).sessions.get(sessionId) as any;
-                const stage = (s?.meta as any)?.stage;
                 const confirmed = Boolean(s?.meta?.direction?.confirmed);
                 const awaiting = Boolean(s?.meta?.direction?.awaitingDecision);
-                if (stage === 'report_done' && !awaiting) {
+                if (!confirmed && !awaiting) {
                     const msgs: any[] = (useSessionStore.getState() as any).getMessages(sessionId) || [];
                     const lastUser = [...msgs].reverse().find(m => m.role === 'user');
                     const text = lastUser?.content || '';
-                    const cmdId = crypto.randomUUID();
-                    await commandBus.dispatch({ id: cmdId, type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: text } } as any);
+                    if (text && text.trim()) {
+                        const cmdId = crypto.randomUUID();
+                        await commandBus.dispatch({ id: cmdId, type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: text } } as any);
+                    }
                 }
             } catch {
                 // ignore
