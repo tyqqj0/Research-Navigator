@@ -92,15 +92,15 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
         })();
 
         // 确定颜色预设
-        const presetName = settings.customTheme?.colorPresetName || 'blue';
+        const presetName = settings.customTheme?.colorPresetName || 'slate';
 
         // 创建主题
         const theme = createTheme(presetName, shouldUseDark);
 
         if (!theme) {
             // 回退到默认主题
-            return createTheme('blue', shouldUseDark) || {
-                name: 'blue-light',
+            return createTheme('slate', shouldUseDark) || {
+                name: 'slate-light',
                 isDark: false,
                 colors: colorPresets[0].colors
             };

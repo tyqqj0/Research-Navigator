@@ -135,6 +135,9 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                     candArtifact = await searchExecutor.searchCandidates(query, roundSize) as any;
                 } catch (err: any) {
                     await emit({ id: newId(), type: 'SearchRoundFailed', ts: Date.now(), sessionId, payload: { round, stage: 'candidates', error: String(err?.message || err) } as any });
+                    try { service.stop(); } catch { }
+                    runners.delete(sessionId);
+                    await emit({ id: newId(), type: 'ExpansionStopped', ts: Date.now(), sessionId, payload: { by: 'ai', reason: 'search_candidates_failed' } as any });
                     return;
                 }
                 // 附加元数据：会话/集合/轮次
@@ -192,6 +195,9 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                     }
                 } catch (err: any) {
                     await emit({ id: newId(), type: 'SearchRoundFailed', ts: Date.now(), sessionId, payload: { round, stage: 'execute', error: 'ingestion_failed' } as any });
+                    try { service.stop(); } catch { }
+                    runners.delete(sessionId);
+                    await emit({ id: newId(), type: 'ExpansionStopped', ts: Date.now(), sessionId, payload: { by: 'ai', reason: 'ingestion_failed' } as any });
                     return;
                 }
                 const batch: Artifact<{ paperIds: string[]; query: string }> = { id: newId(), kind: 'search_batch', version: 1, data: { paperIds: ingested, query }, meta: { sessionId, collectionId, round }, createdAt: Date.now() } as any;
@@ -234,6 +240,8 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                     await emit({ id: newId(), type: 'NoNewResults', ts: Date.now(), sessionId, payload: { round } });
                     if (zeroTolerance === 0 || zeroAddStreak >= zeroTolerance) {
                         await emit({ id: newId(), type: 'ExpansionSaturated', ts: Date.now(), sessionId, payload: { round, reason: 'no_new' } as any });
+                        try { service.stop(); } catch { }
+                        runners.delete(sessionId);
                         // 自动进入图谱阶段
                         try {
                             await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: runtimeConfig.GRAPH_WINDOW_SIZE } } as any);
@@ -258,7 +266,9 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                     }
                 }
                 if (total > upperBound) {
-                    await emit({ id: newId(), type: 'ExpansionSaturated', ts: Date.now(), sessionId, payload: { round, reason: 'max_rounds' } as any });
+                    await emit({ id: newId(), type: 'ExpansionSaturated', ts: Date.now(), sessionId, payload: { round, reason: 'upper_bound' } as any });
+                    try { service.stop(); } catch { }
+                    runners.delete(sessionId);
                     // 触发裁剪
                     await commandBus.dispatch({ id: newId(), type: 'PruneCollection', ts: Date.now(), sessionId, params: { sessionId, targetMax: runtimeConfig.PRUNE_TARGET_MAX, criterion: 'citation_low_first' } } as any);
                     try {
@@ -279,6 +289,8 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 } else {
                     // 达到最大轮数后自动进入图谱阶段
                     await emit({ id: newId(), type: 'ExpansionSaturated', ts: Date.now(), sessionId, payload: { round, reason: 'max_rounds' } as any });
+                    try { service.stop(); } catch { }
+                    runners.delete(sessionId);
                     try {
                         await commandBus.dispatch({ id: newId(), type: 'BuildGraph', ts: Date.now(), sessionId, params: { sessionId, window: runtimeConfig.GRAPH_WINDOW_SIZE } } as any);
                         const { toast } = require('sonner');
