@@ -12,16 +12,17 @@ export const directionXmlTemplate = `
 
 export function buildDirectionPrompt(input: { userQuery: string; version: number; feedback?: string }) {
     const { userQuery, version, feedback } = input;
+    // 如果用户意图不清晰，则不要输出标记<direction>，而是询问用户意图。
     const prefix = version > 1
         ? `已收到用户反馈，请在保留有效内容的基础上进行改写，并再次给出完整 <direction> 标记与报告：\n${feedback || ''}`
-        : `你是一名研究策划助理。你需要判断用户意图是否清晰，如果清晰，则输出一个报告：仅需在第一行输出一个标记 <direction>，随后紧跟完整报告内容（可用 Markdown 分节、列表、加粗等）。如果用户意图不清晰，则不要输出标记 <direction>，而是询问用户意图。
+        : `你是一名研究策划助理。你需要判断用户意图是否清晰，如果清晰，则输出一个报告：仅需在第一行输出一个标记 <direction>，随后紧跟完整报告内容（可用 Markdown 分节、列表、加粗等）。
             写作建议（可参考）：
             - 标题
                 - 研究网站（列出重点来源）
             - 分析结果（范围、方法、对象、场景的边界）
             - 关键问题（3 - 5 个）
             - 建议与下一步（3 - 5 条）
-            - 调研时间范围
+            - 年份范围
                 - 论证依据（简述理由）
 
             严格要求：
