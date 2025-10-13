@@ -21,7 +21,7 @@ export function buildDirectionPrompt(input: { userQuery: string; version: number
             - 分析结果（范围、方法、对象、场景的边界）
             - 关键问题（3 - 5 个）
             - 建议与下一步（3 - 5 条）
-            - 时间范围
+            - 调研时间范围
                 - 论证依据（简述理由）
 
             严格要求：

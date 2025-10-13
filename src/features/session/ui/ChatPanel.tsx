@@ -152,7 +152,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                 {/* Awaiting decision hint */}
                 {awaitingDecision && (
                     <div className="px-2 py-1 text-[12px] rounded bg-blue-50 text-blue-700 border border-blue-200">
-                        已生成“研究方向提案”，请在下方“需要决定”卡片中确认或细化，以继续下一步。
+                        {/* 已生成“研究方向提案”，请在下方“需要决定”卡片中确认或细化，以继续下一步。 */}
+                        已生成“研究方向提案”，请在下方“需要决定”卡片中确认，以继续下一步。
                     </div>
                 )}
                 {/* {!awaitingDecision && canResumeProposal && (
@@ -550,7 +551,8 @@ const ComposerBar: React.FC<{
                 </button>
                 <Input
                     className="pl-32 pr-28"
-                    placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认/细化方向…' : '输入你的问题（普通对话）或让我们找到研究方向'}
+                    // placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认/细化方向…' : '输入你的问题（普通对话）或让我们找到研究方向'}
+                    placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认…' : '输入你的问题（普通对话）或让我们找到研究方向'}
                     value={value}
                     onChange={(e) => handleInputChange(e.target.value)}
                     onKeyDown={onKeyDown}
@@ -648,17 +650,20 @@ const ComposerBar: React.FC<{
 
 
 const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
-    const [feedback, setFeedback] = React.useState('');
     const onConfirm = async () => {
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'confirm' } } as any);
     };
-    const onRefine = async () => {
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'refine', feedback } } as any);
-        setFeedback('');
-    };
-    const onCancel = async () => {
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'cancel' } } as any);
-    };
+    // const [feedback, setFeedback] = React.useState('');
+    // const onConfirm = async () => {
+    //     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'confirm' } } as any);
+    // };
+    // const onRefine = async () => {
+    //     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'refine', feedback } } as any);
+    //     setFeedback('');
+    // };
+    // const onCancel = async () => {
+    //     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'cancel' } } as any);
+    // };
     return (
         <Card className="border rounded-md">
             <CardHeader className="py-2" variant="blue">
@@ -666,12 +671,14 @@ const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
             </CardHeader>
             <CardContent className="space-y-2">
                 <div className="text-sm">是否确认当前研究方向？</div>
-                <Input placeholder="如需细化，可输入补充/反馈" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+                <div className="flex gap-2">
+                    <Button size="sm" onClick={onConfirm}>确认</Button>
+                </div>
+                {/* Input placeholder="如需细化，可输入补充/反馈" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
                 <div className="flex gap-2">
                     <Button size="sm" onClick={onConfirm}>确认</Button>
                     <Button size="sm" variant="secondary" onClick={onRefine}>细化</Button>
-                    <Button size="sm" variant="ghost" onClick={onCancel}>取消</Button>
-                </div>
+                    <Button size="sm" variant="ghost" onClick={onCancel}>取消</Button> */}
             </CardContent>
         </Card>
     );
@@ -681,13 +688,8 @@ const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) =>
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const info = (session as any)?.meta?.graphDecision || {};
     const locked = Boolean((session as any)?.meta?.graphDecision?.locked);
-    const [suggestion, setSuggestion] = React.useState('');
-    const onGenerate = async () => {
+    const onConfirm = async () => {
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any);
-    };
-    const onSupplement = async () => {
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SupplementGraph', ts: Date.now(), params: { sessionId, suggestion } } as any);
-        setSuggestion('');
     };
     return (
         <Card className="border rounded-md">
@@ -698,9 +700,7 @@ const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) =>
                 <div className="text-md mb-2">是否接受当前图谱？（节点 {info.nodes ?? '-'}，边 {info.edges ?? '-'}）</div>
                 <div className="text-xs text-muted-foreground mb-3">可随时手动修改/添加节点</div>
                 <div className="flex gap-2">
-                    <Button size="sm" onClick={onGenerate} disabled={locked}>生成报告</Button>
-                    <Input className="max-w-sm" placeholder="输入补充/扩展建议（可选）" value={suggestion} onChange={(e) => setSuggestion(e.target.value)} disabled={locked} />
-                    <Button size="sm" variant="secondary" onClick={onSupplement} disabled={!suggestion.trim() || locked}>补充图谱</Button>
+                    <Button size="sm" onClick={onConfirm} disabled={locked}>确认并生成报告</Button>
                 </div>
             </CardContent>
         </Card>
@@ -779,7 +779,7 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
             txt = txt.replace(/\[(\d+)\]/g, (m: string, nStr: string) => {
                 const n = parseInt(nStr, 10);
                 const key = numToKey.get(n);
-                return key && allKnownKeys.has(key) ? `[@${key}]` : m;
+                return key && allKnownKeys.has(key) ? `[@${key}]` : '';
             });
         }
         // Remove any stray bibtex blocks leftover anywhere
@@ -798,7 +798,7 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                 const n = numberingMap.get(key)!;
                 return `[${n}]`;
             }
-            return m;
+            return '';
         });
         return { rendered: replaced, numbering: numberingMap };
     }, [preprocessed.text, allKnownKeys]);

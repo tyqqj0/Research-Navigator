@@ -96,10 +96,10 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             // Expansion stage
             await emit({ id: newId(), type: 'ReportExpandStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
             const expandPrompt = [
-                '基于以下大纲与图谱数据，请逐节扩写成完整中文报告（Markdown）。要求：',
+                '基于以下大纲与图谱数据，请逐节扩写成完整中文报告（请使用 Markdown 格式）。要求：',
                 '- 保留并充分使用 cite 键（形如 [@key]），覆盖尽可能多的相关节点。',
                 '- 不要输出引用清单（References），系统会自动渲染。',
-                '- 仅可引用提供的数据集中给出的 cite 键，不得自造。',
+                '- 仅可引用提供的数据集中给出的 cite 键，**不得自造引用**。',
                 '',
                 '【图谱数据】',
                 datasetBlock,
