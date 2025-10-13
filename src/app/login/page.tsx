@@ -14,11 +14,33 @@ export default function LoginPage() {
     const searchParams = useSearchParams();
     const loginStore = useAuthStore((s) => s.login);
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const clearAuth = useAuthStore((s) => s.clearAuth);
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const safeResolveReturnTo = (): string => {
+        const raw = searchParams?.get('returnTo');
+        if (!raw) return '/';
+        let decoded = raw;
+        try {
+            decoded = decodeURIComponent(raw);
+        } catch {
+            // ignore decode errors, fallback to raw
+        }
+        // Only allow same-origin path starting with '/'
+        if (!decoded.startsWith('/')) return '/';
+        // Prevent open redirect to protocols like //evil.com
+        if (decoded.startsWith('//')) return '/';
+        return decoded || '/';
+    };
+
+    const hasDevSessionCookie = (): boolean => {
+        if (typeof document === 'undefined') return false;
+        return document.cookie.includes('dev_session=');
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -27,8 +49,7 @@ export default function LoginPage() {
         try {
             const result = await authApi.login({ email, password });
             loginStore({ user: result.user, token: result.token });
-            const returnTo = searchParams?.get('returnTo') || '/';
-            router.replace(returnTo);
+            router.replace(safeResolveReturnTo());
         } catch (err: any) {
             setError(err?.message || '登录失败，请重试');
         } finally {
@@ -37,14 +58,26 @@ export default function LoginPage() {
     };
 
     useEffect(() => {
-        if (isAuthenticated) {
-            const returnTo = searchParams?.get('returnTo') || '/';
-            router.replace(returnTo);
+        if (!isAuthenticated) return;
+        if (hasDevSessionCookie()) {
+            router.replace(safeResolveReturnTo());
+        } else {
+            // 本地状态显示已登录，但无会话cookie，视为失效会话并重置
+            clearAuth();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAuthenticated]);
 
-    if (isAuthenticated) return null;
+    if (isAuthenticated && hasDevSessionCookie()) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center space-y-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                    <p className="text-sm text-gray-600">已登录，正在跳转...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
