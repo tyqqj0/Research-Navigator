@@ -656,7 +656,8 @@ export class BackendApiService {
 
 // 🏪 单例服务实例
 export const backendApiService = new BackendApiService({
-    baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000',
+    // Prefer same-origin proxy to avoid mixed content; allow override for Node/server tools
+    baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || '/api/backend',
     apiKey: process.env.NEXT_PUBLIC_API_KEY
 });
 
