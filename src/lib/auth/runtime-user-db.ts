@@ -8,7 +8,7 @@ import type { MockUserRecord } from '@/lib/auth/mock-user-db';
 import { readAllUsers as fsReadAllUsers, writeAllUsers as fsWriteAllUsers, findUserByEmail as fsFindUserByEmail, createUser as fsCreateUser, updateUser as fsUpdateUser } from '@/lib/auth/mock-user-db';
 import { browserReadAllUsers, browserFindUserByEmail, browserCreateUser, browserUpdateUser } from '@/lib/auth/browser-user-db';
 
-const MODE = process.env.NEXT_PUBLIC_AUTH_MODE || 'server';
+const MODE = process.env.NEXT_PUBLIC_AUTH_MODE || 'browser';
 
 const isBrowser = typeof window !== 'undefined';
 

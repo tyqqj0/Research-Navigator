@@ -26,7 +26,7 @@ export interface AuthResult {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const MODE = process.env.NEXT_PUBLIC_AUTH_MODE || 'server';
+const MODE = process.env.NEXT_PUBLIC_AUTH_MODE || 'browser';
 const isBrowser = typeof window !== 'undefined';
 
 function setDevSessionCookie(userId: string) {
