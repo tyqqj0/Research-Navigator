@@ -11,6 +11,8 @@ import { commandBus } from '@/features/session/runtime/command-bus';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SessionList } from '@/features/session/ui/SessionList';
+// Bootstrap orchestrators to ensure command handlers are ready before first user interaction
+import '@/features/session/runtime/orchestrator/bootstrap-orchestrators';
 
 export default function ResearchPage() {
     const router = useRouter();

@@ -34,25 +34,12 @@ export function startDirectionSupervisor() {
             }
             return;
         }
-        // 2) 当用户开启 Deep 时，若方向未确认且当前不在等待决定，则用最近一条用户消息自动触发一轮提案（支持刷新后的恢复）
+        // 2) 当用户开启 Deep 时，不再自动触发提案。
+        // 原逻辑会基于最后一条用户消息立即生成提案，导致用户点击 Deep Research 后立即弹出提案。
+        // 现在改为：点击 Deep Research 只是开启模式，等用户发送下一条消息时才触发提案（通过上面的 UserMessageAdded 逻辑）。
         if (e.type === 'DeepResearchModeChanged' && (e as any).payload.enabled) {
-            try {
-                const { useSessionStore } = await import('../../data-access/session-store');
-                const s = (useSessionStore.getState() as any).sessions.get(sessionId) as any;
-                const confirmed = Boolean(s?.meta?.direction?.confirmed);
-                const awaiting = Boolean(s?.meta?.direction?.awaitingDecision);
-                if (!confirmed && !awaiting) {
-                    const msgs: any[] = (useSessionStore.getState() as any).getMessages(sessionId) || [];
-                    const lastUser = [...msgs].reverse().find(m => m.role === 'user');
-                    const text = lastUser?.content || '';
-                    if (text && text.trim()) {
-                        const cmdId = crypto.randomUUID();
-                        await commandBus.dispatch({ id: cmdId, type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: text } } as any);
-                    }
-                }
-            } catch {
-                // ignore
-            }
+            try { console.debug('[supervisor][direction][deep_enabled]', { sessionId }); } catch { }
+            // 不做任何操作，等待下一条用户消息
         }
     });
 }
