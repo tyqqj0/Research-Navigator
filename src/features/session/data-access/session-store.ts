@@ -10,6 +10,9 @@ interface SessionProjectionState {
     sessions: Map<SessionId, ChatSession>;
     messagesBySession: Map<SessionId, ChatMessage[]>;
     orderedSessionIds?: string[];
+    // ✅ 缓存 sessions 数组，避免每次调用都创建新数组
+    _cachedSessions?: ChatSession[];
+    _cacheVersion?: number;
 
     getSessions(): ChatSession[];
     getOrderedIds(): string[];
@@ -43,8 +46,15 @@ interface SessionProjectionState {
 export const useSessionStore = create<SessionProjectionState & { __activeUserId?: string }>()((set, get) => {
     // Clear projection caches when archive changes
     try {
-        ArchiveManager.subscribe(() => {
-            set(() => ({ sessions: new Map(), messagesBySession: new Map(), orderedSessionIds: undefined, __activeUserId: undefined } as Partial<SessionProjectionState & { __activeUserId?: string }>));
+        ArchiveManager.subscribe((archiveId) => {
+            set(() => ({ sessions: new Map(), messagesBySession: new Map(), orderedSessionIds: undefined, __activeUserId: undefined, _cachedSessions: undefined } as Partial<SessionProjectionState & { __activeUserId?: string }>));
+            // Auto-hydrate when archive switches to current user
+            try {
+                const uid = authStoreUtils.getStoreInstance().getCurrentUserId();
+                if (uid && archiveId === uid) {
+                    void get().loadAllSessions();
+                }
+            } catch { /* noop */ }
         });
     } catch { /* ignore subscription errors in non-browser environments */ }
 
@@ -52,19 +62,37 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
         sessions: new Map(),
         messagesBySession: new Map(),
         orderedSessionIds: undefined,
+        _cachedSessions: undefined,
+        _cacheVersion: 0,
         __activeUserId: undefined,
 
         getSessions() {
-            const ids = get().orderedSessionIds;
-            if (ids && ids.length > 0) {
-                const all = get().sessions;
-                return ids.map(id => all.get(id)).filter(Boolean) as ChatSession[];
+            const state = get();
+            // ✅ 返回缓存的数组，避免每次调用都创建新数组
+            if (state._cachedSessions) {
+                return state._cachedSessions;
             }
-            return Array.from(get().sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+
+            const ids = state.orderedSessionIds;
+            let arr: ChatSession[];
+            if (ids && ids.length > 0) {
+                const all = state.sessions;
+                arr = ids.map(id => all.get(id)).filter(Boolean) as ChatSession[];
+                try { console.debug('[store][sessions][getSessions][ordered]', { count: arr.length }); } catch { /* noop */ }
+            } else {
+                arr = Array.from(state.sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+                try { console.debug('[store][sessions][getSessions][by_updatedAt]', { count: arr.length }); } catch { /* noop */ }
+            }
+
+            // 缓存结果
+            set({ _cachedSessions: arr } as Partial<SessionProjectionState>);
+            return arr;
         },
         getOrderedIds() { return get().orderedSessionIds || get().getSessions().map(s => s.id); },
         getMessages(sessionId) {
-            return get().messagesBySession.get(sessionId) ?? EMPTY_MESSAGES;
+            const list = get().messagesBySession.get(sessionId) ?? EMPTY_MESSAGES;
+            try { console.debug('[store][messages][getMessages]', { sessionId, count: list.length }); } catch { /* noop */ }
+            return list;
         },
 
         upsertSession(s) {
@@ -73,7 +101,9 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
                 sessions.set(s.id, s);
                 // keep orderedSessionIds in sync if present
                 const orderedSessionIds = state.orderedSessionIds && (state.orderedSessionIds.includes(s.id) ? state.orderedSessionIds : [s.id, ...state.orderedSessionIds]);
-                return { sessions, orderedSessionIds } as Partial<SessionProjectionState>;
+                try { console.debug('[store][sessions][upsert]', { id: s.id, title: (s as any)?.title, orderedPreset: Boolean(state.orderedSessionIds) }); } catch { /* noop */ }
+                // ✅ 清除缓存
+                return { sessions, orderedSessionIds, _cachedSessions: undefined } as Partial<SessionProjectionState>;
             });
             void getRepo().putSession(s);
         },
@@ -113,7 +143,9 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
                 const messagesBySession = new Map(state.messagesBySession);
                 sessions.delete(sessionId);
                 messagesBySession.delete(sessionId);
-                return { sessions, messagesBySession } as Partial<SessionProjectionState>;
+                try { console.debug('[store][sessions][remove]', { sessionId }); } catch { /* noop */ }
+                // ✅ 清除缓存
+                return { sessions, messagesBySession, _cachedSessions: undefined } as Partial<SessionProjectionState>;
             });
             void getRepo().deleteSession(sessionId);
         },
@@ -170,10 +202,24 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
         },
 
         async loadSessionProjection(sessionId) {
+            // Gate on authentication and archive readiness
+            const isLoggedIn = (() => { try { return !!authStoreUtils.getStoreInstance().getCurrentUserId(); } catch { return false; } })();
+            if (!isLoggedIn) return;
+            const userId = authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+            if (ArchiveManager.getCurrentArchiveId() !== userId) {
+                try { console.debug('[store][loadSessionProjection][skip_not_ready]', { archiveId: ArchiveManager.getCurrentArchiveId(), userId }); } catch { /* noop */ }
+                return;
+            }
+            const startGen = ArchiveManager.getGeneration();
             const [s, msgsRaw] = await Promise.all([
                 getRepo().getSession(sessionId),
                 getRepo().listMessages(sessionId)
             ]);
+            // Drop stale results if archive switched during load
+            if (startGen !== ArchiveManager.getGeneration() || ArchiveManager.getCurrentArchiveId() !== userId) {
+                try { console.debug('[store][loadSessionProjection][drop_stale]', { startGen, currGen: ArchiveManager.getGeneration() }); } catch { /* noop */ }
+                return;
+            }
             set((state) => {
                 const sessions = new Map(state.sessions);
                 if (s) sessions.set(sessionId, s);
@@ -192,7 +238,9 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
         async setSessionsOrder(ids) {
             const viewId = 'default';
             const curr = get().getOrderedIds();
-            set({ orderedSessionIds: ids });
+            // ✅ 清除缓存
+            set({ orderedSessionIds: ids, _cachedSessions: undefined } as Partial<SessionProjectionState>);
+            try { console.debug('[store][order][setSessionsOrder]', { curr: curr.length, next: ids.length }); } catch { /* noop */ }
             // compute minimal moves from curr -> ids
             const moves: Array<{ sessionId: string; beforeId?: string; afterId?: string }> = [];
             for (let i = 0; i < ids.length; i++) {
@@ -221,27 +269,42 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
             // Skip when unauthenticated to avoid requireAuth throws and Dexie errors
             const isLoggedIn = (() => { try { return !!authStoreUtils.getStoreInstance().getCurrentUserId(); } catch { return false; } })();
             if (!isLoggedIn) {
-                set(() => ({ sessions: new Map(), messagesBySession: new Map(), orderedSessionIds: undefined, __activeUserId: undefined } as Partial<SessionProjectionState & { __activeUserId?: string }>));
+                set(() => ({ sessions: new Map(), messagesBySession: new Map(), orderedSessionIds: undefined, __activeUserId: undefined, _cachedSessions: undefined } as Partial<SessionProjectionState & { __activeUserId?: string }>));
+                try { console.debug('[store][loadAllSessions][skip_unauthenticated]'); } catch { /* noop */ }
                 return;
             }
             const userId = authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
             // If switching user, clear store first to avoid mixed state and loops
             const prevUser = get().__activeUserId;
             if (prevUser && prevUser !== userId) {
-                set(() => ({ sessions: new Map(), messagesBySession: new Map(), orderedSessionIds: undefined } as Partial<SessionProjectionState>));
+                set(() => ({ sessions: new Map(), messagesBySession: new Map(), orderedSessionIds: undefined, _cachedSessions: undefined } as Partial<SessionProjectionState>));
+                try { console.debug('[store][loadAllSessions][clear_on_user_switch]', { from: prevUser, to: userId }); } catch { /* noop */ }
             }
+            // Gate on archive readiness: only load when archive matches current user
+            if (ArchiveManager.getCurrentArchiveId() !== userId) {
+                try { console.debug('[store][loadAllSessions][skip_not_ready]', { archiveId: ArchiveManager.getCurrentArchiveId(), userId }); } catch { /* noop */ }
+                return;
+            }
+            const startGen = ArchiveManager.getGeneration();
             let sessions: ChatSession[] = [] as any;
             try {
                 sessions = await getRepo().listSessions();
             } catch (e) {
-                // Dexie closed or schema errors: reset archive services then retry once
-                try { await ArchiveManager.setCurrentArchive(userId); } catch { /* ignore */ }
-                try { sessions = await getRepo().listSessions(); } catch { sessions = []; }
+                // Dexie closed or schema errors: rely on repo retries; do not trigger archive switching here
+                try { console.warn('[store][loadAllSessions][repo_error]', { message: String((e as any)?.message || e) }); } catch { /* noop */ }
+                sessions = [];
+            }
+            // Drop stale results if archive switched during load
+            if (startGen !== ArchiveManager.getGeneration() || ArchiveManager.getCurrentArchiveId() !== userId) {
+                try { console.debug('[store][loadAllSessions][drop_stale]', { startGen, currGen: ArchiveManager.getGeneration() }); } catch { /* noop */ }
+                return;
             }
             set(() => {
                 const map = new Map(sessions.map((s: ChatSession) => [s.id, s] as const));
                 const orderedSessionIds = sessions.map((s: ChatSession) => s.id);
-                return { sessions: map, orderedSessionIds, __activeUserId: userId } as Partial<SessionProjectionState & { __activeUserId?: string }>;
+                try { console.debug('[store][loadAllSessions][done]', { count: sessions.length, userId }); } catch { /* noop */ }
+                // ✅ 清除缓存
+                return { sessions: map, orderedSessionIds, __activeUserId: userId, _cachedSessions: undefined } as Partial<SessionProjectionState & { __activeUserId?: string }>;
             });
         }
     });

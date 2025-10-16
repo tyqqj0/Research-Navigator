@@ -14,10 +14,11 @@
  * - 管理集合相关的UI状态
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useCollectionStore, useLiteratureStore } from '../data-access/stores';
 import { literatureDataAccess } from '../data-access';
 import { authStoreUtils } from '@/stores/auth.store';
+import { ArchiveManager } from '@/lib/archive/manager';
 import type {
     Collection,
     CollectionType,
@@ -386,7 +387,14 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
         if (!force && collectionStore.stats.total > 0) return;
 
         // 未登录时跳过加载，避免 requireAuth 抛错
-        try { authStoreUtils.getStoreInstance().requireAuth(); } catch { return; }
+        let userId = '';
+        try { userId = authStoreUtils.getStoreInstance().requireAuth(); } catch { return; }
+
+        // 档案未就绪或不匹配时跳过（等待切档完成后订阅会触发加载）
+        if (ArchiveManager.getCurrentArchiveId() !== userId) {
+            try { console.debug('[collection][hook][loadCollections][skip_mismatch]', { archiveId: ArchiveManager.getCurrentArchiveId(), userId }); } catch { /* noop */ }
+            return;
+        }
 
         setUIState(prev => ({ ...prev, isLoading: true, error: null }));
 
@@ -407,6 +415,22 @@ export const useCollectionOperations = (): UseCollectionOperationsReturn => {
             throw error;
         }
     }, [collectionStore]);
+
+    // 在档案切换为当前用户后自动触发一次加载
+    useEffect(() => {
+        let unsub: (() => void) | null = null;
+        try {
+            unsub = ArchiveManager.subscribe((archiveId) => {
+                try {
+                    const uid = authStoreUtils.getStoreInstance().getCurrentUserId();
+                    if (uid && archiveId === uid && (collectionStore.stats.total === 0)) {
+                        void loadCollections({ force: false });
+                    }
+                } catch { /* noop */ }
+            });
+        } catch { /* noop */ }
+        return () => { try { unsub?.(); } catch { /* noop */ } };
+    }, [loadCollections, collectionStore.stats.total]);
 
     const loadCollection = useCallback(async (id: string) => {
         setUIState(prev => ({

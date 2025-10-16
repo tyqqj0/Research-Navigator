@@ -15,6 +15,7 @@ class SessionDatabase extends Dexie {
 
     constructor(dbName: string = 'ResearchNavigatorSession') {
         super(dbName);
+        try { console.debug('[repo][session][db_init]', { dbName }); } catch { /* noop */ }
         // v1 -> v2: add orderIndex to sessions for custom ordering
         this.version(1).stores({
             sessions: 'id, updatedAt',
@@ -72,6 +73,7 @@ class SessionDatabase extends Dexie {
             // best-effort migration: attribute existing records to current user if available, otherwise 'anonymous'
             let uid = '';
             try { uid = authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous'; } catch { uid = 'anonymous'; }
+            try { console.debug('[repo][session][migrate_v4][start]', { dbName: this.name, userId: uid }); } catch { /* noop */ }
             try {
                 const sessionsTable = tx.table('sessions') as Table<ChatSession, string>;
                 await sessionsTable.toCollection().modify((s: any) => { if (!s.userId) s.userId = uid; });
@@ -95,6 +97,7 @@ class SessionDatabase extends Dexie {
                 const layoutsTableV4 = tx.table('sessionLayoutsV4') as Table<SessionLayout, [string, string, string]>;
                 if (newLayouts.length > 0) await layoutsTableV4.bulkPut(newLayouts);
             } catch { /* ignore */ }
+            try { console.debug('[repo][session][migrate_v4][done]', { dbName: this.name, userId: uid }); } catch { /* noop */ }
         });
     }
 
@@ -118,6 +121,7 @@ class SessionDatabase extends Dexie {
                 lastErr = e;
                 const msg = String(e?.message || e || '');
                 const transient = msg.includes('Database has been closed') || msg.includes('DatabaseClosedError') || msg.includes('InvalidState') || msg.includes('VersionChangeError');
+                try { console.warn('[repo][dexie][retry]', { dbName: this.name, attempt: i + 1, transient, message: msg }); } catch { /* noop */ }
                 if (!transient || i === attempts - 1) break;
                 try { await new Promise(r => setTimeout(r, 40 + i * 40)); } catch { /* noop */ }
             }
@@ -165,18 +169,21 @@ export function createSessionRepository(archiveId: string) {
     const safeId = String(archiveId || 'anonymous').slice(0, 64);
     const dbName = `ResearchNavigatorSession__${safeId}`;
     const sessionDb = new SessionDatabase(dbName);
+    try { console.debug('[repo][session][create]', { archiveId: safeId, dbName }); } catch { /* noop */ }
     const repo = {
         _requireUserId(): string {
             try { return authStoreUtils.getStoreInstance().requireAuth(); } catch { return 'anonymous'; }
         },
         async putSession(s: ChatSession) {
             const userId = this._requireUserId();
+            try { console.debug('[repo][session][putSession]', { dbName, userId, id: s.id, title: (s as any)?.title }); } catch { /* noop */ }
             await sessionDb.withDexieRetry(async () => {
                 await sessionDb.sessions.put({ ...s, userId });
             });
         },
         async getSession(id: string) {
             const userId = this._requireUserId();
+            try { console.debug('[repo][session][getSession]', { dbName, userId, id }); } catch { /* noop */ }
             const s = await sessionDb.withDexieRetry(async () => {
                 return await sessionDb.sessions.get(id);
             });
@@ -184,6 +191,7 @@ export function createSessionRepository(archiveId: string) {
         },
         async listSessions() {
             const userId = this._requireUserId();
+            try { console.debug('[repo][session][listSessions][begin]', { dbName, userId }); } catch { /* noop */ }
             if (!userId || userId === 'anonymous') return [] as ChatSession[];
             // Prefer new table if present
             let userLayoutsCountV4 = 0;
@@ -203,6 +211,7 @@ export function createSessionRepository(archiveId: string) {
                     return (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
                 });
                 const map = new Map(list.filter(s => (s as any).userId === userId).map(s => [s.id, s]));
+                try { console.debug('[repo][session][listSessions][by_layout_v4]', { count: list.length }); } catch { /* noop */ }
                 return ids.map((id: string) => map.get(id)!).filter(Boolean);
             }
             // fallback for callers not yet migrated (old table might exist)
@@ -223,6 +232,7 @@ export function createSessionRepository(archiveId: string) {
                     return (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
                 });
                 const map = new Map(list.filter(s => (s as any).userId === userId).map(s => [s.id, s]));
+                try { console.debug('[repo][session][listSessions][by_layout_v3]', { count: list.length }); } catch { /* noop */ }
                 return ids.map((id: string) => map.get(id)!).filter(Boolean);
             }
             // pre-v3 behavior
@@ -230,14 +240,19 @@ export function createSessionRepository(archiveId: string) {
                 return await sessionDb.sessions.where('orderIndex').aboveOrEqual(0).and((s: any) => s.userId === userId).count().then(c => c > 0).catch(() => false);
             });
             if (anyHasOrder) return await sessionDb.withDexieRetry(async () => {
-                return await (sessionDb.sessions as any).where('userId').equals(userId).sortBy('orderIndex');
+                const res = await (sessionDb.sessions as any).where('userId').equals(userId).sortBy('orderIndex');
+                try { console.debug('[repo][session][listSessions][by_orderIndex]', { count: res.length }); } catch { /* noop */ }
+                return res;
             });
             return await sessionDb.withDexieRetry(async () => {
-                return await (sessionDb.sessions as any).where('userId').equals(userId).reverse().sortBy('updatedAt');
+                const res = await (sessionDb.sessions as any).where('userId').equals(userId).reverse().sortBy('updatedAt');
+                try { console.debug('[repo][session][listSessions][by_updatedAt]', { count: res.length }); } catch { /* noop */ }
+                return res;
             });
         },
         async bulkPutSessions(s: ChatSession[]) {
             const userId = this._requireUserId();
+            try { console.debug('[repo][session][bulkPutSessions]', { dbName, userId, count: s.length }); } catch { /* noop */ }
             await sessionDb.withDexieRetry(async () => {
                 await sessionDb.sessions.bulkPut(s.map(x => ({ ...x, userId })));
             });
@@ -245,6 +260,7 @@ export function createSessionRepository(archiveId: string) {
         async deleteSession(id: string) {
             // Best-effort: ensure only current user's session is deleted
             const userId = this._requireUserId();
+            try { console.debug('[repo][session][deleteSession]', { dbName, userId, id }); } catch { /* noop */ }
             await sessionDb.withDexieRetry(async () => {
                 const s = await sessionDb.sessions.get(id);
                 if (s && (s as any).userId === userId) await sessionDb.sessions.delete(id);
@@ -267,6 +283,7 @@ export function createSessionRepository(archiveId: string) {
         async putLayout(layout: SessionLayout) {
             const dbAny = sessionDb as any;
             const payload = { ...layout, userId: this._requireUserId() } as any;
+            try { console.debug('[repo][session][putLayout]', { dbName, viewId: layout.viewId, sessionId: layout.sessionId }); } catch { /* noop */ }
             if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.put(payload));
             return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.put(payload));
         },
@@ -274,11 +291,13 @@ export function createSessionRepository(archiveId: string) {
             const dbAny = sessionDb as any;
             const userId = this._requireUserId();
             const items = layouts.map(l => ({ ...l, userId } as any));
+            try { console.debug('[repo][session][bulkPutLayouts]', { dbName, count: items.length }); } catch { /* noop */ }
             if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.bulkPut(items));
             return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.bulkPut(items));
         },
         async deleteLayout(viewId: string, sessionId: string) {
             const dbAny = sessionDb as any;
+            try { console.debug('[repo][session][deleteLayout]', { dbName, viewId, sessionId }); } catch { /* noop */ }
             if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.delete([this._requireUserId(), viewId, sessionId]));
             return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.delete([this._requireUserId(), viewId, sessionId]));
         },
@@ -286,6 +305,7 @@ export function createSessionRepository(archiveId: string) {
             const userId = this._requireUserId();
             const now = Date.now();
             const dbAny = sessionDb as any;
+            try { console.debug('[repo][session][ensureLayoutTop][begin]', { dbName, userId, viewId, sessionId }); } catch { /* noop */ }
             return await sessionDb.withDexieRetry(async () => {
                 let first: any | undefined;
                 if (dbAny.sessionLayoutsV4) {
@@ -296,6 +316,7 @@ export function createSessionRepository(archiveId: string) {
                 const newKey = orderKeyUtils.before(first?.orderKey);
                 const layout: SessionLayout = { userId, viewId, sessionId, orderKey: newKey, updatedAt: now } as any;
                 if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.put(layout as any); else await dbAny.sessionLayouts.put(layout as any);
+                try { console.debug('[repo][session][ensureLayoutTop][done]', { dbName, viewId, sessionId, orderKey: newKey }); } catch { /* noop */ }
                 return layout;
             });
         },
@@ -303,6 +324,7 @@ export function createSessionRepository(archiveId: string) {
             const userId = this._requireUserId();
             const now = Date.now();
             const dbAny = sessionDb as any;
+            try { console.debug('[repo][session][reorder][begin]', { dbName, userId, viewId, moves }); } catch { /* noop */ }
             const current = await sessionDb.withDexieRetry(async () => dbAny.sessionLayoutsV4
                 ? await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey')
                 : await dbAny.sessionLayouts.where('viewId').equals(viewId).sortBy('orderKey'));
@@ -332,6 +354,7 @@ export function createSessionRepository(archiveId: string) {
             await sessionDb.withDexieRetry(async () => {
                 if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.bulkPut(updated as any); else await dbAny.sessionLayouts.bulkPut(updated as any);
             });
+            try { console.debug('[repo][session][reorder][done]', { dbName, viewId, count: updated.length }); } catch { /* noop */ }
             return updated;
         },
 
@@ -342,6 +365,7 @@ export function createSessionRepository(archiveId: string) {
         async appendEvent(e: EventEnvelope) { await sessionDb.withDexieRetry(async () => { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); }); },
         async listEvents(sessionId?: string) {
             const userId = this._requireUserId();
+            try { console.debug('[repo][session][listEvents]', { dbName, userId, sessionId: sessionId || null }); } catch { /* noop */ }
             return await sessionDb.withDexieRetry(async () => sessionId
                 ? await (sessionDb.events as any).where('[userId+sessionId]').equals([userId, sessionId]).sortBy('ts')
                 : await (sessionDb.events as any).where('userId').equals(userId).sortBy('ts'));

@@ -1099,6 +1099,18 @@ class CollectionDataAccessImpl implements CollectionDataAccessAPI {
         const userId = this.requireUserId();
         const page = options.page || 1;
         const pageSize = options.pageSize || 100;
+        // Gate on archive readiness and generation to avoid Dexie closed errors during switches
+        const startGen = (this.archiveManager as any).getGeneration?.() ?? 0;
+        if ((this.archiveManager as any).getCurrentArchiveId?.() !== userId) {
+            try { console.debug('[literature][collections][skip_or_wait_not_ready]', { archiveId: (this.archiveManager as any).getCurrentArchiveId?.(), userId }); } catch { /* noop */ }
+            // Wait for readiness once to allow initial hydration after switch
+            try { await (this.archiveManager as any).whenReady?.(); } catch { /* noop */ }
+        }
+        if ((this.archiveManager as any).getCurrentArchiveId?.() !== userId) {
+            try { console.debug('[literature][collections][still_mismatch_after_ready]', { archiveId: (this.archiveManager as any).getCurrentArchiveId?.(), userId }); } catch { /* noop */ }
+            return [];
+        }
+        const genBefore = (this.archiveManager as any).getGeneration?.() ?? startGen;
         const repo = this.archiveManager.getServices().collectionsRepository;
         const result = await repo.searchWithFilters(
             { ownerUid: userId } as any,
@@ -1106,6 +1118,12 @@ class CollectionDataAccessImpl implements CollectionDataAccessAPI {
             page,
             pageSize
         );
+        // Drop stale results if archive switched during load
+        const genAfter = (this.archiveManager as any).getGeneration?.() ?? genBefore;
+        if (genAfter !== genBefore || (this.archiveManager as any).getCurrentArchiveId?.() !== userId) {
+            try { console.debug('[literature][collections][drop_stale]', { genBefore, genAfter }); } catch { /* noop */ }
+            return [];
+        }
         return result.items;
     }
 
@@ -1188,14 +1206,37 @@ class LiteraturesDataAccessImpl implements LiteraturesDataAccessAPI {
         // 未登录直接返回空数组，避免登录页触发异常
         let userId = '';
         try { userId = this.authUtils.getStoreInstance().requireAuth(); } catch { return []; }
+        // Gate on archive readiness and generation to avoid Dexie reads during switch
+        const startGen = (this.archiveManager as any).getGeneration?.() ?? 0;
+        if ((this.archiveManager as any).getCurrentArchiveId?.() !== userId) {
+            try { console.debug('[literature][list][skip_or_wait_not_ready]', { archiveId: (this.archiveManager as any).getCurrentArchiveId?.(), userId }); } catch { /* noop */ }
+            try { await (this.archiveManager as any).whenReady?.(); } catch { /* noop */ }
+        }
+        if ((this.archiveManager as any).getCurrentArchiveId?.() !== userId) {
+            try { console.debug('[literature][list][still_mismatch_after_ready]', { archiveId: (this.archiveManager as any).getCurrentArchiveId?.(), userId }); } catch { /* noop */ }
+            return [];
+        }
+        const genBefore = (this.archiveManager as any).getGeneration?.() ?? startGen;
         const membershipRepo = this.archiveManager.getServices().membershipRepository;
         const list = await membershipRepo.listByUser(userId);
+        // Drop stale if switched
+        const genAfterList = (this.archiveManager as any).getGeneration?.() ?? genBefore;
+        if (genAfterList !== genBefore || (this.archiveManager as any).getCurrentArchiveId?.() !== userId) {
+            try { console.debug('[literature][list][drop_stale_after_membership]', { genBefore, genAfter: genAfterList }); } catch { /* noop */ }
+            return [];
+        }
         const results: EnhancedLibraryItem[] = [];
         for (const m of list) {
             try {
                 const enhanced = await this.services.getEnhancedLiterature(m.paperId);
                 if (enhanced) results.push(enhanced);
             } catch { }
+        }
+        // Final stale guard
+        const genAfter = (this.archiveManager as any).getGeneration?.() ?? genAfterList;
+        if (genAfter !== genAfterList || (this.archiveManager as any).getCurrentArchiveId?.() !== userId) {
+            try { console.debug('[literature][list][drop_stale_after_enhance]', { genBefore, genMid: genAfterList, genAfter }); } catch { /* noop */ }
+            return [];
         }
         return results;
     }

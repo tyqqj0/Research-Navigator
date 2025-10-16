@@ -77,6 +77,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
     const sendUserMessage = async () => {
         const text = userInput.trim();
         if (!text) return;
+        try { console.debug('[ui][chat_panel][send_click]', { sessionId, textLen: text.length, refs: selectedRefs?.length || 0 }); } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text }, inputRefs: selectedRefs } as any);
         setUserInput('');
         // 如果 Deep 模式开启且方向未确认，chat.orchestrator 不会生成普通回复；direction.supervisor 会用这条消息触发提案
@@ -84,6 +85,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
 
     const toggleDeep = async (enabled: boolean) => {
         setDeep(enabled);
+        try { console.debug('[ui][chat_panel][toggle_deep]', { sessionId, enabled }); } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ToggleDeepResearch', ts: Date.now(), params: { sessionId, enabled } } as any);
     };
 

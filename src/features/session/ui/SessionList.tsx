@@ -32,15 +32,19 @@ function SortableItem({ id, children }: { id: string; children: React.ReactNode 
 export function SessionList() {
     const router = useRouter();
     const pathname = usePathname();
-    const store = useSessionStore();
-    const sessions = store.getSessions();
+    // ✅ 优化：使用缓存的 sessions 数组，避免每次渲染都创建新数组
+    const sessions = useSessionStore(s => s.getSessions());
+    const setSessionsOrder = useSessionStore(s => s.setSessionsOrder);
+    const removeSession = useSessionStore(s => s.removeSession);
+
     const [items, setItems] = React.useState<string[]>(sessions.map(s => s.id));
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [titleDraft, setTitleDraft] = React.useState('');
     const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-    React.useEffect(() => { setItems(sessions.map(s => s.id)); }, [sessions.map(s => s.id).join('|')]);
+    // ✅ 优化：只在 sessions 引用变化时更新（缓存机制确保引用稳定）
+    React.useEffect(() => { setItems(sessions.map(s => s.id)); }, [sessions]);
 
     const handleDragEnd = async (event: any) => {
         const { active, over } = event;
@@ -49,10 +53,12 @@ export function SessionList() {
         const newIndex = items.indexOf(over.id);
         const next = arrayMove(items, oldIndex, newIndex);
         setItems(next);
-        await store.setSessionsOrder(next); // optimistic + persist
+        try { console.debug('[ui][session_list][drag_end]', { active: String(active?.id), over: String(over?.id), oldIndex, newIndex }); } catch { /* noop */ }
+        await setSessionsOrder(next); // optimistic + persist
     };
 
     const openDeleteDialog = (sessionId: string) => {
+        try { console.debug('[ui][session_list][open_delete]', { sessionId }); } catch { /* noop */ }
         setDeleteTargetId(sessionId);
     };
 
@@ -62,9 +68,10 @@ export function SessionList() {
         const s = sessions.find(ss => ss.id === sessionId);
         const collectionId = s?.linkedCollectionId;
         const graphId = (s?.meta as any)?.graphId as string | undefined;
+        try { console.debug('[ui][session_list][confirm_delete]', { sessionId, mode, isActive, collectionId, graphId }); } catch { /* noop */ }
 
         // 1) Remove session (UI + Dexie)
-        await store.removeSession(sessionId);
+        await removeSession(sessionId);
 
         // 2) Optionally remove collection
         if ((mode === 'session_collection' || mode === 'all') && collectionId) {
@@ -87,6 +94,7 @@ export function SessionList() {
 
     const createSession = async () => {
         const id = crypto.randomUUID();
+        try { console.debug('[ui][session_list][create_session_click]', { id }); } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'CreateSession', ts: Date.now(), sessionId: id, params: { title: '未命名研究' } } as any);
         router.push(`/research/${id}`);
     };

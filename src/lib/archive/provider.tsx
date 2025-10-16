@@ -9,10 +9,13 @@ export function ArchiveProvider({ archiveIdOverride, children }: { archiveIdOver
     const currentUser = useAuthStore(s => s.currentUser);
 
     const archiveId: ArchiveId = useMemo(() => {
-        return archiveIdOverride || currentUser?.id || 'anonymous';
+        const id = archiveIdOverride || currentUser?.id || 'anonymous';
+        try { console.debug('[archive][provider][select_archiveId]', { archiveId: id, hasUser: !!currentUser?.id }); } catch { /* noop */ }
+        return id;
     }, [archiveIdOverride, currentUser?.id]);
 
     useEffect(() => {
+        try { console.debug('[archive][provider][effect_setCurrentArchive]', { archiveId }); } catch { /* noop */ }
         void ArchiveManager.setCurrentArchive(archiveId);
     }, [archiveId]);
 

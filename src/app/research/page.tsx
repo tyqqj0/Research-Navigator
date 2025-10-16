@@ -15,10 +15,11 @@ import { SessionList } from '@/features/session/ui/SessionList';
 export default function ResearchPage() {
     const router = useRouter();
     const pathname = usePathname();
-    const store = useSessionStore();
+    const loadAllSessions = useSessionStore(s => s.loadAllSessions);
+    const getSessions = useSessionStore(s => s.getSessions);
     const [hydrated, setHydrated] = useState(false);
 
-    useEffect(() => { void store.loadAllSessions().then(() => setHydrated(true)); }, []);
+    useEffect(() => { void loadAllSessions().then(() => setHydrated(true)); }, [loadAllSessions]);
     // Re-load sessions when user changes
     useEffect(() => {
         let prevUserId = useAuthStore.getState().currentUser?.id;
@@ -26,26 +27,29 @@ export default function ResearchPage() {
             const uid = state.currentUser?.id;
             if (uid !== prevUserId) {
                 prevUserId = uid;
-                void store.loadAllSessions().then(() => setHydrated(true));
+                try { console.debug('[ui][research_page][user_changed]', { userId: uid }); } catch { /* noop */ }
+                void loadAllSessions().then(() => setHydrated(true));
             }
         });
         return () => { unsub(); };
-    }, [store]);
-    const sessions = store.getSessions();
+    }, [loadAllSessions]);
+    const sessions = getSessions();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [titleDraft, setTitleDraft] = useState('');
 
     // 自动跳转到最近会话
     useEffect(() => {
         if (!hydrated) return;
-        const list = store.getSessions();
+        const list = getSessions();
+        try { console.debug('[ui][research_page][auto_redirect_check]', { hydrated, count: list.length }); } catch { /* noop */ }
         if (list.length > 0) {
             router.replace(`/research/${list[0].id}`);
         }
-    }, [hydrated]);
+    }, [hydrated, getSessions, router]);
 
     const createSession = async () => {
         const id = crypto.randomUUID();
+        try { console.debug('[ui][research_page][create_session_click]', { id }); } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'CreateSession', ts: Date.now(), sessionId: id, params: { title: '未命名研究' } } as any);
         router.push(`/research/${id}`);
     };

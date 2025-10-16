@@ -13,10 +13,8 @@ export const SessionCollectionPanel: React.FC<{ sessionId: SessionId; onOpenDeta
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const cid = session?.linkedCollectionId || null;
 
-    // ensure initial load after refresh
-    const { loadCollections, loadCollection } = useCollectionOperations();
-    const { loadLiteratures } = useLiteratureOperations();
-    React.useEffect(() => { void loadCollections({ force: false }); void loadLiteratures({ force: false }); }, [loadCollections, loadLiteratures]);
+    // ✅ 数据加载已由页面统一处理，这里只需要订阅和使用
+    const { loadCollection } = useCollectionOperations();
 
     // subscribe to store updates for reactive list
     const collection = useCollectionStore(s => (cid ? s.getCollection(cid) : undefined));

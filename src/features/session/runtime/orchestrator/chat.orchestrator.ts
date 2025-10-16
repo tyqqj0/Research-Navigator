@@ -39,7 +39,10 @@ if (!g.__chatOrchestratorRegistered) {
     g.__chatOrchestratorRegistered = true;
     try { console.debug('[orch][chat][init]', ORCH_ID); } catch { }
     commandBus.register(async (cmd: SessionCommand) => {
-        try { console.debug('[orch][chat][cmd]', ORCH_ID, cmd.type, cmd.id); } catch { }
+        try {
+            const arch = (await import('@/lib/archive/manager')).ArchiveManager.getCurrentArchiveId?.() || 'unknown';
+            console.debug('[orch][chat][cmd]', ORCH_ID, cmd.type, cmd.id, { sessionId: (cmd as any)?.params?.sessionId || (cmd as any)?.sessionId, archiveId: arch });
+        } catch { /* noop */ }
         if (cmd.type === 'CreateSession') {
             const sessionId = cmd.sessionId || newId();
             await emit({ id: newId(), type: 'SessionCreated', ts: Date.now(), sessionId, payload: { title: cmd.params.title } });
@@ -57,6 +60,7 @@ if (!g.__chatOrchestratorRegistered) {
             const sessionId = cmd.params.sessionId;
             if (handledCmdIds.has(cmd.id)) { try { console.warn('[orch][chat][duplicate_cmd]', ORCH_ID, cmd.id); } catch { } return; }
             handledCmdIds.add(cmd.id);
+            try { console.debug('[orch][chat][send_message]', ORCH_ID, { sessionId, textLen: (cmd as any)?.params?.text?.length || 0 }); } catch { /* noop */ }
             const userMid = newId();
             await emit({ id: newId(), type: 'UserMessageAdded', ts: Date.now(), sessionId, payload: { messageId: userMid, text: cmd.params.text }, artifacts: (cmd as any).inputRefs || undefined, qos: 'async' } as any);
             // 当 Deep Research 开启且方向未确认时：仅记录用户消息，不启动普通对话，避免与方案生成并发
@@ -83,6 +87,7 @@ if (!g.__chatOrchestratorRegistered) {
                 onAbort: (reason) => { emit({ id: newId(), type: 'AssistantMessageAborted', ts: Date.now(), sessionId, payload: { messageId: asMid, reason } }); running.delete(sessionId); },
                 onError: (msg) => { emit({ id: newId(), type: 'AssistantMessageFailed', ts: Date.now(), sessionId, payload: { messageId: asMid, error: msg } }); running.delete(sessionId); }
             });
+            try { console.debug('[orch][chat][executor_started]', ORCH_ID, { sessionId, messageId: asMid }); } catch { /* noop */ }
             running.set(sessionId, run);
             return;
         }
