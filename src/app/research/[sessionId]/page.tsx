@@ -24,6 +24,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { commandBus } from '@/features/session/runtime/command-bus';
 import { useLiteratureOperations } from '@/features/literature/hooks/use-literature-operations';
 import { useCollectionOperations } from '@/features/literature/hooks/use-collection-operations';
+import { ArchiveManager } from '@/lib/archive/manager';
 
 export default function ResearchSessionPage() {
     const params = useParams<{ sessionId: string }>();
@@ -43,6 +44,25 @@ export default function ResearchSessionPage() {
             }
         });
         return () => { unsub(); };
+    }, [sessionId, store]);
+    // Re-hydrate current session after archive switches to the logged-in user
+    useEffect(() => {
+        if (!sessionId) return;
+        let unsub: (() => void) | undefined;
+        try {
+            unsub = ArchiveManager.subscribe((archiveId) => {
+                try {
+                    const uid = useAuthStore.getState().currentUser?.id;
+                    if (uid && archiveId === uid) {
+                        void Promise.all([
+                            store.loadAllSessions(),
+                            store.loadSessionProjection(sessionId)
+                        ]);
+                    }
+                } catch { /* noop */ }
+            });
+        } catch { /* noop */ }
+        return () => { try { unsub?.(); } catch { /* noop */ } };
     }, [sessionId, store]);
 
     const sessions = store.getSessions();
@@ -192,5 +212,4 @@ function DynamicSessionBody({ sessionId, getPaperSummary, graphId, onOpenDetail 
         </div>
     );
 }
-
 
