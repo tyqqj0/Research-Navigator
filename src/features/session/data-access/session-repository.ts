@@ -176,7 +176,7 @@ export function createSessionRepository(archiveId: string) {
         },
         async putSession(s: ChatSession) {
             const userId = this._requireUserId();
-            try { console.debug('[repo][session][putSession]', { dbName, userId, id: s.id, title: (s as any)?.title }); } catch { /* noop */ }
+            // try { console.debug('[repo][session][putSession]', { dbName, userId, id: s.id, title: (s as any)?.title }); } catch { /* noop */ }
             await sessionDb.withDexieRetry(async () => {
                 await sessionDb.sessions.put({ ...s, userId });
             });

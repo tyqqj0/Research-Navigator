@@ -257,11 +257,11 @@ export interface Theme {
 export function generateCSSVariables(theme: Theme): Record<string, string> {
     const { colors } = theme;
 
-    console.log('🎨 [DEBUG] 开始生成CSS变量:', {
-        themeName: theme.name,
-        isDark: theme.isDark,
-        timestamp: new Date().toLocaleTimeString()
-    });
+    // console.log('🎨 [DEBUG] 开始生成CSS变量:', {
+    //     themeName: theme.name,
+    //     isDark: theme.isDark,
+    //     timestamp: new Date().toLocaleTimeString()
+    // });
 
     return {
         // ========== 主题系统变量 ==========

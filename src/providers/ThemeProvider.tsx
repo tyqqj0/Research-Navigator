@@ -113,7 +113,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     const applyTheme = useCallback((theme: Theme) => {
         if (typeof window === 'undefined') return;
 
-        console.log('🎨 [DEBUG] 应用主题:', theme);
+        // console.log('🎨 [DEBUG] 应用主题:', theme);
 
         const variables = generateCSSVariables(theme);
         const root = document.documentElement;

@@ -652,8 +652,16 @@ const ComposerBar: React.FC<{
 
 
 const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
+    const [submitting, setSubmitting] = React.useState(false);
     const onConfirm = async () => {
-        await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'confirm' } } as any);
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'confirm' } } as any);
+        } finally {
+            // UI will hide this card when awaitingDecision is cleared; keep disabled briefly to avoid bursts
+            setTimeout(() => setSubmitting(false), 1200);
+        }
     };
     // const [feedback, setFeedback] = React.useState('');
     // const onConfirm = async () => {
@@ -674,7 +682,7 @@ const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
             <CardContent className="space-y-2">
                 <div className="text-sm">是否确认当前研究方向？</div>
                 <div className="flex gap-2">
-                    <Button size="sm" onClick={onConfirm}>确认</Button>
+                    <Button size="sm" onClick={onConfirm} disabled={submitting}>确认</Button>
                 </div>
                 {/* Input placeholder="如需细化，可输入补充/反馈" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
                 <div className="flex gap-2">

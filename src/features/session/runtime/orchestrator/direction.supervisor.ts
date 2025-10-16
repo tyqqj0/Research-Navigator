@@ -10,6 +10,8 @@ export function startDirectionSupervisor() {
     try { console.debug('[supervisor][direction][start]'); } catch { }
     eventBus.subscribe(async (e: SessionEvent) => {
         const sessionId = e.sessionId!;
+        try { console.debug('[supervisor][direction][event]', e.type, { sessionId }); } catch { }
+
         // 1) 正常触发：监听用户消息
         if (e.type === 'UserMessageAdded') {
             try {
@@ -19,14 +21,16 @@ export function startDirectionSupervisor() {
                 const confirmed = Boolean(s?.meta?.direction?.confirmed);
                 const awaiting = Boolean(s?.meta?.direction?.awaitingDecision);
                 const stage = (s?.meta as any)?.stage;
-                try { console.debug('[supervisor][direction][onUserMessage]', { sessionId, enabled, confirmed, awaiting }); } catch { }
+                try { console.debug('[supervisor][direction][onUserMessage]', { sessionId, enabled, confirmed, awaiting, stage }); } catch { }
                 if (enabled && (!confirmed || stage === 'report_done') && !awaiting) {
                     const cmdId = crypto.randomUUID();
                     try { console.debug('[supervisor][direction][dispatch_propose]', cmdId, sessionId); } catch { }
                     await commandBus.dispatch({ id: cmdId, type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: (e as any).payload.text } } as any);
+                } else {
+                    try { console.debug('[supervisor][direction][skip_propose]', { sessionId, enabled, confirmed, awaiting, stage }); } catch { }
                 }
-            } catch {
-                // ignore
+            } catch (err) {
+                try { console.error('[supervisor][direction][error_onUserMessage]', { sessionId, error: String(err) }); } catch { }
             }
             return;
         }
