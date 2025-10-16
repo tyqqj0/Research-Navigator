@@ -11,11 +11,8 @@ import { GraphCanvas } from '@/features/graph/editor/canvas/GraphCanvas';
 import { GraphToolbar } from '@/features/graph/editor/canvas/GraphToolbar';
 import { LiteratureDetailPanel } from '@/features/literature/management/components/LiteratureDetailPanel';
 import { usePaperCatalog } from '@/features/graph/editor/paper-catalog';
-// 激活 orchestrators
-import '@/features/session/runtime/orchestrator/chat.orchestrator';
-import '@/features/session/runtime/orchestrator/direction.orchestrator';
-import '@/features/session/runtime/orchestrator/collection.orchestrator';
-import '@/features/session/runtime/orchestrator/report.orchestrator';
+// Bootstrap orchestrators to ensure command handlers are ready before first user interaction
+import '@/features/session/runtime/orchestrator/bootstrap-orchestrators';
 import { startDirectionSupervisor } from '@/features/session/runtime/orchestrator/direction.supervisor';
 import { startCollectionSupervisor } from '@/features/session/runtime/orchestrator/collection.supervisor';
 import { startTitleSupervisor } from '@/features/session/runtime/orchestrator/title.supervisor';
