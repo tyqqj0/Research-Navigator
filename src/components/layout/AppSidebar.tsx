@@ -1,20 +1,13 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Settings, ChevronDown, ChevronLeft, ChevronRight, Search as SearchIcon, Sun, Moon } from 'lucide-react';
+import { Settings, ChevronLeft, ChevronRight, Search as SearchIcon, Sun, Moon } from 'lucide-react';
 import { Sidebar, type SidebarItem } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-    DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu';
+import { ExpandableUserMenu } from '@/components/ui/expandable-user-menu';
 // import { QuickThemeToggle } from '@/components/ui/theme-mode-toggle';
 import { useTheme } from '@/providers';
 import useAuthStore from '@/stores/auth.store';
@@ -26,13 +19,19 @@ interface AppSidebarProps {
     onCollapse?: (collapsed: boolean) => void;
     items: SidebarItem[];
     className?: string;
+    /** 侧边栏展开宽度（像素） */
+    width?: number;
+    /** 侧边栏折叠宽度（像素） */
+    collapsedWidth?: number;
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
     collapsed,
     onCollapse,
     items,
-    className
+    className,
+    width = 210,
+    collapsedWidth = 64,
 }) => {
     const router = useRouter();
     const [query, setQuery] = React.useState('');
@@ -89,51 +88,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         <div className={cn('space-y-3', collapsed && 'px-0')}>
             {/* 顶部紧凑行：用户、搜索按钮、折叠按钮 */}
             <div className={cn('flex items-center gap-2 px-2', collapsed ? 'justify-center' : undefined)}>
-                {/* 用户下拉 */}
-                {!collapsed && displayUser && (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className={cn('h-9 px-2 theme-pressable-flat', collapsed ? 'w-9 justify-center' : 'justify-start')}
-                            >
-                                {displayUser.avatar ? (
-                                    <Image
-                                        src={displayUser.avatar}
-                                        alt={displayUser.name}
-                                        width={28}
-                                        height={28}
-                                        className="h-7 w-7 rounded-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-medium theme-icon-blue">
-                                        {displayUser.name.charAt(0).toUpperCase()}
-                                    </div>
-                                )}
-                                {!collapsed && (
-                                    <>
-                                        <span className="ml-2 text-sm truncate max-w-[100px]">{displayUser.name}</span>
-                                        <ChevronDown className="ml-1 h-4 w-4" />
-                                    </>
-                                )}
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                            <DropdownMenuItem asChild>
-                                <Link href="/settings/profile">个人资料</Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                                <Link href="/projects/my">我的项目</Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>使用帮助</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem asChild>
-                                <Link href="/settings">设置</Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
-                                退出登录
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                {/* 用户菜单 - 使用扩展式设计（仅在展开状态下显示） */}
+                {displayUser && !collapsed && (
+                    <ExpandableUserMenu
+                        user={{
+                            name: displayUser.name,
+                            email: authUser?.email,
+                            avatar: displayUser.avatar,
+                        }}
+                        onLogout={handleLogout}
+                        align="start"
+                        expandDirection="bottom"
+                    />
                 )}
 
                 {/* 搜索按钮（点击展开输入） */}
@@ -214,6 +180,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             showCollapseButton={false}
             topSlot={TopSlot}
             bottomSlot={BottomSlot}
+            width={width}
+            collapsedWidth={collapsedWidth}
         />
     );
 };

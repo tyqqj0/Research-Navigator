@@ -1,19 +1,10 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
-import { Settings, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { HeaderProps } from '@/types';
-import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-    DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu';
+import { ExpandableUserMenu } from '@/components/ui/expandable-user-menu';
 import useAuthStore from '@/stores/auth.store';
 import { authApi } from '@/lib/auth/auth-api';
 
@@ -74,57 +65,16 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
 
                     {displayUser && !hideUserInfo && (
-                        <div className="flex items-center space-x-3">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" className="flex items-center space-x-2 h-auto p-2">
-                                        {displayUser.avatar ? (
-                                            <Image
-                                                src={displayUser.avatar}
-                                                alt={displayUser.name}
-                                                width={32}
-                                                height={32}
-                                                className="h-8 w-8 rounded-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className={cn(
-                                                'h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-medium',
-                                                'theme-icon-blue'
-                                            )}>
-                                                {displayUser.name.charAt(0).toUpperCase()}
-                                            </div>
-                                        )}
-                                        <span className={cn(
-                                            'text-sm font-medium',
-                                            // 'theme-primary-background'
-                                        )}>
-                                            {displayUser.name}
-                                        </span>
-                                        <ChevronDown className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                    <DropdownMenuItem>
-                                        个人资料
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                        我的项目
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                        使用帮助
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => router.push('/settings')}>
-                                        <Settings className="mr-2 h-4 w-4" />
-                                        设置
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
-                                        退出登录
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
+                        <ExpandableUserMenu
+                            user={{
+                                name: displayUser.name,
+                                email: authUser?.email,
+                                avatar: displayUser.avatar,
+                            }}
+                            onLogout={handleLogout}
+                            align="end"
+                            expandDirection="bottom"
+                        />
                     )}
                 </div>
             </div>

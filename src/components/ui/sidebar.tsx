@@ -271,7 +271,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
             return (
                 <div className={cn(
                     "flex p-2",
-                    collapseButtonPosition === 'start' ? 'justify-start' : 'justify-end'
+                    collapsed ? 'justify-center' : (collapseButtonPosition === 'start' ? 'justify-start' : 'justify-end')
                 )}>
                     <Button
                         variant="ghost"

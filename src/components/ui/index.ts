@@ -34,6 +34,7 @@ export { StatCard } from './stat-card';
 export { FeatureCard } from './feature-card';
 export { ActivityItem } from './activity-item';
 export { StreamCard } from './stream-card';
+export { ExpandableUserMenu, type ExpandableUserMenuProps, type UserMenuAction } from './expandable-user-menu';
 // export { ThemeShowcase } from './theme-showcase';
 
 // Theme Components
