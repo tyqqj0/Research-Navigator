@@ -192,66 +192,147 @@ function DynamicSessionBody({ sessionId, getPaperSummary, graphId, onOpenDetail 
     // 用一个无意义的 style 变量绑定时间戳，使 React 在变更时应用 transition
     const stageKeyStyle = { ['--stageKey' as any]: (stageChangedAt || 0) as unknown as string } as React.CSSProperties;
 
+    // 移动端标签页状态（对话/图谱/集合）
+    const [mobileTab, setMobileTab] = React.useState<'chat' | 'graph' | 'collection'>('chat');
+
     return (
-        <div className="h-full flex-1 p-4">
-            <div
-                className="h-[calc(100vh-5rem)] grid"
-                style={{
-                    gridTemplateColumns: open ? '1.2fr 1.6fr 0.6fr' : '1fr 0fr 0fr',
-                    gap: open ? '1rem' : '0rem',
-                    transition: 'grid-template-columns 300ms ease-in-out, gap 300ms ease-in-out',
-                    ...stageKeyStyle
-                }}
-            >
-                {/* 左：对话栏 */}
-                <div className="min-w-0">
-                    <ChatPanel sessionId={sessionId} onOpenDetail={onOpenDetail} />
-                </div>
-
-                {/* 中：图谱 */}
+        <>
+            {/* 桌面端：三列网格布局（保留原有逻辑） */}
+            <div className="hidden md:block h-full flex-1 p-4">
                 <div
-                    className={cn('min-w-0 overflow-hidden')}
+                    className="h-[calc(100vh-5rem)] grid"
                     style={{
-                        opacity: open ? 1 : 0,
-                        transform: open ? 'none' : 'translateX(8px)',
-                        pointerEvents: open ? 'auto' : 'none',
-                        transition: 'opacity 300ms ease-in-out, transform 300ms ease-in-out'
+                        gridTemplateColumns: open ? '1.2fr 1.6fr 0.6fr' : '1fr 0fr 0fr',
+                        gap: open ? '1rem' : '0rem',
+                        transition: 'grid-template-columns 300ms ease-in-out, gap 300ms ease-in-out',
+                        ...stageKeyStyle
                     }}
-                    aria-hidden={!open}
                 >
-                    {graphId ? (
-                        <>
-                            <div className="p-2">
-                                <GraphToolbar graphId={graphId || undefined} />
-                            </div>
-                            <GraphCanvas
-                                graphId={graphId}
-                                getPaperSummary={getPaperSummary}
-                                layoutMode="timeline"
-                                height={'calc(100vh - 5rem - 40px)'}
-                                onNodeOpenDetail={(pid) => onOpenDetail(pid)}
-                            />
-                        </>
-                    ) : (
-                        <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
-                    )}
-                </div>
+                    {/* 左：对话栏 */}
+                    <div className="min-w-0">
+                        <ChatPanel sessionId={sessionId} onOpenDetail={onOpenDetail} />
+                    </div>
 
-                {/* 右：集合列表 */}
-                <div
-                    className={cn('min-w-0 overflow-hidden')}
-                    style={{
-                        opacity: open ? 1 : 0,
-                        transform: open ? 'none' : 'translateX(8px)',
-                        pointerEvents: open ? 'auto' : 'none',
-                        transition: 'opacity 300ms ease-in-out, transform 300ms ease-in-out'
-                    }}
-                    aria-hidden={!open}
-                >
-                    <SessionCollectionPanel sessionId={sessionId} onOpenDetail={onOpenDetail} />
+                    {/* 中：图谱 */}
+                    <div
+                        className={cn('min-w-0 overflow-hidden')}
+                        style={{
+                            opacity: open ? 1 : 0,
+                            transform: open ? 'none' : 'translateX(8px)',
+                            pointerEvents: open ? 'auto' : 'none',
+                            transition: 'opacity 300ms ease-in-out, transform 300ms ease-in-out'
+                        }}
+                        aria-hidden={!open}
+                    >
+                        {graphId ? (
+                            <>
+                                <div className="p-2">
+                                    <GraphToolbar graphId={graphId || undefined} />
+                                </div>
+                                <GraphCanvas
+                                    graphId={graphId}
+                                    getPaperSummary={getPaperSummary}
+                                    layoutMode="timeline"
+                                    height={'calc(100vh - 5rem - 40px)'}
+                                    onNodeOpenDetail={(pid) => onOpenDetail(pid)}
+                                />
+                            </>
+                        ) : (
+                            <div className="h-full grid place-items-center text-muted-foreground">尚未生成图谱</div>
+                        )}
+                    </div>
+
+                    {/* 右：集合列表 */}
+                    <div
+                        className={cn('min-w-0 overflow-hidden')}
+                        style={{
+                            opacity: open ? 1 : 0,
+                            transform: open ? 'none' : 'translateX(8px)',
+                            pointerEvents: open ? 'auto' : 'none',
+                            transition: 'opacity 300ms ease-in-out, transform 300ms ease-in-out'
+                        }}
+                        aria-hidden={!open}
+                    >
+                        <SessionCollectionPanel sessionId={sessionId} onOpenDetail={onOpenDetail} />
+                    </div>
                 </div>
             </div>
-        </div>
+
+            {/* 移动端：标签页切换模式 */}
+            <div className="md:hidden h-[calc(100vh-5rem)] flex flex-col">
+                {/* 标签页导航 */}
+                <div className="shrink-0 flex border-b theme-border-primary theme-background-primary">
+                    <button
+                        onClick={() => setMobileTab('chat')}
+                        className={cn(
+                            'flex-1 px-3 py-2 text-sm font-medium transition-colors',
+                            mobileTab === 'chat'
+                                ? 'border-b-2 border-blue-600 text-blue-600'
+                                : 'text-muted-foreground hover:text-foreground'
+                        )}
+                    >
+                        💬 对话
+                    </button>
+                    <button
+                        onClick={() => setMobileTab('graph')}
+                        className={cn(
+                            'flex-1 px-3 py-2 text-sm font-medium transition-colors',
+                            mobileTab === 'graph'
+                                ? 'border-b-2 border-blue-600 text-blue-600'
+                                : 'text-muted-foreground hover:text-foreground'
+                        )}
+                    >
+                        🌐 图谱
+                    </button>
+                    <button
+                        onClick={() => setMobileTab('collection')}
+                        className={cn(
+                            'flex-1 px-3 py-2 text-sm font-medium transition-colors',
+                            mobileTab === 'collection'
+                                ? 'border-b-2 border-blue-600 text-blue-600'
+                                : 'text-muted-foreground hover:text-foreground'
+                        )}
+                    >
+                        📚 集合
+                    </button>
+                </div>
+
+                {/* 标签页内容（全屏显示） */}
+                <div className="flex-1 min-h-0 p-2">
+                    {mobileTab === 'chat' && (
+                        <ChatPanel sessionId={sessionId} onOpenDetail={onOpenDetail} />
+                    )}
+                    {mobileTab === 'graph' && (
+                        <div className="h-full flex flex-col">
+                            {graphId ? (
+                                <>
+                                    <div className="shrink-0 p-2">
+                                        <GraphToolbar graphId={graphId || undefined} />
+                                    </div>
+                                    <div className="flex-1 min-h-0">
+                                        <GraphCanvas
+                                            graphId={graphId}
+                                            getPaperSummary={getPaperSummary}
+                                            layoutMode="timeline"
+                                            height={'100%'}
+                                            onNodeOpenDetail={(pid) => onOpenDetail(pid)}
+                                        />
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="h-full grid place-items-center text-muted-foreground text-center px-4">
+                                    尚未生成图谱<br />
+                                    <span className="text-xs mt-2">在对话中提出研究问题后，系统会自动生成知识图谱</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {mobileTab === 'collection' && (
+                        <SessionCollectionPanel sessionId={sessionId} onOpenDetail={onOpenDetail} />
+                    )}
+                </div>
+            </div>
+        </>
     );
 }
 

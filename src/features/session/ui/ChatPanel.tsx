@@ -106,13 +106,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
     const awaitingDecision = Boolean(meta?.direction?.awaitingDecision);
     return (
         // <div></div>
-        <Card className="relative h-[calc(100vh-5rem)] flex flex-col">
-            {/* 右上角书签形按钮：收起为向左箭头，展开为小叉 */}
+        <Card className="relative h-full md:h-[calc(100vh-5rem)] flex flex-col">
+            {/* 右上角书签形按钮：收起为向左箭头，展开为小叉（仅桌面端显示） */}
             <button
                 type="button"
                 onClick={() => toggleGraphPanel(sessionId)}
                 className={cn(
-                    'bookmark-shape icon-button absolute right-0 top-3 translate-x-1/2 z-20 flex items-center justify-center',
+                    'hidden md:flex bookmark-shape icon-button absolute right-0 top-3 translate-x-1/2 z-20 items-center justify-center',
                     'w-7 h-9 shadow-sm',
                     isOpen
                         ? 'bg-blue-50 text-blue-600 border border-blue-200'
