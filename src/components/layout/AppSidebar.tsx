@@ -115,12 +115,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                     </Button>
                 )}
 
-                {/* 折叠按钮 */}
+                {/* 折叠按钮（移动端隐藏，使用顶部汉堡触发） */}
                 <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className={cn('h-9 w-9 theme-pressable-flat', !collapsed && 'ml-auto')}
+                    className={cn('h-9 w-9 theme-pressable-flat hidden md:inline-flex', !collapsed && 'ml-auto')}
                     onClick={() => onCollapse?.(!collapsed)}
                     aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
                 >

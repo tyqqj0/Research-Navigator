@@ -14,6 +14,8 @@ export interface HeaderProps {
     title?: string;
     logo?: ReactNode;
     actions?: ReactNode;
+    /** Custom content for the right side (replaces actions + user menu) */
+    rightContent?: ReactNode;
     user?: {
         name: string;
         avatar?: string;
@@ -22,6 +24,8 @@ export interface HeaderProps {
     theme?: 'light' | 'dark';
     hideUserInfo?: boolean;
     className?: string;
+    /** Called when hamburger button is clicked on small screens */
+    onOpenSidebar?: () => void;
 }
 
 // Sidebar types are now exported from @/components/ui/sidebar

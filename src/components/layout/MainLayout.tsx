@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { LayoutProps, MenuActionItem } from '@/types';
 import { Home } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 interface MainLayoutProps extends LayoutProps {
     sidebarItems?: SidebarItem[];
@@ -15,6 +16,7 @@ interface MainLayoutProps extends LayoutProps {
     onSidebarCollapse?: (collapsed: boolean) => void;
     headerTitle?: string;
     headerActions?: React.ReactNode;
+    headerRightContent?: React.ReactNode;
     showHeader?: boolean;
     pageHeader?: React.ReactNode;
     user?: {
@@ -33,6 +35,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     onSidebarCollapse,
     headerTitle,
     headerActions,
+    headerRightContent,
     showHeader = true,
     pageHeader,
     user,
@@ -40,6 +43,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     className
 }) => {
     const [collapsed, setCollapsed] = useState(sidebarCollapsed);
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
     const handleSidebarCollapse = (newCollapsed: boolean) => {
         setCollapsed(newCollapsed);
@@ -118,6 +122,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             {/* 侧边栏 */}
             {showSidebar && (
                 <AppSidebar
+                    className="hidden md:flex"
                     collapsed={collapsed}
                     onCollapse={handleSidebarCollapse}
                     items={activeSidebarItems}
@@ -131,16 +136,20 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                     <Header
                         title={headerTitle}
                         actions={headerActions}
+                        rightContent={headerRightContent}
                         user={user}
                         hideUserInfo={hideUserInfo}
+                        onOpenSidebar={showSidebar ? () => setMobileSidebarOpen(true) : undefined}
                     />
                 ) : (
                     <div className="md:hidden">
                         <Header
                             title={headerTitle}
                             actions={headerActions}
+                            rightContent={headerRightContent}
                             user={user}
                             hideUserInfo={hideUserInfo}
+                            onOpenSidebar={showSidebar ? () => setMobileSidebarOpen(true) : undefined}
                         />
                     </div>
                 )}
@@ -160,6 +169,23 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                     </div>
                 </main>
             </div>
+
+            {/* 移动端覆盖式侧栏 */}
+            {showSidebar && (
+                <Dialog open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+                    <DialogContent className="md:hidden left-0 top-0 translate-x-0 translate-y-0 w-[280px] max-w-none h-screen p-0 rounded-none border-0 shadow-xl">
+                        {/* 无障碍：提供隐藏的标题与描述，消除 Radix 警告 */}
+                        <DialogTitle className="sr-only">移动端导航</DialogTitle>
+                        <DialogDescription className="sr-only">应用的侧边栏导航</DialogDescription>
+                        <AppSidebar
+                            className="h-full"
+                            collapsed={false}
+                            onCollapse={() => { /* no-op in mobile overlay */ }}
+                            items={activeSidebarItems}
+                        />
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 };

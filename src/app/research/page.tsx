@@ -4,11 +4,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { MainLayout } from '@/components/layout';
-import { Button, Card, CardContent } from '@/components/ui';
+import { Button, Card, CardContent, Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui';
 import { useSessionStore } from '@/features/session/data-access/session-store';
 import { useAuthStore } from '@/stores/auth.store';
 import { commandBus } from '@/features/session/runtime/command-bus';
-import { Plus } from 'lucide-react';
+import { Plus, MessagesSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SessionList } from '@/features/session/ui/SessionList';
 // Bootstrap orchestrators to ensure command handlers are ready before first user interaction
@@ -39,6 +39,22 @@ export default function ResearchPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [titleDraft, setTitleDraft] = useState('');
 
+    // 移动端会话列表 Sheet 状态
+    const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
+
+    // 构建 Header 右侧内容
+    const headerRightContent = (
+        <Button
+            variant="outline"
+            size="sm"
+            className="md:hidden"
+            onClick={() => setMobileSessionsOpen(true)}
+        >
+            <MessagesSquare className="w-4 h-4 mr-2" />
+            会话列表
+        </Button>
+    );
+
     // 自动跳转到最近会话
     useEffect(() => {
         if (!hydrated) return;
@@ -56,26 +72,48 @@ export default function ResearchPage() {
         router.push(`/research/${id}`);
     };
 
-    const pageHeader = (
-        <div className="px-6 py-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">研究会话</h2>
-        </div>
-    );
-
     return (
-        <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
+        <MainLayout showSidebar={true} showHeader={true} headerTitle="Research Navigator" headerRightContent={headerRightContent}>
             <div className="h-full flex">
-                {/* 子侧边栏：会话列表 */}
-                <div className="w-64 border-r bg-background p-3"><SessionList /></div>
+                {/* 子侧边栏：会话列表（桌面端显示，移动端隐藏） */}
+                <div className="hidden md:block w-64 border-r bg-background p-3">
+                    <SessionList />
+                </div>
                 {/* 主区域 */}
                 <div className="flex-1 p-6">
                     <Card>
                         <CardContent className="p-6 text-sm text-muted-foreground">
-                            {hydrated ? '选择左侧一个会话或点击“新建会话”开始研究讨论。' : '正在加载会话…'}
+                            <div className="hidden md:block">
+                                {hydrated ? '选择左侧一个会话或点击"新建会话"开始研究讨论。' : '正在加载会话…'}
+                            </div>
+                            <div className="md:hidden text-center">
+                                {hydrated ? '点击右上角"会话列表"查看或创建研究会话。' : '正在加载会话…'}
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
             </div>
+
+            {/* 移动端会话列表 Sheet */}
+            <Sheet open={mobileSessionsOpen} onOpenChange={setMobileSessionsOpen}>
+                <SheetContent side="bottom" className="h-[85vh] p-0">
+                    <SheetHeader className="p-6 pb-4">
+                        <SheetTitle>研究会话</SheetTitle>
+                    </SheetHeader>
+                    <div
+                        className="px-6 pb-6 h-[calc(100%-5rem)] overflow-y-auto"
+                        onClick={(e) => {
+                            // 点击会话链接后自动关闭 Sheet
+                            const target = e.target as HTMLElement;
+                            if (target.closest('a[href^="/research/"]')) {
+                                setMobileSessionsOpen(false);
+                            }
+                        }}
+                    >
+                        <SessionList />
+                    </div>
+                </SheetContent>
+            </Sheet>
         </MainLayout>
     );
 }

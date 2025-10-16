@@ -12,9 +12,11 @@ export const Header: React.FC<HeaderProps> = ({
     title = 'Research Navigator',
     logo,
     actions,
+    rightContent,
     user,
     hideUserInfo,
-    className
+    className,
+    onOpenSidebar
 }) => {
     const router = useRouter();
     const authUser = useAuthStore((s) => s.currentUser);
@@ -40,9 +42,25 @@ export const Header: React.FC<HeaderProps> = ({
                 className
             )}
         >
-            <div className="flex h-full items-center justify-between px-6">
+            <div className="flex h-full items-center justify-between px-4 md:px-6">
                 {/* 左侧：Logo 和标题 */}
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-3 md:space-x-4">
+                    {/* 移动端汉堡按钮 */}
+                    <button
+                        type="button"
+                        aria-label="打开侧边栏"
+                        onClick={onOpenSidebar}
+                        className={cn(
+                            'md:hidden inline-flex items-center justify-center rounded-md p-2 theme-text-primary hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring'
+                        )}
+                    >
+                        {/* simple hamburger icon */}
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
                     {logo && (
                         <div className="flex items-center">
                             {logo}
@@ -56,27 +74,34 @@ export const Header: React.FC<HeaderProps> = ({
                     </h1>
                 </div>
 
-                {/* 右侧：操作按钮和用户信息 */}
-                <div className="flex items-center space-x-4">
-                    {actions && (
-                        <div className="flex items-center space-x-2">
-                            {actions}
-                        </div>
-                    )}
+                {/* 右侧：自定义内容 或 默认的操作按钮和用户信息 */}
+                {rightContent ? (
+                    <div className="flex items-center space-x-3 md:space-x-4">
+                        {rightContent}
+                    </div>
+                ) : (
+                    <div className="flex items-center space-x-3 md:space-x-4">
+                        {actions && (
+                            <div className="hidden sm:flex items-center space-x-2">
+                                {actions}
+                            </div>
+                        )}
 
-                    {displayUser && !hideUserInfo && (
-                        <ExpandableUserMenu
-                            user={{
-                                name: displayUser.name,
-                                email: authUser?.email,
-                                avatar: displayUser.avatar,
-                            }}
-                            onLogout={handleLogout}
-                            align="end"
-                            expandDirection="bottom"
-                        />
-                    )}
-                </div>
+                        {displayUser && !hideUserInfo && (
+                            <ExpandableUserMenu
+                                className="hidden md:inline-flex"
+                                user={{
+                                    name: displayUser.name,
+                                    email: authUser?.email,
+                                    avatar: displayUser.avatar,
+                                }}
+                                onLogout={handleLogout}
+                                align="end"
+                                expandDirection="bottom"
+                            />
+                        )}
+                    </div>
+                )}
             </div>
         </header>
     );

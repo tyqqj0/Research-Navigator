@@ -15,10 +15,11 @@ const DialogPortal = DialogPrimitive.Portal
 const DialogClose = DialogPrimitive.Close
 
 // 拆分 Overlay 的 className，确保遮罩层不会影响 Dialog 本身
+// 使用深色半透明遮罩，避免右侧出现刺眼的白色大片空白
 const dialogOverlayBaseClass =
-  "fixed inset-0 z-50 theme-background-primary/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+  "fixed inset-0 z-50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
 const dialogOverlayBgClass =
-  "theme-background-primary/50"
+  "bg-black/40 dark:bg-black/60"
 const dialogOverlayAnimClass =
   "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
 
