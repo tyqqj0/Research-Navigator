@@ -19,15 +19,16 @@ export interface AIPresetConfig {
     maxTokens?: number;
 }
 
-// Read backend proxy config from env. Note: NEXT_PUBLIC_* will be exposed in browser
-const ENV_BASE_URL = (process.env.NEXT_PUBLIC_AI_BASE_URL || '').trim();
-const ENV_API_KEY = (process.env.NEXT_PUBLIC_AI_API_KEY || '').trim();
+// Read backend proxy config from env (browser-safe). Frontend should not carry API keys.
+// Use same-origin proxy path by default to avoid mixed content and expose no secrets.
+const ENV_BASE_URL = (process.env.NEXT_PUBLIC_AI_BASE_URL || '/api/backend/v1').trim();
+const ENV_API_KEY = '';
 
 export const presets: Record<AIPresetName, AIPresetConfig> = {
     zju_default: {
         provider: 'openAICompatible',
-        // If user passes full endpoint like http://host:port/v1/chat/completions, adapter keeps as-is
-        baseURL: ENV_BASE_URL || 'http://175.24.200.253:3000/v1/chat/completions',
+        // Same-origin proxy path (Edge/Serverless) → upstream OpenAI-compatible endpoint
+        baseURL: ENV_BASE_URL,
         credentials: {
             // Backend handles all fallbacks. We just select purpose → model alias
             task: { apiKey: ENV_API_KEY, model: 'task' },
@@ -38,7 +39,7 @@ export const presets: Record<AIPresetName, AIPresetConfig> = {
     },
     zju_test: {
         provider: 'openAICompatible',
-        baseURL: ENV_BASE_URL || 'http://175.24.200.253:3000/v1/chat/completions',
+        baseURL: ENV_BASE_URL,
         credentials: {
             task: { apiKey: ENV_API_KEY, model: 'task' },
             thinking: { apiKey: ENV_API_KEY, model: 'thinking' },
