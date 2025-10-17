@@ -4,39 +4,45 @@ export type AIPurpose = 'thinking' | 'task' | 'summary';
 
 export type AIPresetName = 'zju_default' | 'zju_test';
 
+export interface AICredential {
+    apiKey: string;
+    model: string;
+}
+
 export interface AIPresetConfig {
     provider: string;
     baseURL: string;
-    credentials: Record<AIPurpose, { apiKey: string; model: string }>;
+    // Allow single or multiple candidates per purpose (waterfall)
+    credentials: Record<AIPurpose, AICredential | AICredential[]>;
     headers?: Record<string, string>;
     temperature?: number;
     maxTokens?: number;
 }
 
+// Read backend proxy config from env. Note: NEXT_PUBLIC_* will be exposed in browser
+const ENV_BASE_URL = (process.env.NEXT_PUBLIC_AI_BASE_URL || '').trim();
+const ENV_API_KEY = (process.env.NEXT_PUBLIC_AI_API_KEY || '').trim();
+
 export const presets: Record<AIPresetName, AIPresetConfig> = {
     zju_default: {
         provider: 'openAICompatible',
-        baseURL: 'https://zjuapi.com/v1/chat/completions',
+        // If user passes full endpoint like http://host:port/v1/chat/completions, adapter keeps as-is
+        baseURL: ENV_BASE_URL || 'http://175.24.200.253:3000/v1/chat/completions',
         credentials: {
-            // task → gpt-5
-            task: { apiKey: 'sk-h23ccKj22huAfX2VRE3SKg8Dz3Y2Jterhjbcpu5jczf5421w', model: 'gpt-5' },
-            // thinking → gemini-2.5-flash
-            thinking: { apiKey: 'sk-ObUPynbwDvm3o7s1JZLbmKnRv88x3P0LOPYYtv0iNhp0ebn4', model: 'gemini-2.5-flash' },
-            // summary → gemini-2.5-pro
-            summary: { apiKey: 'sk-ObUPynbwDvm3o7s1JZLbmKnRv88x3P0LOPYYtv0iNhp0ebn4', model: 'gemini-2.5-pro' },
+            // Backend handles all fallbacks. We just select purpose → model alias
+            task: { apiKey: ENV_API_KEY, model: 'task' },
+            thinking: { apiKey: ENV_API_KEY, model: 'thinking' },
+            summary: { apiKey: ENV_API_KEY, model: 'summary' },
         },
         temperature: 0.4
     },
     zju_test: {
         provider: 'openAICompatible',
-        baseURL: 'https://zjuapi.com/v1/chat/completions',
+        baseURL: ENV_BASE_URL || 'http://175.24.200.253:3000/v1/chat/completions',
         credentials: {
-            // task-test → gpt-4o with key sk-h23...
-            task: { apiKey: 'sk-h23ccKj22huAfX2VRE3SKg8Dz3Y2Jterhjbcpu5jczf5421w', model: 'gpt-4o' },
-            // thinking-test → gemini-2.5-flash with key sk-ObU...
-            thinking: { apiKey: 'sk-ObUPynbwDvm3o7s1JZLbmKnRv88x3P0LOPYYtv0iNhp0ebn4', model: 'gemini-2.5-flash' },
-            // summary-test → gemini-2.5-pro
-            summary: { apiKey: 'sk-ObUPynbwDvm3o7s1JZLbmKnRv88x3P0LOPYYtv0iNhp0ebn4', model: 'gemini-2.5-flash' },
+            task: { apiKey: ENV_API_KEY, model: 'task' },
+            thinking: { apiKey: ENV_API_KEY, model: 'thinking' },
+            summary: { apiKey: ENV_API_KEY, model: 'summary' },
         },
         temperature: 0.5
     }
@@ -52,15 +58,30 @@ export const ACTIVE_PRESET: AIPresetName = (
 
 export function resolveAIForPurpose(purpose: AIPurpose): { provider: string; baseURL: string; apiKey: string; model: string; headers?: Record<string, string>; temperature?: number; maxTokens?: number } {
     const conf = presets[ACTIVE_PRESET];
-    const cred = conf.credentials[purpose];
+    const raw = conf.credentials[purpose];
+    const first = Array.isArray(raw) ? (raw[0] as AICredential) : (raw as AICredential);
     return {
         provider: conf.provider,
         baseURL: conf.baseURL,
-        apiKey: cred.apiKey,
-        model: cred.model,
+        apiKey: first.apiKey,
+        model: first.model,
         headers: conf.headers,
         temperature: conf.temperature,
         maxTokens: conf.maxTokens,
+    };
+}
+
+export function resolveAICandidatesForPurpose(purpose: AIPurpose): { provider: string; baseURL: string; headers?: Record<string, string>; temperature?: number; maxTokens?: number; candidates: AICredential[] } {
+    const conf = presets[ACTIVE_PRESET];
+    const raw = conf.credentials[purpose];
+    const list = Array.isArray(raw) ? raw : [raw];
+    return {
+        provider: conf.provider,
+        baseURL: conf.baseURL,
+        headers: conf.headers,
+        temperature: conf.temperature,
+        maxTokens: conf.maxTokens,
+        candidates: list,
     };
 }
 
