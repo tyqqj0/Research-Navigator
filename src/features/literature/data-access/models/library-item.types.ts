@@ -64,6 +64,11 @@ export const LibraryItemSchema = z.object({
         referenceDetails: z.array(ReferenceDetailSchema).default([]),
     }).optional(),
 
+    // 📊 Citation metrics (from backend/Semantic Scholar)
+    citationCount: z.number().int().optional(),
+    influentialCitationCount: z.number().int().optional(),
+    isOpenAccess: z.boolean().optional(),
+
     // ⏰ 时间戳
     createdAt: z.date(),
     updatedAt: z.date().optional()

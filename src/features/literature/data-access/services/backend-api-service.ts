@@ -654,6 +654,10 @@ export class BackendApiService {
             pdfPath,
             parsedContent,
             backendTask: backendData.backend_task || undefined,
+            // Citation metrics (pass through from backend if available)
+            citationCount: backendData.citationCount || backendData.citation_count,
+            influentialCitationCount: backendData.influentialCitationCount || backendData.influential_citation_count,
+            isOpenAccess: backendData.isOpenAccess || backendData.is_open_access || (backendData.openAccessPdf?.url != null),
             createdAt: new Date(createdAt),
             updatedAt: new Date(updatedAt)
         } as ExtendedLibraryItem;
