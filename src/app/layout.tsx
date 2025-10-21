@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/providers";
 import { ArchiveProvider } from "@/lib/archive/provider";
 import "@/lib/immer-config";
 import { Toaster } from "@/components/ui";
+import AuthBootstrap from "@/lib/auth/AuthBootstrap";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,6 +36,7 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <ArchiveProvider>
+            <AuthBootstrap />
             {children}
             {/* Global toast portal */}
             <Toaster richColors expand />
