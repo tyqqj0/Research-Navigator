@@ -151,6 +151,7 @@ export class SettingsRepository {
             input.onchange = async (event) => {
                 const file = (event.target as HTMLInputElement).files?.[0];
                 if (!file) {
+                    try { console.warn('[settings][import] no file selected'); } catch { /* noop */ }
                     resolve(null);
                     return;
                 }
@@ -158,12 +159,14 @@ export class SettingsRepository {
                 try {
                     const text = await file.text();
                     const importedData = JSON.parse(text);
+                    try { console.debug('[settings][import][payload_keys]', Object.keys(importedData || {})); } catch { /* noop */ }
 
                     // 验证导入的数据
                     if (this.validateImportedSettings(importedData)) {
                         // 移除导入信息，返回纯设置数据
                         const { exportInfo, backupInfo, ...settings } = importedData;
                         void exportInfo; void backupInfo; // Explicitly mark as intentionally unused
+                        try { console.info('[settings][import][validated] applying imported settings'); } catch { /* noop */ }
                         resolve(settings as UserSettings);
                     } else {
                         console.error('Invalid settings format');
@@ -232,11 +235,22 @@ export class SettingsRepository {
         if (settings.ui.references === 'enable') enabledFeatures.push('References');
         if (settings.research.enableTaskWaitingTime) enabledFeatures.push('Task Waiting');
 
+        let lastUpdatedIso = new Date().toISOString();
+        const rawUpdatedAt: unknown = (settings as any)?.updatedAt;
+        if (rawUpdatedAt instanceof Date) {
+            lastUpdatedIso = rawUpdatedAt.toISOString();
+        } else if (typeof rawUpdatedAt === 'number') {
+            lastUpdatedIso = new Date(rawUpdatedAt).toISOString();
+        } else if (typeof rawUpdatedAt === 'string') {
+            const d = new Date(rawUpdatedAt);
+            if (!Number.isNaN(d.getTime())) lastUpdatedIso = d.toISOString();
+        }
+
         return {
             totalProviders: aiProviders.length,
             configuredProviders: configuredProviders.length,
             enabledFeatures,
-            lastUpdated: settings.updatedAt.toISOString()
+            lastUpdated: lastUpdatedIso
         };
     }
 }

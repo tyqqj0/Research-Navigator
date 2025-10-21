@@ -192,7 +192,10 @@ export function createSessionRepository(archiveId: string) {
         async listSessions() {
             const userId = this._requireUserId();
             try { console.debug('[repo][session][listSessions][begin]', { dbName, userId }); } catch { /* noop */ }
-            if (!userId || userId === 'anonymous') return [] as ChatSession[];
+            if (!userId || userId === 'anonymous') {
+                try { console.warn('[repo][session][listSessions][anonymous]', { note: 'returning empty due to anonymous gating' }); } catch { /* noop */ }
+                return [] as ChatSession[];
+            }
             // Prefer new table if present
             let userLayoutsCountV4 = 0;
             try {
@@ -220,12 +223,13 @@ export function createSessionRepository(archiveId: string) {
                 userLayoutsCount = await sessionDb.withDexieRetry(async () => {
                     const dbAny: any = sessionDb as any;
                     if (!dbAny.sessionLayouts) return 0;
-                    return await dbAny.sessionLayouts.where('[userId+viewId]').equals([userId, 'default']).count();
+                    // v3 schema has primary key [viewId+sessionId]; there is no [userId+viewId] index
+                    return await dbAny.sessionLayouts.where('viewId').equals('default').count();
                 });
             } catch { userLayoutsCount = 0; }
             if (userLayoutsCount > 0) {
                 const layouts = await sessionDb.withDexieRetry(async () => {
-                    return await (sessionDb as any).sessionLayouts.where('[userId+viewId]').equals([userId, 'default']).sortBy('orderKey');
+                    return await (sessionDb as any).sessionLayouts.where('viewId').equals('default').sortBy('orderKey');
                 });
                 const ids = layouts.map((l: any) => l.sessionId);
                 const list = await sessionDb.withDexieRetry(async () => {
@@ -267,6 +271,34 @@ export function createSessionRepository(archiveId: string) {
             });
         },
 
+        async deleteMessagesBySession(sessionId: string) {
+            const userId = this._requireUserId();
+            try { console.debug('[repo][session][deleteMessagesBySession]', { dbName, userId, sessionId }); } catch { /* noop */ }
+            await sessionDb.withDexieRetry(async () => {
+                const coll = (sessionDb.messages as any).where('[userId+sessionId]').equals([userId, sessionId]);
+                try { await coll.delete(); } catch {
+                    try {
+                        const keys = await coll.primaryKeys();
+                        if (Array.isArray(keys) && keys.length > 0) await sessionDb.messages.bulkDelete(keys as any);
+                    } catch { /* ignore */ }
+                }
+            });
+        },
+
+        async deleteEventsBySession(sessionId: string) {
+            const userId = this._requireUserId();
+            try { console.debug('[repo][session][deleteEventsBySession]', { dbName, userId, sessionId }); } catch { /* noop */ }
+            await sessionDb.withDexieRetry(async () => {
+                const coll = (sessionDb.events as any).where('[userId+sessionId]').equals([userId, sessionId]);
+                try { await coll.delete(); } catch {
+                    try {
+                        const keys = await coll.primaryKeys();
+                        if (Array.isArray(keys) && keys.length > 0) await sessionDb.events.bulkDelete(keys as any);
+                    } catch { /* ignore */ }
+                }
+            });
+        },
+
         // Layout APIs
         async listLayouts(viewId = 'default') {
             const userId = this._requireUserId();
@@ -299,7 +331,8 @@ export function createSessionRepository(archiveId: string) {
             const dbAny = sessionDb as any;
             try { console.debug('[repo][session][deleteLayout]', { dbName, viewId, sessionId }); } catch { /* noop */ }
             if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.delete([this._requireUserId(), viewId, sessionId]));
-            return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.delete([this._requireUserId(), viewId, sessionId]));
+            // v3 primary key is [viewId, sessionId]
+            return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.delete([viewId, sessionId]));
         },
         async ensureLayoutTop(viewId: string, sessionId: string) {
             const userId = this._requireUserId();

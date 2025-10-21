@@ -43,6 +43,7 @@ import {
 import { useSettingsStore } from '../../data-access';
 import { downloadArchiveJson, uploadAndImportArchiveJson } from '@/lib/archive/backup';
 import { settingsRepository } from '../../data-access/settings-repository';
+import { toast } from 'sonner';
 
 interface BackupInfo {
     key: string;
@@ -56,6 +57,7 @@ export function BackupSettingsTab() {
     const [backups, setBackups] = useState<BackupInfo[]>([]);
     const [backupLabel, setBackupLabel] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [replaceImport, setReplaceImport] = useState(false);
     const [stats, setStats] = useState<{
         totalProviders: number;
         configuredProviders: number;
@@ -130,9 +132,12 @@ export function BackupSettingsTab() {
 
     const handleExportSettings = async () => {
         try {
+            toast.info('开始导出设置…');
             await settingsRepository.exportToFile(settings);
+            toast.success('设置已导出');
         } catch (error) {
             console.error('Failed to export settings:', error);
+            toast.error('导出设置失败');
         }
     };
 
@@ -140,9 +145,12 @@ export function BackupSettingsTab() {
     const handleExportArchive = async () => {
         setIsLoading(true);
         try {
+            toast.info('开始导出应用数据…');
             await downloadArchiveJson();
+            toast.success('导出完成，已下载 JSON 文件');
         } catch (error) {
             console.error('Failed to export archive:', error);
+            toast.error('导出失败');
         } finally {
             setIsLoading(false);
         }
@@ -151,12 +159,17 @@ export function BackupSettingsTab() {
     const handleImportArchive = async () => {
         setIsLoading(true);
         try {
-            const res = await uploadAndImportArchiveJson();
+            try { console.debug('[BackupSettingsTab][import_click]', { replace: replaceImport }); } catch { /* noop */ }
+            toast.info('选择备份文件并开始导入…');
+            const res = await uploadAndImportArchiveJson({ replace: replaceImport });
             if (res?.warnings?.length) {
                 console.warn('[BackupSettings] import warnings:', res.warnings);
+                toast.warning(`导入完成，但有 ${res.warnings.length} 条提示`);
             }
+            if (!res?.warnings?.length) toast.success('导入完成');
         } catch (error) {
             console.error('Failed to import archive:', error);
+            toast.error('导入失败');
         } finally {
             setIsLoading(false);
         }
@@ -164,13 +177,18 @@ export function BackupSettingsTab() {
 
     const handleImportSettings = async () => {
         try {
+            toast.info('选择设置文件并开始导入…');
             const importedSettings = await settingsRepository.importFromFile();
             if (importedSettings) {
                 settings.updateSettings(importedSettings);
                 await loadStats();
+                toast.success('设置已导入并应用');
+            } else {
+                toast.warning('未导入任何设置');
             }
         } catch (error) {
             console.error('Failed to import settings:', error);
+            toast.error('导入设置失败');
         }
     };
 
@@ -385,6 +403,17 @@ export function BackupSettingsTab() {
                                 <Upload className="w-4 h-4 mr-2" />
                                 导入应用数据（JSON）
                             </Button>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <input
+                                id="replaceImport"
+                                type="checkbox"
+                                checked={replaceImport}
+                                onChange={(e) => setReplaceImport(e.target.checked)}
+                            />
+                            <Label htmlFor="replaceImport" className="cursor-pointer">
+                                导入时替换现有数据（会删除备份中不存在的会话）
+                            </Label>
                         </div>
                     </div>
 
