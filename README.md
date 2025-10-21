@@ -68,6 +68,20 @@ NEXT_PUBLIC_ACTIVE_PRESET=zju_default
 NEXT_PUBLIC_AI_BASE_URL=/api/backend/v1
 ```
 
+### OAuth local setup
+
+Add these to `.env.local` for OAuth login integration:
+
+```bash
+NEXT_PUBLIC_AUTH_API_BASE_URL=http://114.132.91.247/api
+NEXT_PUBLIC_OAUTH_CLIENT_ID=your_client_id
+NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:3000/oauth-app/callback
+NEXT_PUBLIC_OAUTH_SCOPE=openid profile email
+NEXT_PUBLIC_DISABLE_AUTH_MIDDLEWARE=true
+```
+
+Then visit `/oauth-app/login` to start the OAuth login flow.
+
 Notes:
 - The frontend never includes an API key. Authorization is injected by the server in `Authorization: Bearer $BACKEND_API_KEY`.
 - SSE streaming is passed through without buffering for responsive token-by-token updates.

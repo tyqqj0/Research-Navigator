@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 const PUBLIC_PATHS = new Set<string>([
     '/login',
     '/register',
+    '/oauth-app/callback',
+    '/oauth-app/login',
 ]);
 
 function isPublicPath(pathname: string): boolean {
@@ -18,6 +20,10 @@ function isPublicPath(pathname: string): boolean {
 }
 
 export function middleware(req: NextRequest) {
+    // Dev bypass for OAuth integration
+    if (process.env.NEXT_PUBLIC_DISABLE_AUTH_MIDDLEWARE === 'true') {
+        return NextResponse.next();
+    }
     const { pathname, search } = req.nextUrl;
     if (isPublicPath(pathname)) {
         return NextResponse.next();

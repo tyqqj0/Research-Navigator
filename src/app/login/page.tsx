@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authApi } from '@/lib/auth/auth-api';
 import useAuthStore from '@/stores/auth.store';
+import Link from 'next/link';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -125,6 +126,9 @@ export default function LoginPage() {
                             )}
                             <Button type="submit" className="w-full" disabled={isSubmitting}>
                                 {isSubmitting ? '登录中...' : '登录'}
+                            </Button>
+                            <Button type="button" variant="outline" className="w-full" onClick={() => router.push('/oauth-app/login')}>
+                                使用 OAuth 登录
                             </Button>
                             <div className="text-sm text-center mt-2">
                                 还没有账号？

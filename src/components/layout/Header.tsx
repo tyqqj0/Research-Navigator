@@ -7,6 +7,7 @@ import { HeaderProps } from '@/types';
 import { ExpandableUserMenu } from '@/components/ui/expandable-user-menu';
 import useAuthStore from '@/stores/auth.store';
 import { authApi } from '@/lib/auth/auth-api';
+// OAuth hooks are only available inside `oauth-app` subtree
 
 export const Header: React.FC<HeaderProps> = ({
     title = 'Research Navigator',
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
     const authUser = useAuthStore((s) => s.currentUser);
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const logoutStore = useAuthStore((s) => s.logout);
+    const oauth: { logout?: () => Promise<void> } | null = null;
 
     const displayUser = isAuthenticated && authUser ? {
         name: authUser.name,
