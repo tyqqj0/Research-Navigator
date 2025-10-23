@@ -11,7 +11,7 @@ import { ExpandableUserMenu } from '@/components/ui/expandable-user-menu';
 // import { QuickThemeToggle } from '@/components/ui/theme-mode-toggle';
 import { useTheme } from '@/providers';
 import useAuthStore from '@/stores/auth.store';
-import { authApi } from '@/lib/auth/auth-api';
+import { useOAuth } from '@autolabz/oauth-sdk';
 import { cn } from '@/lib/utils';
 // OAuth hooks are only available inside `oauth-app` subtree
 
@@ -42,7 +42,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     const authUser = useAuthStore((s) => s.currentUser);
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const logoutStore = useAuthStore((s) => s.logout);
-    const oauth: { logout?: () => Promise<void> } | null = null;
+    const { logout } = (() => { try { return useOAuth(); } catch { return { logout: async () => { } }; } })();
 
     const displayUser = isAuthenticated && authUser
         ? { name: authUser.name, avatar: authUser.avatar }
@@ -58,11 +58,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     };
 
     const handleLogout = async () => {
-        try {
-            await authApi.logout();
-        } catch { }
+        try { await logout?.(); } catch { }
         logoutStore();
-        router.push('/login');
+        router.push('/oauth-app/login');
     };
 
     // 初始化与持久化折叠状态

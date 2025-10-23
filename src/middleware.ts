@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // 允许匿名访问的路径前缀
 const PUBLIC_PATHS = new Set<string>([
-    '/login',
-    '/register',
     '/oauth-app/callback',
     '/oauth-app/login',
 ]);
@@ -20,25 +18,9 @@ function isPublicPath(pathname: string): boolean {
 }
 
 export function middleware(req: NextRequest) {
-    // Dev bypass for OAuth integration
-    if (process.env.NEXT_PUBLIC_DISABLE_AUTH_MIDDLEWARE === 'true') {
-        return NextResponse.next();
-    }
-    const { pathname, search } = req.nextUrl;
-    if (isPublicPath(pathname)) {
-        return NextResponse.next();
-    }
-
-    const hasSession = !!req.cookies.get('dev_session')?.value;
-    if (hasSession) {
-        return NextResponse.next();
-    }
-
-    const url = req.nextUrl.clone();
-    url.pathname = '/login';
-    const returnTo = encodeURIComponent(pathname + (search || ''));
-    url.search = `?returnTo=${returnTo}`;
-    return NextResponse.redirect(url);
+    // For now, rely on client-side RequireAuth. Keep middleware permissive.
+    // Optionally, implement SSR session cookie gate later.
+    return NextResponse.next();
 }
 
 export const config = {

@@ -6,8 +6,7 @@ import { cn } from '@/lib/utils';
 import { HeaderProps } from '@/types';
 import { ExpandableUserMenu } from '@/components/ui/expandable-user-menu';
 import useAuthStore from '@/stores/auth.store';
-import { authApi } from '@/lib/auth/auth-api';
-// OAuth hooks are only available inside `oauth-app` subtree
+import { useOAuth } from '@autolabz/oauth-sdk';
 
 export const Header: React.FC<HeaderProps> = ({
     title = 'Research Navigator',
@@ -23,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
     const authUser = useAuthStore((s) => s.currentUser);
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const logoutStore = useAuthStore((s) => s.logout);
-    const oauth: { logout?: () => Promise<void> } | null = null;
+    const { logout } = (() => { try { return useOAuth(); } catch { return { logout: async () => { } }; } })();
 
     const displayUser = isAuthenticated && authUser ? {
         name: authUser.name,
@@ -31,11 +30,9 @@ export const Header: React.FC<HeaderProps> = ({
     } : user; // 未登录时回退到传入的user（兼容旧实现）
 
     const handleLogout = async () => {
-        try {
-            await authApi.logout();
-        } catch { }
+        try { await logout?.(); } catch { }
         logoutStore();
-        router.push('/login');
+        router.push('/oauth-app/login');
     };
     return (
         <header

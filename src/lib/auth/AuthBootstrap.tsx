@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import useAuthStore from '@/stores/auth.store';
-import { authApi } from '@/lib/auth/auth-api';
+// Legacy bootstrap using authApi has been deprecated in favor of OAuth SDK
 
 /**
  * AuthBootstrap
@@ -22,15 +22,7 @@ export function AuthBootstrap() {
             if (isAuthenticated) return;
             setLoading(true);
             try {
-                const me = await authApi.getMe();
-                if (cancelled) return;
-                if (me?.user) {
-                    login({ user: me.user, token: me.token ?? null });
-                } else {
-                    clearAuth();
-                }
-            } catch {
-                if (!cancelled) clearAuth();
+                // No-op: OAuthProvider + OAuthStoreBridge handle hydration
             } finally {
                 if (!cancelled) setLoading(false);
             }

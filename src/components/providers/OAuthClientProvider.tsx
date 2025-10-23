@@ -3,7 +3,6 @@
 import React from 'react';
 import { OAuthProvider } from '@autolabz/oauth-sdk';
 import { Toaster } from '@/components/ui';
-import AuthBootstrap from '@/lib/auth/AuthBootstrap';
 import { OAuthStoreBridge } from '@/lib/auth';
 
 interface OAuthClientProviderProps {
@@ -15,7 +14,6 @@ interface OAuthClientProviderProps {
 export function OAuthClientProvider({ authServiceUrl, clientId, children }: OAuthClientProviderProps) {
     return (
         <OAuthProvider authServiceUrl={authServiceUrl} clientId={clientId}>
-            <AuthBootstrap />
             <OAuthStoreBridge />
             {children}
             {/* Global toast portal */}

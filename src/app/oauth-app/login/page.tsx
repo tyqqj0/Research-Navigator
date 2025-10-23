@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,10 +19,12 @@ export default function OAuthLoginPage() {
         });
     }, [redirectUri, startLogin]);
 
-    if (isAuthenticated) {
-        router.replace('/');
-        return null;
-    }
+    useEffect(() => {
+        if (isAuthenticated) {
+            router.replace('/');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated]);
 
     return (
         <div className="min-h-screen flex items-center justify-center p-6">

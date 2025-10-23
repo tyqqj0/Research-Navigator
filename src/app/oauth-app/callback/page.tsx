@@ -20,7 +20,7 @@ export default function OAuthCallbackPage() {
         }
         handleRedirect({ fetchUserinfo: true, redirectUri })
             .then(() => router.replace('/'))
-            .catch(() => router.replace('/login'));
+            .catch(() => router.replace('/oauth-app/login'));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
