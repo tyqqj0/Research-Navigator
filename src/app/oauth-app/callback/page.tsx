@@ -7,14 +7,14 @@ import { useOAuth } from '@autolabz/oauth-sdk';
 export default function OAuthCallbackPage() {
     const router = useRouter();
     const search = useSearchParams();
-    const { handleRedirect, isAuthenticated } = useOAuth();
+    const { handleRedirect, isAuthenticated, accessToken } = useOAuth();
     const redirectUri = process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || `${typeof window !== 'undefined' ? window.location.origin : ''}/oauth-app/callback`;
 
     useEffect(() => {
         // If no code present and already authed, go home
         const code = search?.get('code');
         const error = search?.get('error');
-        if (!code && !error && isAuthenticated) {
+        if (!code && !error && isAuthenticated && typeof accessToken === 'string' && accessToken.length > 0) {
             router.replace('/');
             return;
         }

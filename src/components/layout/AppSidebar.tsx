@@ -60,6 +60,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     const handleLogout = async () => {
         try { await logout?.(); } catch { }
         logoutStore();
+        try { localStorage.removeItem('auth-store'); } catch { }
         router.push('/oauth-app/login');
     };
 

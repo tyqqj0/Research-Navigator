@@ -32,6 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
     const handleLogout = async () => {
         try { await logout?.(); } catch { }
         logoutStore();
+        try { localStorage.removeItem('auth-store'); } catch { }
         router.push('/oauth-app/login');
     };
     return (

@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useOAuth } from '@autolabz/oauth-sdk';
 
 export default function OAuthLoginPage() {
     const router = useRouter();
-    const { startLogin, isAuthenticated } = useOAuth();
+    const searchParams = useSearchParams();
+    const { startLogin, isAuthenticated, accessToken } = useOAuth();
     const redirectUri = process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || `${typeof window !== 'undefined' ? window.location.origin : ''}/oauth-app/callback`;
 
     const doLogin = useCallback(async () => {
@@ -20,11 +21,12 @@ export default function OAuthLoginPage() {
     }, [redirectUri, startLogin]);
 
     useEffect(() => {
-        if (isAuthenticated) {
-            router.replace('/');
+        const returnTo = searchParams?.get('returnTo') || '/';
+        if (isAuthenticated && typeof accessToken === 'string' && accessToken.length > 0) {
+            router.replace(returnTo);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAuthenticated]);
+    }, [isAuthenticated, accessToken]);
 
     return (
         <div className="min-h-screen flex items-center justify-center p-6">

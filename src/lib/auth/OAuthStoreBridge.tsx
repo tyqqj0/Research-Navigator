@@ -13,7 +13,8 @@ export default function OAuthStoreBridge() {
     const clearAuth = useAuthStore((s) => s.clearAuth);
 
     useEffect(() => {
-        if (isAuthenticated && user) {
+        const hasToken = typeof accessToken === 'string' && accessToken.length > 0;
+        if (isAuthenticated && user && hasToken) {
             const mappedUser = {
                 id: String(user.sub || user.id || user.userId || 'oauth-user'),
                 email: String(user.email || ''),
@@ -22,7 +23,7 @@ export default function OAuthStoreBridge() {
                 createdAt: new Date(),
                 lastLoginAt: new Date(),
             };
-            login({ user: mappedUser, token: typeof accessToken === 'string' ? accessToken : null });
+            login({ user: mappedUser, token: accessToken });
         } else {
             clearAuth();
         }
