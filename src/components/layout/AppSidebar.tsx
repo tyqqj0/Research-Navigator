@@ -58,10 +58,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     };
 
     const handleLogout = async () => {
-        try { await logout?.(); } catch { }
+        try { console.log('[auth][logout][sidebar]'); } catch { /* noop */ }
+        try { sessionStorage.setItem('oauth:logout-intent', '1'); } catch { }
+        try { await logout?.(); } catch (e) { try { console.log('[auth][logout][sidebar][sdk-error]', e); } catch { } }
         logoutStore();
         try { localStorage.removeItem('auth-store'); } catch { }
-        router.push('/oauth-app/login');
+        router.push('/');
     };
 
     // 初始化与持久化折叠状态

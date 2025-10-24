@@ -12,6 +12,7 @@ interface OAuthClientProviderProps {
 }
 
 export function OAuthClientProvider({ authServiceUrl, clientId, children }: OAuthClientProviderProps) {
+    try { console.log('[auth][provider][init]', { authServiceUrl, clientId }); } catch { /* noop */ }
     return (
         <OAuthProvider authServiceUrl={authServiceUrl} clientId={clientId}>
             <OAuthStoreBridge />

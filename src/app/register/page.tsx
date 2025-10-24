@@ -8,7 +8,7 @@ export default function RegisterPage() {
     const searchParams = useSearchParams();
     useEffect(() => {
         const returnTo = encodeURIComponent((searchParams?.get('returnTo') || '/'));
-        router.replace(`/oauth-app/login?returnTo=${returnTo}`);
+        router.replace(`/?returnTo=${returnTo}`);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     return null;

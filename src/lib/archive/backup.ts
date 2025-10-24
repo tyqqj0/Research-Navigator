@@ -3,6 +3,7 @@
 import { ArchiveManager } from './manager';
 import { authStoreUtils } from '@/stores/auth.store';
 import { useSettingsStore } from '@/features/user/settings/data-access/settings-store';
+import { literatureDB } from '@/features/literature/data-access/database/literature-database';
 
 export interface FullBackupPayload {
     version: string;
@@ -15,6 +16,10 @@ export interface FullBackupPayload {
     artifacts: any[];
     layouts: any[];
     graphs: Array<{ id: string; name?: string | null; nodes: Record<string, any>; edges: Record<string, any> }>;
+    // Literature domain
+    libraries?: any[];
+    userMetas?: any[];
+    citations?: any[];
     collections: any[];
     collectionItems: any[];
     memberships: any[];
@@ -72,6 +77,17 @@ export async function exportArchiveToJson(): Promise<string> {
     let memberships: any[] = [];
     try { memberships = await membershipRepo.listByUser(userId); } catch { memberships = []; }
 
+    // Literature domain export (global cache + per-user metas)
+    let libraries: any[] = [];
+    let userMetas: any[] = [];
+    let citations: any[] = [];
+    try {
+        try { await literatureDB.ensureOpen?.(); } catch { /* noop */ }
+        libraries = await literatureDB.libraries.toArray().catch(() => []);
+        userMetas = await (literatureDB.userMetas as any).where('userId').equals(userId).toArray().catch(() => []);
+        citations = await literatureDB.citations.toArray().catch(() => []);
+    } catch { libraries = []; userMetas = []; citations = []; }
+
     try {
         console.debug('[backup][export][counts]', {
             sessions: (sessions || []).length,
@@ -80,6 +96,9 @@ export async function exportArchiveToJson(): Promise<string> {
             artifacts: (artifacts || []).length,
             layouts: (layouts || []).length,
             graphs: graphs.length,
+            libraries: (libraries || []).length,
+            userMetas: (userMetas || []).length,
+            citations: (citations || []).length,
             collections: collections.length,
             collectionItems: collectionItems.length,
             memberships: memberships.length
@@ -97,6 +116,9 @@ export async function exportArchiveToJson(): Promise<string> {
         artifacts: artifacts || [],
         layouts: layouts || [],
         graphs,
+        libraries,
+        userMetas,
+        citations,
         collections,
         collectionItems,
         memberships,
@@ -126,6 +148,9 @@ export async function importArchiveFromJson(json: string, options?: { replace?: 
             artifacts: Array.isArray(parsed.artifacts) ? parsed.artifacts.length : 0,
             layouts: Array.isArray(parsed.layouts) ? parsed.layouts.length : 0,
             graphs: Array.isArray(parsed.graphs) ? parsed.graphs.length : 0,
+            libraries: Array.isArray(parsed.libraries) ? parsed.libraries.length : 0,
+            userMetas: Array.isArray(parsed.userMetas) ? parsed.userMetas.length : 0,
+            citations: Array.isArray(parsed.citations) ? parsed.citations.length : 0,
             collections: Array.isArray(parsed.collections) ? parsed.collections.length : 0,
             memberships: Array.isArray(parsed.memberships) ? parsed.memberships.length : 0
         });
@@ -152,6 +177,49 @@ export async function importArchiveFromJson(json: string, options?: { replace?: 
             try { await gr.saveGraph({ id: g.id, name: g.name, nodes: g.nodes, edges: g.edges }); } catch { }
         }
     } catch { warnings.push('Some graphs failed to import'); }
+
+    // Literature domain import
+    try {
+        try { await literatureDB.ensureOpen?.(); } catch { /* noop */ }
+        const libs = Array.isArray((parsed as any).libraries) ? (parsed as any).libraries as any[] : [];
+        const metas = Array.isArray((parsed as any).userMetas) ? (parsed as any).userMetas as any[] : [];
+        const cites = Array.isArray((parsed as any).citations) ? (parsed as any).citations as any[] : [];
+
+        const toDate = (v: any): any => {
+            if (!v) return v;
+            if (v instanceof Date) return v;
+            if (typeof v === 'string' || typeof v === 'number') {
+                const d = new Date(v);
+                return isNaN(d.getTime()) ? v : d;
+            }
+            return v;
+        };
+
+        for (const it of libs) {
+            const obj = { ...it } as any;
+            if (obj.createdAt) obj.createdAt = toDate(obj.createdAt);
+            if (obj.updatedAt) obj.updatedAt = toDate(obj.updatedAt);
+            try { await literatureDB.libraries.put(obj as any); } catch { /* ignore */ }
+        }
+        for (const m of metas) {
+            const obj = { ...(m as any), userId } as any;
+            if (obj.createdAt) obj.createdAt = toDate(obj.createdAt);
+            if (obj.updatedAt) obj.updatedAt = toDate(obj.updatedAt);
+            if (obj.lastAccessedAt) obj.lastAccessedAt = toDate(obj.lastAccessedAt);
+            if (obj.readingStartedAt) obj.readingStartedAt = toDate(obj.readingStartedAt);
+            if (obj.readingCompletedAt) obj.readingCompletedAt = toDate(obj.readingCompletedAt);
+            try { await literatureDB.userMetas.put(obj as any); } catch { /* ignore */ }
+        }
+        for (const c of cites) {
+            if (!c || typeof c !== 'object') continue;
+            if (!(c as any).sourceItemId || !(c as any).targetItemId) continue;
+            const obj = { ...(c as any) } as any;
+            // Normalize createdAt for zod schema (expects Date)
+            if (obj.createdAt) obj.createdAt = toDate(obj.createdAt);
+            try { await literatureDB.citations.put(obj as any); } catch { /* ignore */ }
+        }
+        try { console.debug('[backup][import][literature_written]', { libraries: libs.length, userMetas: metas.length, citations: cites.length }); } catch { /* noop */ }
+    } catch { warnings.push('Some literature records failed to import'); }
 
     try {
         const col = services.collectionsRepository as any;
@@ -197,6 +265,7 @@ export async function importArchiveFromJson(json: string, options?: { replace?: 
                 deletedCount++;
             }
             try { console.debug('[backup][import][replace_prune]', { deleted: deletedCount }); } catch { /* noop */ }
+            try { console.debug('[backup][import][replace_note]', { message: 'Replace mode prunes sessions only; literature (libraries/userMetas/citations) is preserved.' }); } catch { /* noop */ }
         } catch { warnings.push('Failed to prune missing sessions'); }
     }
 

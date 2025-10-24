@@ -30,10 +30,12 @@ export const Header: React.FC<HeaderProps> = ({
     } : user; // 未登录时回退到传入的user（兼容旧实现）
 
     const handleLogout = async () => {
-        try { await logout?.(); } catch { }
+        try { console.log('[auth][logout][header]'); } catch { /* noop */ }
+        try { sessionStorage.setItem('oauth:logout-intent', '1'); } catch { }
+        try { await logout?.(); } catch (e) { try { console.log('[auth][logout][header][sdk-error]', e); } catch { } }
         logoutStore();
         try { localStorage.removeItem('auth-store'); } catch { }
-        router.push('/oauth-app/login');
+        router.push('/');
     };
     return (
         <header

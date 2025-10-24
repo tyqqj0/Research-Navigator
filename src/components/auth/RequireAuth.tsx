@@ -21,11 +21,12 @@ export const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
     const isLoading = useAuthStore((s) => s.isLoading);
 
     useEffect(() => {
+        try { console.log('[auth][guard]', { isLoading, isAuthenticated, pathname }); } catch { /* noop */ }
         if (!isLoading && !isAuthenticated) {
             const returnTo = encodeURIComponent(
                 pathname + (searchParams?.toString() ? `?${searchParams?.toString()}` : '')
             );
-            router.replace(`/oauth-app/login?returnTo=${returnTo}`);
+            router.replace(`/?returnTo=${returnTo}`);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAuthenticated, isLoading, pathname]);

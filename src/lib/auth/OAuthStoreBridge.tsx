@@ -13,6 +13,15 @@ export default function OAuthStoreBridge() {
     const clearAuth = useAuthStore((s) => s.clearAuth);
 
     useEffect(() => {
+        try {
+            console.log('[auth][bridge][state]', {
+                isAuthenticated,
+                hasUser: !!user,
+                hasToken: typeof accessToken === 'string' && accessToken.length > 0,
+                userSub: (user as any)?.sub,
+                userEmail: (user as any)?.email,
+            });
+        } catch { /* noop */ }
         const hasToken = typeof accessToken === 'string' && accessToken.length > 0;
         if (isAuthenticated && user && hasToken) {
             const mappedUser = {
@@ -23,8 +32,10 @@ export default function OAuthStoreBridge() {
                 createdAt: new Date(),
                 lastLoginAt: new Date(),
             };
+            try { console.log('[auth][bridge][login]', { id: mappedUser.id, email: mappedUser.email }); } catch { /* noop */ }
             login({ user: mappedUser, token: accessToken });
         } else {
+            try { console.log('[auth][bridge][clearAuth]'); } catch { /* noop */ }
             clearAuth();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
