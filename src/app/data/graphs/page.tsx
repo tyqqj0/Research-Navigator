@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
-import RequireAuth from '@/components/auth/RequireAuth';
-import { MainLayout } from '@/components/layout';
+// import RequireAuth from '@/components/auth/RequireAuth'; // Replaced by ProtectedLayout
+import { MainLayout, ProtectedLayout } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { GraphPickerPanel } from '@/features/graph/editor/left/GraphPickerPanel';
 import { GraphMetaPanel } from '@/features/graph/editor/left/GraphMetaPanel';
@@ -70,7 +70,7 @@ export default function GraphPage() {
     }, []);
 
     return (
-        <RequireAuth>
+        <ProtectedLayout>
             <MainLayout headerTitle="图谱编辑" showSidebar={true} hideUserInfo={true}>
                 <div className="p-4 h-full relative">
                     {/* 桌面端：三栏布局 */}
@@ -238,7 +238,7 @@ export default function GraphPage() {
                     />
                 </div>
             </MainLayout>
-        </RequireAuth>
+        </ProtectedLayout>
     );
 }
 

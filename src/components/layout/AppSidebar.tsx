@@ -7,11 +7,11 @@ import { Settings, ChevronLeft, ChevronRight, Search as SearchIcon, Sun, Moon } 
 import { Sidebar, type SidebarItem } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
-import { ExpandableUserMenu } from '@/components/ui/expandable-user-menu';
+// import { AuthAvatar } from '@autolabz/oauth-sdk';
+import { UserMenu } from '@/components/auth/UserMenu';
 // import { QuickThemeToggle } from '@/components/ui/theme-mode-toggle';
 import { useTheme } from '@/providers';
 import useAuthStore from '@/stores/auth.store';
-import { useOAuth } from '@autolabz/oauth-sdk';
 import { cn } from '@/lib/utils';
 // OAuth hooks are only available inside `oauth-app` subtree
 
@@ -39,14 +39,24 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     const [showSearch, setShowSearch] = React.useState(false);
     const { theme, setThemeMode } = useTheme();
 
-    const authUser = useAuthStore((s) => s.currentUser);
-    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-    const logoutStore = useAuthStore((s) => s.logout);
-    const { logout } = (() => { try { return useOAuth(); } catch { return { logout: async () => { } }; } })();
-
-    const displayUser = isAuthenticated && authUser
-        ? { name: authUser.name, avatar: authUser.avatar }
-        : undefined;
+    const redirectUri = (() => {
+        if (typeof window !== 'undefined') {
+            return process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || `${window.location.origin}/oauth-app/callback`;
+        }
+        return process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || '/oauth-app/callback';
+    })();
+    const scope = process.env.NEXT_PUBLIC_OAUTH_SCOPE || 'openid profile email';
+    const profileUrl = process.env.NEXT_PUBLIC_OAUTH_PROFILE_URL;
+    const buildState = () => {
+        try {
+            const payload = {
+                returnTo: typeof window !== 'undefined' ? window.location.href : '/',
+                nonce: (typeof crypto !== 'undefined' && (crypto as any).randomUUID?.()) || String(Date.now()),
+            };
+            const json = JSON.stringify(payload);
+            return btoa(encodeURIComponent(json));
+        } catch { return ''; }
+    };
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -57,14 +67,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         setQuery('');
     };
 
-    const handleLogout = async () => {
-        try { console.log('[auth][logout][sidebar]'); } catch { /* noop */ }
-        try { sessionStorage.setItem('oauth:logout-intent', '1'); } catch { }
-        try { await logout?.(); } catch (e) { try { console.log('[auth][logout][sidebar][sdk-error]', e); } catch { } }
-        logoutStore();
-        try { localStorage.removeItem('auth-store'); } catch { }
-        router.push('/');
-    };
+    // Logout is handled by AuthAvatar internally.
 
     // 初始化与持久化折叠状态
     React.useEffect(() => {
@@ -91,17 +94,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         <div className={cn('space-y-3', collapsed && 'px-0')}>
             {/* 顶部紧凑行：用户、搜索按钮、折叠按钮 */}
             <div className={cn('flex items-center gap-2 px-2', collapsed ? 'justify-center' : undefined)}>
-                {/* 用户菜单 - 使用扩展式设计（仅在展开状态下显示） */}
-                {displayUser && !collapsed && (
-                    <ExpandableUserMenu
-                        user={{
-                            name: displayUser.name,
-                            email: authUser?.email,
-                            avatar: displayUser.avatar,
-                        }}
-                        onLogout={handleLogout}
-                        align="start"
+                {/* 用户菜单（自定义组件） - 仅在展开状态下显示 */}
+                {!collapsed && (
+                    <UserMenu
+                        className=""
                         expandDirection="bottom"
+                        align="start"
                     />
                 )}
 

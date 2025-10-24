@@ -12,11 +12,7 @@ export default function Home() {
   })();
 
   useEffect(() => {
-    const hasLogoutIntent = (() => { try { return sessionStorage.getItem('oauth:logout-intent') === '1'; } catch { return false; } })();
-    // 只有在没有 logout-intent 时才自动跳转
-    if (hasLogoutIntent) {
-      return; // 用户刚刚退出登录，停留在着陆页等待重新登录
-    }
+    // 已登录用户自动跳转到主应用
     const hasToken = typeof accessToken === 'string' && accessToken.length > 0;
     if (isAuthenticated && hasToken) {
       router.replace('/research');
@@ -31,18 +27,10 @@ export default function Home() {
   }, []);
 
   const handleStart = useCallback(async () => {
-    const hasLogoutIntent = (() => { try { return sessionStorage.getItem('oauth:logout-intent') === '1'; } catch { return false; } })();
-    const additionalParams: Record<string, string> = {};
-    if (hasLogoutIntent) {
-      additionalParams.prompt = 'login';
-      additionalParams.max_age = '0';
-    }
-    try { sessionStorage.removeItem('oauth:logout-intent'); } catch { }
     await startLogin({
       redirectUri,
       scope: process.env.NEXT_PUBLIC_OAUTH_SCOPE || 'openid profile email',
       usePkce: true,
-      additionalParams,
     });
   }, [redirectUri, startLogin]);
 

@@ -1,12 +1,9 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { HeaderProps } from '@/types';
-import { ExpandableUserMenu } from '@/components/ui/expandable-user-menu';
-import useAuthStore from '@/stores/auth.store';
-import { useOAuth } from '@autolabz/oauth-sdk';
+import { AuthAvatar } from '@autolabz/oauth-sdk';
 
 export const Header: React.FC<HeaderProps> = ({
     title = 'Research Navigator',
@@ -18,24 +15,23 @@ export const Header: React.FC<HeaderProps> = ({
     className,
     onOpenSidebar
 }) => {
-    const router = useRouter();
-    const authUser = useAuthStore((s) => s.currentUser);
-    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-    const logoutStore = useAuthStore((s) => s.logout);
-    const { logout } = (() => { try { return useOAuth(); } catch { return { logout: async () => { } }; } })();
-
-    const displayUser = isAuthenticated && authUser ? {
-        name: authUser.name,
-        avatar: authUser.avatar,
-    } : user; // 未登录时回退到传入的user（兼容旧实现）
-
-    const handleLogout = async () => {
-        try { console.log('[auth][logout][header]'); } catch { /* noop */ }
-        try { sessionStorage.setItem('oauth:logout-intent', '1'); } catch { }
-        try { await logout?.(); } catch (e) { try { console.log('[auth][logout][header][sdk-error]', e); } catch { } }
-        logoutStore();
-        try { localStorage.removeItem('auth-store'); } catch { }
-        router.push('/');
+    const redirectUri = (() => {
+        if (typeof window !== 'undefined') {
+            return process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || `${window.location.origin}/oauth-app/callback`;
+        }
+        return process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || '/oauth-app/callback';
+    })();
+    const scope = process.env.NEXT_PUBLIC_OAUTH_SCOPE || 'openid profile email';
+    const profileUrl = process.env.NEXT_PUBLIC_OAUTH_PROFILE_URL;
+    const buildState = () => {
+        try {
+            const payload = {
+                returnTo: typeof window !== 'undefined' ? window.location.href : '/',
+                nonce: (typeof crypto !== 'undefined' && (crypto as any).randomUUID?.()) || String(Date.now()),
+            };
+            const json = JSON.stringify(payload);
+            return btoa(encodeURIComponent(json));
+        } catch { return ''; }
     };
     return (
         <header
@@ -89,17 +85,14 @@ export const Header: React.FC<HeaderProps> = ({
                             </div>
                         )}
 
-                        {displayUser && !hideUserInfo && (
-                            <ExpandableUserMenu
+                        {!hideUserInfo && (
+                            <AuthAvatar
                                 className="hidden md:inline-flex"
-                                user={{
-                                    name: displayUser.name,
-                                    email: authUser?.email,
-                                    avatar: displayUser.avatar,
-                                }}
-                                onLogout={handleLogout}
+                                redirectUri={redirectUri}
+                                scope={scope}
+                                profileUrl={profileUrl}
+                                state={buildState}
                                 align="end"
-                                expandDirection="bottom"
                             />
                         )}
                     </div>

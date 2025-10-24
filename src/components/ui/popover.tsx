@@ -25,8 +25,11 @@ const PopoverClose = PopoverPrimitive.Close;
  */
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "center", sideOffset = 4, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & {
+    unstyled?: boolean;
+    disableAnimations?: boolean;
+  }
+>(({ className, align = "center", sideOffset = 4, unstyled = false, disableAnimations = false, ...props }, ref) => (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       ref={ref}
@@ -34,19 +37,16 @@ const PopoverContent = React.forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        // 覆盖背景 & 文字色
-        "theme-primary-background theme-text-primary",
-        "z-50 w-72 rounded-md border p-4 shadow-md outline-none",
-        // Plugin-based animations (tailwindcss-animate)
-        "data-[state=open]:animate-in data-[state=closed]:animate-out",
-        "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-        "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-        "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-        "origin-[--radix-popover-content-transform-origin]",
-        // Transition fallbacks to ensure animation even if plugin utilities are unavailable
-        "transition-opacity transition-transform duration-200 ease-out",
-        "data-[state=open]:opacity-100 data-[state=closed]:opacity-0",
-        "data-[state=open]:scale-100 data-[state=closed]:scale-95",
+        !unstyled && "theme-primary-background theme-text-primary",
+        !unstyled && "z-50 w-72 rounded-md border p-4 shadow-md outline-none",
+        !disableAnimations && "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        !disableAnimations && "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+        !disableAnimations && "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        !disableAnimations && "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        !unstyled && "origin-[--radix-popover-content-transform-origin]",
+        !disableAnimations && "transition-opacity transition-transform duration-200 ease-out",
+        !disableAnimations && "data-[state=open]:opacity-100 data-[state=closed]:opacity-0",
+        !disableAnimations && "data-[state=open]:scale-100 data-[state=closed]:scale-95",
         className
       )}
       {...props}

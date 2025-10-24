@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, usePathname } from 'next/navigation';
-import { MainLayout } from '@/components/layout';
+import { MainLayout, ProtectedLayout } from '@/components/layout';
 import { Button, Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui';
 import { ChatPanel } from '@/features/session/ui/ChatPanel';
 import { SessionCollectionPanel } from '@/features/session/ui/SessionCollectionPanel';
@@ -133,49 +133,51 @@ export default function ResearchSessionPage() {
     }, [detailOpen]);
 
     return (
-        <MainLayout showSidebar={true} showHeader={true} headerTitle="Research Navigator" headerRightContent={headerRightContent}>
-            <div className="h-full flex relative">
-                {/* 子侧边栏：会话列表（桌面端显示，移动端隐藏） */}
-                <div className="hidden md:block w-60 border-r bg-background p-3 h-[calc(100vh-4rem)]">
-                    <SessionList />
-                </div>
-
-                {/* 动态布局：根据阶段和用户开关决定单列/三列，并带过渡动画 */}
-                <DynamicSessionBody sessionId={sessionId!} getPaperSummary={getPaperSummary} graphId={graphId} onOpenDetail={openDetail} />
-            </div>
-
-            {/* 移动端会话列表 Sheet */}
-            <Sheet open={mobileSessionsOpen} onOpenChange={setMobileSessionsOpen}>
-                <SheetContent side="bottom" className="h-[85vh] p-0">
-                    <SheetHeader className="p-6 pb-4">
-                        <SheetTitle>研究会话</SheetTitle>
-                    </SheetHeader>
-                    <div
-                        className="px-6 pb-6 h-[calc(100%-5rem)] overflow-y-auto"
-                        onClick={(e) => {
-                            // 点击会话链接后自动关闭 Sheet
-                            const target = e.target as HTMLElement;
-                            if (target.closest('a[href^="/research/"]')) {
-                                setMobileSessionsOpen(false);
-                            }
-                        }}
-                    >
+        <ProtectedLayout>
+            <MainLayout showSidebar={true} showHeader={true} headerTitle="Research Navigator" headerRightContent={headerRightContent}>
+                <div className="h-full flex relative">
+                    {/* 子侧边栏：会话列表（桌面端显示，移动端隐藏） */}
+                    <div className="hidden md:block w-60 border-r bg-background p-3 h-[calc(100vh-4rem)]">
                         <SessionList />
                     </div>
-                </SheetContent>
-            </Sheet>
 
-            {/* 右侧上层覆盖的文献详情 Overlay：保持挂载以获得过渡动画 */}
-            <LiteratureDetailPanel
-                open={detailOpen}
-                onOpenChange={setDetailOpen}
-                paperId={activePaperId}
-                onUpdated={() => { }}
-                variant="overlay"
-                defaultCollectionId={current?.linkedCollectionId || undefined}
-            />
+                    {/* 动态布局：根据阶段和用户开关决定单列/三列，并带过渡动画 */}
+                    <DynamicSessionBody sessionId={sessionId!} getPaperSummary={getPaperSummary} graphId={graphId} onOpenDetail={openDetail} />
+                </div>
 
-        </MainLayout>
+                {/* 移动端会话列表 Sheet */}
+                <Sheet open={mobileSessionsOpen} onOpenChange={setMobileSessionsOpen}>
+                    <SheetContent side="bottom" className="h-[85vh] p-0">
+                        <SheetHeader className="p-6 pb-4">
+                            <SheetTitle>研究会话</SheetTitle>
+                        </SheetHeader>
+                        <div
+                            className="px-6 pb-6 h-[calc(100%-5rem)] overflow-y-auto"
+                            onClick={(e) => {
+                                // 点击会话链接后自动关闭 Sheet
+                                const target = e.target as HTMLElement;
+                                if (target.closest('a[href^="/research/"]')) {
+                                    setMobileSessionsOpen(false);
+                                }
+                            }}
+                        >
+                            <SessionList />
+                        </div>
+                    </SheetContent>
+                </Sheet>
+
+                {/* 右侧上层覆盖的文献详情 Overlay：保持挂载以获得过渡动画 */}
+                <LiteratureDetailPanel
+                    open={detailOpen}
+                    onOpenChange={setDetailOpen}
+                    paperId={activePaperId}
+                    onUpdated={() => { }}
+                    variant="overlay"
+                    defaultCollectionId={current?.linkedCollectionId || undefined}
+                />
+
+            </MainLayout>
+        </ProtectedLayout>
     );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
-import { MainLayout } from '@/components/layout';
+import { MainLayout, ProtectedLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -41,7 +41,7 @@ import { useSessionStore } from '@/features/session/data-access/session-store';
 import { useLiteratureViewStore } from '@/features/literature/stores/view-store';
 import { CollectionTreePanel } from '@/features/literature/management/components/CollectionTreePanel';
 import { useCollectionOperations } from '@/features/literature/hooks';
-import RequireAuth from '@/components/auth/RequireAuth';
+// import RequireAuth from '@/components/auth/RequireAuth'; // Replaced by ProtectedLayout
 import useAuthStore from '@/stores/auth.store';
 import { cn } from '@/lib/utils';
 import {
@@ -388,7 +388,7 @@ export default function LibraryPage() {
     }, [deleteCollection, selectedCollectionId, handleCollectionSelect]);
 
     return (
-        <RequireAuth>
+        <ProtectedLayout>
             <MainLayout showSidebar={true} showHeader={false} pageHeader={pageHeader}>
                 <div className="p-0 h-full relative">
                     {/* 桌面端：三列网格布局 */}
@@ -784,6 +784,6 @@ export default function LibraryPage() {
                     </div>
                 </DialogContent>
             </Dialog>
-        </RequireAuth>
+        </ProtectedLayout>
     );
 }
