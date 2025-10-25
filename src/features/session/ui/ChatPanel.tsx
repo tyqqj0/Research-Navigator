@@ -79,7 +79,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
     const sendUserMessage = async () => {
         const text = userInput.trim();
         if (!text) return;
-        try { console.debug('[ui][chat_panel][send_click]', { sessionId, textLen: text.length, refs: selectedRefs?.length || 0 }); } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text }, inputRefs: selectedRefs } as any);
         setUserInput('');
         // 如果 Deep 模式开启且方向未确认，chat.orchestrator 不会生成普通回复；direction.supervisor 会用这条消息触发提案
@@ -87,7 +86,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
 
     const toggleDeep = async (enabled: boolean) => {
         setDeep(enabled);
-        try { console.debug('[ui][chat_panel][toggle_deep]', { sessionId, enabled }); } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ToggleDeepResearch', ts: Date.now(), params: { sessionId, enabled } } as any);
     };
 
@@ -280,7 +278,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                                     aria-label="Deep Research"
                                     onClick={() => toggleDeep(!deep)}
                                     className={cn(
-                                        'inline-flex items-center gap-1.5 rounded-full text-xs px-2.5 py-10 border transition-all',
+                                        'inline-flex items-center gap-1.5 rounded-full text-xs px-2.5 py-1 border transition-all',
                                         deep
                                             ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 shadow-sm'
                                             : 'bg-white/80 dark:bg-slate-900/60 text-muted-foreground border-border hover:bg-white'

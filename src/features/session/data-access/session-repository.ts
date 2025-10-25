@@ -191,7 +191,7 @@ export function createSessionRepository(archiveId: string) {
         },
         async listSessions() {
             const userId = this._requireUserId();
-            try { console.debug('[repo][session][listSessions][begin]', { dbName, userId }); } catch { /* noop */ }
+
             if (!userId || userId === 'anonymous') {
                 try { console.warn('[repo][session][listSessions][anonymous]', { note: 'returning empty due to anonymous gating' }); } catch { /* noop */ }
                 return [] as ChatSession[];
@@ -214,7 +214,7 @@ export function createSessionRepository(archiveId: string) {
                     return (await sessionDb.sessions.bulkGet(ids)).filter(Boolean) as ChatSession[];
                 });
                 const map = new Map(list.filter(s => (s as any).userId === userId).map(s => [s.id, s]));
-                try { console.debug('[repo][session][listSessions][by_layout_v4]', { count: list.length }); } catch { /* noop */ }
+
                 return ids.map((id: string) => map.get(id)!).filter(Boolean);
             }
             // fallback for callers not yet migrated (old table might exist)

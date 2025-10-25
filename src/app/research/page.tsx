@@ -217,8 +217,8 @@ export default function ResearchPage() {
                                                     </span>
                                                 ))}
                                             </div>
-                                        </CardContent>
-                                    </Card>
+                        </CardContent>
+                    </Card>
                                 ))}
                             </div>
                         </div>
@@ -242,10 +242,10 @@ export default function ResearchPage() {
                             }}
                         >
                             <SessionList />
-                        </div>
+            </div>
                     </SheetContent>
                 </Sheet>
-            </MainLayout>
+        </MainLayout>
         </ProtectedLayout>
     );
 }

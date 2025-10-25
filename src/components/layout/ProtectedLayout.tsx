@@ -43,7 +43,6 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
         // 检测到从已登录变为未登录（即退出登录）
         if (prevAuthRef.current === true && isAuthenticated === false) {
-            console.debug('[ProtectedLayout] User logged out, redirecting to landing page');
             router.replace('/');
         }
 

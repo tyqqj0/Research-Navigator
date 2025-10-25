@@ -89,9 +89,43 @@ export default function ResearchSessionPage() {
             try { window.history.replaceState(null, '', pathname || `/research/${sessionId}`); } catch { /* noop */ }
 
             (async () => {
+                // 确保当前 session 已加载到投影层，避免在空投影上切换 deep 被后续加载覆盖
+                const waitSessionLoaded = async (timeoutMs = 3000) => {
+                    const start = Date.now();
+                    while (Date.now() - start < timeoutMs) {
+                        try {
+                            const s = (useSessionStore.getState() as any).sessions.get(sessionId);
+                            if (s) return true;
+                        } catch { /* noop */ }
+                        await new Promise(r => setTimeout(r, 40));
+                    }
+                    return false;
+                };
+                await waitSessionLoaded();
+                // 若需要开启 Deep，则先切换并等待 store 中的 deepResearchEnabled 生效
                 if (deep) {
+                    // 先把意图写入本地 meta，避免随后 listSessions 覆盖掉 UI 状态
+                    try { (useSessionStore.getState() as any).setSessionMeta(sessionId, { deepResearchEnabled: true }); } catch { /* noop */ }
                     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ToggleDeepResearch', ts: Date.now(), params: { sessionId, enabled: true } } as any);
+                    // 等待直到投影层写入 deepResearchEnabled，最多等待 3s
+                    const waitUntil = async (predicate: () => boolean, timeoutMs = 3000, intervalMs = 40) => {
+                        const start = Date.now();
+                        while (Date.now() - start < timeoutMs) {
+                            if (predicate()) return true;
+                            await new Promise(r => setTimeout(r, intervalMs));
+                        }
+                        return false;
+                    };
+                    try {
+                        await waitUntil(() => {
+                            try {
+                                const s = (useSessionStore.getState() as any).sessions.get(sessionId);
+                                return Boolean(s?.meta?.deepResearchEnabled);
+                            } catch { return false; }
+                        });
+                    } catch { /* noop */ }
                 }
+                // Deep 模式已就绪后再发送初始输入，以触发方向/搜索流程
                 if (initPrompt) {
                     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text: initPrompt } } as any);
                 }

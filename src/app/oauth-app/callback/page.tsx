@@ -19,7 +19,7 @@ export default function OAuthCallbackPage() {
         try {
             hasLogoutIntent = sessionStorage.getItem('oauth:logout-intent') === '1';
         } catch { }
-        try { console.log('[auth][callback][effect:start]', { code: !!code, error, isAuthenticated, hasToken }); } catch { /* noop */ }
+
         if (hasLogoutIntent) {
             // 用户刚刚点击了退出，不要继续处理 OAuth 回调，回到首页
             router.replace('/');
@@ -31,11 +31,11 @@ export default function OAuthCallbackPage() {
         }
         handleRedirect({ fetchUserinfo: true, redirectUri })
             .then(() => {
-                try { console.log('[auth][callback][handleRedirect:success]'); } catch { /* noop */ }
+
                 router.replace('/research');
             })
             .catch((e) => {
-                try { console.log('[auth][callback][handleRedirect:fail]', e); } catch { /* noop */ }
+
                 router.replace('/');
             });
         // eslint-disable-next-line react-hooks/exhaustive-deps
