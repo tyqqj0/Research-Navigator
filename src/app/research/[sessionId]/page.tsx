@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter, usePathname } from 'next/navigation';
+import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { MainLayout, ProtectedLayout } from '@/components/layout';
 import { Button, Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui';
 import { ChatPanel } from '@/features/session/ui/ChatPanel';
@@ -26,10 +26,16 @@ import { useLiteratureOperations } from '@/features/literature/hooks/use-literat
 import { useCollectionOperations } from '@/features/literature/hooks/use-collection-operations';
 import { ArchiveManager } from '@/lib/archive/manager';
 
+// Guard: ensure init query (initPrompt/deep) is consumed only once per session, even under React StrictMode double-mount
+const gOnce: any = globalThis as any;
+const consumedInitQueryForSession: Set<string> = gOnce.__consumedInitQueryForSession || new Set<string>();
+gOnce.__consumedInitQueryForSession = consumedInitQueryForSession;
+
 export default function ResearchSessionPage() {
     const params = useParams<{ sessionId: string }>();
     const router = useRouter();
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const sessionId = params?.sessionId;
     const store = useSessionStore();
     useEffect(() => { if (sessionId) void Promise.all([store.loadAllSessions(), store.loadSessionProjection(sessionId)]); }, [sessionId]);
@@ -68,6 +74,32 @@ export default function ResearchSessionPage() {
     const sessions = store.getSessions();
     // Ensure supervisors started once on client
     useEffect(() => { startDirectionSupervisor(); startCollectionSupervisor(); startTitleSupervisor(); }, []);
+
+    // 消费从主页带来的 initPrompt 与 deep 参数（一次性）
+    useEffect(() => {
+        try {
+            if (!sessionId) return;
+            if (consumedInitQueryForSession.has(sessionId)) return; // StrictMode 双挂载保护
+            const initPrompt = (searchParams?.get('initPrompt') || '').trim();
+            const deep = searchParams?.get('deep') === '1';
+            if (!initPrompt && !deep) return;
+
+            // 立刻标记与清理 URL，避免并发的第二次 effect 再次读取到参数
+            consumedInitQueryForSession.add(sessionId);
+            try { window.history.replaceState(null, '', pathname || `/research/${sessionId}`); } catch { /* noop */ }
+
+            (async () => {
+                if (deep) {
+                    await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ToggleDeepResearch', ts: Date.now(), params: { sessionId, enabled: true } } as any);
+                }
+                if (initPrompt) {
+                    await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text: initPrompt } } as any);
+                }
+            })();
+        } catch { /* noop */ }
+        // 仅在首次挂载处理一次
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionId]);
 
     const createSession = async () => {
         const id = crypto.randomUUID();

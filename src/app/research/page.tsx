@@ -8,7 +8,7 @@ import { Button, Card, CardContent, Sheet, SheetContent, SheetHeader, SheetTitle
 import { useSessionStore } from '@/features/session/data-access/session-store';
 import { useAuthStore } from '@/stores/auth.store';
 import { commandBus } from '@/features/session/runtime/command-bus';
-import { Plus, MessagesSquare } from 'lucide-react';
+import { Plus, MessagesSquare, Search } from 'lucide-react';
 import { UserMenu } from '@/components/auth/UserMenu';
 import { cn } from '@/lib/utils';
 import { SessionList } from '@/features/session/ui/SessionList';
@@ -70,13 +70,19 @@ export default function ResearchPage() {
     };
 
     const [topic, setTopic] = useState('');
+    const [deepEnabled, setDeepEnabled] = useState(false);
 
     const createSessionFromTopic = async () => {
         const id = crypto.randomUUID();
         const title = topic.trim() || '未命名研究';
-        try { console.debug('[ui][research_page][create_session_from_topic]', { id, title }); } catch { /* noop */ }
+        try { console.debug('[ui][research_page][create_session_from_topic]', { id, title, deepEnabled }); } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'CreateSession', ts: Date.now(), sessionId: id, params: { title } } as any);
-        router.push(`/research/${id}`);
+        const params = new URLSearchParams();
+        const prompt = topic.trim();
+        if (prompt) params.set('initPrompt', prompt);
+        if (deepEnabled) params.set('deep', '1');
+        const qs = params.toString();
+        router.push(`/research/${id}${qs ? `?${qs}` : ''}`);
     };
 
     return (
@@ -91,19 +97,63 @@ export default function ResearchPage() {
                                     <div className="text-sm text-muted-foreground">描述你的研究主题或问题，我们会为你创建一个新会话</div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <Input
-                                        value={topic}
-                                        onChange={(e) => setTopic(e.target.value)}
-                                        placeholder="例如：大型语言模型在生物医学信息抽取中的应用挑战？"
-                                        className="h-12 rounded-xl"
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                void createSessionFromTopic();
-                                            }
-                                        }}
-                                    />
+                                    <div className="relative flex-1">
+                                        <button
+                                            type="button"
+                                            title="Deep Research"
+                                            aria-label="Deep Research"
+                                            onClick={() => setDeepEnabled(!deepEnabled)}
+                                            className={cn(
+                                                'absolute left-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 rounded-full text-xs px-2 py-0.5 border',
+                                                deepEnabled ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-muted text-muted-foreground border-transparent'
+                                            )}
+                                        >
+                                            <Search className="w-3 h-3" />
+                                            <span>Deep Research</span>
+                                        </button>
+                                        <Input
+                                            value={topic}
+                                            onChange={(e) => setTopic(e.target.value)}
+                                            placeholder="例如：大型语言模型在生物医学信息抽取中的应用挑战？"
+                                            className="h-12 rounded-xl pl-32"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    void createSessionFromTopic();
+                                                }
+                                            }}
+                                        />
+                                    </div>
                                     <Button className="h-12 rounded-xl px-6" onClick={() => void createSessionFromTopic()}>开始研究</Button>
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-full"
+                                        onClick={() => setTopic('大型语言模型在生物医学信息抽取中的应用挑战是什么？')}
+                                    >
+                                        大型语言模型在生物医学…挑战
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-full"
+                                        onClick={() => setTopic('综述：RAG 在科研文献检索中的最佳实践和常见陷阱')}
+                                    >
+                                        RAG 检索最佳实践
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-full"
+                                        onClick={() => setTopic('帮我制定一个关于 LLM 评估的系统研究计划')}
+                                    >
+                                        LLM 评估研究计划
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
