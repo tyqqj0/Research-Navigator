@@ -4,6 +4,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -410,8 +411,14 @@ const ComposerBar: React.FC<{
     onRefsChange: (refs: ArtifactRef[]) => void;
     onOpenDetail?: (paperId: string) => void;
 }> = ({ value, onChange, onSend, deep, onToggleDeep, awaitingDecision, selectedRefs, onRefsChange, onOpenDetail }) => {
-    const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
+    const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        // Enter 发送，Shift+Enter 换行，忽略输入法组合键
+        if (e.key === 'Enter' && !e.shiftKey) {
+            const anyEvt = e.nativeEvent as any;
+            if (anyEvt && anyEvt.isComposing) return;
+            e.preventDefault();
+            onSend();
+        }
     };
 
     const [mentionOpen, setMentionOpen] = React.useState(false);
@@ -544,16 +551,15 @@ const ComposerBar: React.FC<{
                     title="Deep Research"
                     onClick={() => onToggleDeep(!deep)}
                     className={cn(
-                        'absolute left-2 inline-flex items-center gap-1 rounded-full text-xs px-2 py-0.5 border',
-                        deep ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-muted text-muted-foreground border-transparent'
+                        'absolute left-2 top-1 inline-flex items-center gap-1.5 rounded-full text-xs px-2.5 py-0.5 border shadow-sm',
+                        deep ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white/80 dark:bg-slate-900/60 text-muted-foreground border-border'
                     )}
                 >
                     <Search className="w-3 h-3" />
                     <span>Deep Research</span>
                 </button>
-                <Input
-                    className="pl-32 pr-28"
-                    // placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认/细化方向…' : '输入你的问题（普通对话）或让我们找到研究方向'}
+                <Textarea
+                    className="pl-32 pr-24 rounded-2xl min-h-[44px] h-11 max-h-40 resize-none py-2.5"
                     placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认…' : '输入你的问题（普通对话）或让我们找到研究方向'}
                     value={value}
                     onChange={(e) => handleInputChange(e.target.value)}
@@ -578,7 +584,7 @@ const ComposerBar: React.FC<{
                 />
                 <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
                     <PopoverTrigger asChild>
-                        <Button size="sm" variant="ghost" className="absolute right-10" title="添加参考 (@)" onClick={() => setMentionOpen(!mentionOpen)}>
+                        <Button size="sm" variant="ghost" className="absolute right-12 top-1" title="添加参考 (@)" onClick={() => setMentionOpen(!mentionOpen)}>
                             <AtSign className="w-4 h-4" />
                         </Button>
                     </PopoverTrigger>
@@ -642,7 +648,7 @@ const ComposerBar: React.FC<{
                         </div>
                     </PopoverContent>
                 </Popover>
-                <Button size="sm" className="absolute right-2" onClick={onSend}>
+                <Button size="sm" className="absolute right-2 top-1 h-8 w-8 rounded-full p-0" onClick={onSend} title="发送">
                     <Send className="w-4 h-4" />
                 </Button>
             </div>

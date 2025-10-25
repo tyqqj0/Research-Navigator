@@ -21,8 +21,8 @@ interface UserMenuProps {
  * 不使用 SDK 内置的菜单外观，复用现有 UI 风格
  */
 export const UserMenu: React.FC<UserMenuProps> = ({ className, expandDirection = 'top', align = 'center' }) => {
-    const { isAuthenticated, user, startLogin, logout } = (() => {
-        try { return useOAuth(); } catch { return { isAuthenticated: false, user: undefined, startLogin: async () => { }, logout: async () => { } } as any; }
+    const { isAuthenticated, user, startLogin, logout, logoutSession } = (() => {
+        try { return useOAuth(); } catch { return { isAuthenticated: false, user: undefined, startLogin: async () => { }, logout: async () => { }, logoutSession: async () => { } } as any; }
     })();
 
     const redirectUri = useMemo(() => {
@@ -58,11 +58,15 @@ export const UserMenu: React.FC<UserMenuProps> = ({ className, expandDirection =
     const handleLogout = useCallback(async () => {
         try { sessionStorage.setItem('oauth:logout-intent', '1'); } catch { /* noop */ }
         try {
-            await logout();
+            // Prefer full sign-out to terminate server session so next login prompts for credentials
+            await logoutSession();
+        } catch {
+            // Fallback: at least terminate current app/server session
+            try { await logoutSession?.(); } catch { /* noop */ }
         } finally {
             try { sessionStorage.removeItem('oauth:logout-intent'); } catch { /* noop */ }
         }
-    }, [logout]);
+    }, [logout, logoutSession]);
 
     const displayUser = useMemo(() => {
         const name = (user?.nickname || user?.name || user?.username || user?.preferred_username || user?.email || 'User') as string;

@@ -1,0 +1,260 @@
+{
+    "categories": [
+        {
+            "id": "llm-fundamentals",
+            "name": "LLM 基础",
+            "topics": [
+                {
+                    "id": "in-context-learning",
+                    "title": "In-Context Learning",
+                    "displayTitle": "上下文学习",
+                    "description": "探索大语言模型如何通过少量示例进行学习，无需微调即可适应新任务",
+                    "query": "我想深入了解 In-Context Learning 的最新研究进展，包括其理论基础、实现方法和应用场景",
+                    "tags": [
+                        "基础理论",
+                        "学习范式"
+                    ]
+                },
+                {
+                    "id": "instruction-tuning",
+                    "title": "Instruction Tuning",
+                    "displayTitle": "指令微调",
+                    "description": "研究如何通过指令数据集训练模型，提升其遵循人类指令的能力",
+                    "query": "帮我梳理 Instruction Tuning 的发展历程、关键技术和最佳实践",
+                    "tags": [
+                        "模型训练",
+                        "对齐技术"
+                    ]
+                },
+                {
+                    "id": "chain-of-thought",
+                    "title": "Chain of Thought",
+                    "displayTitle": "思维链推理",
+                    "description": "分析思维链提示如何提升模型的复杂推理能力",
+                    "query": "我想了解 Chain of Thought 的工作原理、变体方法和在不同任务上的效果",
+                    "tags": [
+                        "推理能力",
+                        "提示工程"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "llm-applications",
+            "name": "LLM 应用",
+            "topics": [
+                {
+                    "id": "llm-agents",
+                    "title": "LLM-based Agents",
+                    "displayTitle": "LLM 智能体",
+                    "description": "探索如何构建基于大语言模型的自主智能体系统",
+                    "query": "帮我调研 LLM-based Agents 的架构设计、关键能力和典型应用案例",
+                    "tags": [
+                        "智能体",
+                        "自主系统"
+                    ]
+                },
+                {
+                    "id": "llm-recommendation",
+                    "title": "LLMs for Recommendation",
+                    "displayTitle": "LLM 推荐系统",
+                    "description": "研究大语言模型在推荐系统中的应用和优势",
+                    "query": "我想了解 LLMs 如何改进传统推荐系统，有哪些创新方法和挑战",
+                    "tags": [
+                        "推荐系统",
+                        "应用场景"
+                    ]
+                },
+                {
+                    "id": "llm-information-retrieval",
+                    "title": "LLMs for Information Retrieval",
+                    "displayTitle": "LLM 信息检索",
+                    "description": "探索大语言模型在信息检索和搜索中的应用",
+                    "query": "帮我梳理 LLMs 在信息检索领域的最新进展，包括 RAG、重排序等技术",
+                    "tags": [
+                        "信息检索",
+                        "RAG"
+                    ]
+                },
+                {
+                    "id": "llm-software-engineering",
+                    "title": "LLMs for Software Engineering",
+                    "displayTitle": "LLM 软件工程",
+                    "description": "研究大语言模型如何辅助软件开发全流程",
+                    "query": "我想了解 LLMs 在代码生成、测试、调试、文档等软件工程任务中的应用",
+                    "tags": [
+                        "代码生成",
+                        "软件开发"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "llm-safety",
+            "name": "安全与可信",
+            "topics": [
+                {
+                    "id": "hallucination",
+                    "title": "Hallucination in LLMs",
+                    "displayTitle": "幻觉问题",
+                    "description": "研究大语言模型生成虚假信息的原因和缓解方法",
+                    "query": "帮我深入分析 LLM 幻觉问题的成因、检测方法和缓解策略",
+                    "tags": [
+                        "可信度",
+                        "安全性"
+                    ]
+                },
+                {
+                    "id": "bias-fairness",
+                    "title": "Bias and Fairness",
+                    "displayTitle": "偏见与公平性",
+                    "description": "探索大语言模型中的偏见问题及公平性保障",
+                    "query": "我想了解 LLMs 中的偏见来源、评估方法和去偏技术",
+                    "tags": [
+                        "公平性",
+                        "伦理"
+                    ]
+                },
+                {
+                    "id": "safety",
+                    "title": "Safety in LLMs",
+                    "displayTitle": "模型安全",
+                    "description": "研究如何确保大语言模型的安全性和可控性",
+                    "query": "帮我梳理 LLM 安全性的关键挑战、防护机制和最佳实践",
+                    "tags": [
+                        "安全性",
+                        "对抗攻击"
+                    ]
+                },
+                {
+                    "id": "alignment",
+                    "title": "Alignment of LLMs",
+                    "displayTitle": "价值对齐",
+                    "description": "探索如何让大语言模型与人类价值观保持一致",
+                    "query": "我想深入了解 LLM 对齐技术，包括 RLHF、Constitutional AI 等方法",
+                    "tags": [
+                        "对齐",
+                        "RLHF"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "llm-evaluation",
+            "name": "评估与分析",
+            "topics": [
+                {
+                    "id": "evaluation",
+                    "title": "Evaluation of LLMs",
+                    "displayTitle": "模型评估",
+                    "description": "研究如何全面评估大语言模型的能力和性能",
+                    "query": "帮我梳理 LLM 评估的维度、基准数据集和评估方法论",
+                    "tags": [
+                        "评估",
+                        "基准测试"
+                    ]
+                },
+                {
+                    "id": "explainability",
+                    "title": "Explainability for LLMs",
+                    "displayTitle": "可解释性",
+                    "description": "探索如何理解和解释大语言模型的决策过程",
+                    "query": "我想了解 LLM 可解释性的研究方法、可视化技术和应用价值",
+                    "tags": [
+                        "可解释性",
+                        "透明度"
+                    ]
+                },
+                {
+                    "id": "text-detection",
+                    "title": "LLM-Generated Texts Detection",
+                    "displayTitle": "生成文本检测",
+                    "description": "研究如何识别和检测大语言模型生成的文本",
+                    "query": "帮我调研 AI 生成文本检测的技术方法、挑战和应用场景",
+                    "tags": [
+                        "检测",
+                        "真实性"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "llm-domains",
+            "name": "垂直领域",
+            "topics": [
+                {
+                    "id": "llm-medicine",
+                    "title": "LLMs in Medicine",
+                    "displayTitle": "医疗健康",
+                    "description": "探索大语言模型在医疗健康领域的应用和挑战",
+                    "query": "我想了解 LLMs 在医疗诊断、药物研发、临床决策等场景的应用现状",
+                    "tags": [
+                        "医疗",
+                        "垂直领域"
+                    ]
+                },
+                {
+                    "id": "llm-education",
+                    "title": "Challenges of LLMs in Education",
+                    "displayTitle": "教育领域挑战",
+                    "description": "研究大语言模型在教育场景中的机遇和挑战",
+                    "query": "帮我分析 LLMs 在教育领域的应用潜力、面临的挑战和解决方案",
+                    "tags": [
+                        "教育",
+                        "应用挑战"
+                    ]
+                },
+                {
+                    "id": "domain-specialization",
+                    "title": "Domain Specialization",
+                    "displayTitle": "领域专业化",
+                    "description": "探索如何让大语言模型适应特定领域",
+                    "query": "我想了解领域专业化 LLM 的训练方法、数据需求和效果评估",
+                    "tags": [
+                        "领域适配",
+                        "专业化"
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "llm-advanced",
+            "name": "前沿技术",
+            "topics": [
+                {
+                    "id": "multimodal",
+                    "title": "Large Multi-Modal Models",
+                    "displayTitle": "多模态大模型",
+                    "description": "研究融合视觉、语言等多种模态的大模型",
+                    "query": "帮我梳理多模态大模型的架构设计、训练方法和应用场景",
+                    "tags": [
+                        "多模态",
+                        "视觉-语言"
+                    ]
+                },
+                {
+                    "id": "acceleration",
+                    "title": "Acceleration for LLMs",
+                    "displayTitle": "模型加速",
+                    "description": "探索大语言模型的推理加速和优化技术",
+                    "query": "我想了解 LLM 加速的关键技术，包括量化、剪枝、蒸馏等方法",
+                    "tags": [
+                        "优化",
+                        "推理加速"
+                    ]
+                },
+                {
+                    "id": "chatgpt",
+                    "title": "ChatGPT",
+                    "displayTitle": "ChatGPT 研究",
+                    "description": "深入分析 ChatGPT 的技术架构和影响",
+                    "query": "帮我系统梳理 ChatGPT 的技术原理、训练方法和对行业的影响",
+                    "tags": [
+                        "ChatGPT",
+                        "案例研究"
+                    ]
+                }
+            ]
+        }
+    ]
+}

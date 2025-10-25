@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from 'react';
+import { useOAuth } from '@autolabz/oauth-sdk';
 import useAuthStore from '@/stores/auth.store';
 // Legacy bootstrap using authApi has been deprecated in favor of OAuth SDK
 
@@ -14,6 +15,9 @@ export function AuthBootstrap() {
     const setLoading = useAuthStore((s) => s.setLoading);
     const login = useAuthStore((s) => s.login);
     const clearAuth = useAuthStore((s) => s.clearAuth);
+    const { refreshAuth } = (() => {
+        try { return useOAuth(); } catch { return { refreshAuth: () => { } } as any; }
+    })();
 
     useEffect(() => {
         let cancelled = false;
@@ -22,7 +26,8 @@ export function AuthBootstrap() {
             if (isAuthenticated) return;
             setLoading(true);
             try {
-                // No-op: OAuthProvider + OAuthStoreBridge handle hydration
+                // Ensure SDK rehydrates from localStorage/token storage on hard reloads
+                try { refreshAuth?.(); } catch { /* noop */ }
             } finally {
                 if (!cancelled) setLoading(false);
             }
