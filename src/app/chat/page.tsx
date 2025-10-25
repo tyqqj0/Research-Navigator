@@ -1,3 +1,5 @@
+"use client";
+
 import { MainLayout, ProtectedLayout } from '@/components/layout';
 import { Button, Card, CardContent, MessageComposer } from '@/components/ui';
 

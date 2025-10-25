@@ -110,14 +110,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             ),
             path: '/data/graphs'
         },
-        {
-            key: 'dashboard',
-            label: '仪表板',
-            icon: (
-                <Home className="w-5 h-5" />
-            ),
-            path: '/dashboard'
-        },
+        // {
+        //     key: 'dashboard',
+        //     label: '仪表板',
+        //     icon: (
+        //         <Home className="w-5 h-5" />
+        //     ),
+        //     path: '/dashboard'
+        // },
         {
             key: 'discovery',
             label: '文献发现',
