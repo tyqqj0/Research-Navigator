@@ -35,7 +35,8 @@ interface ChatPanelProps {
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail }) => {
-    const messages = useSessionStore(s => s.getMessages(sessionId));
+    const getMessages = useSessionStore(s => s.getMessages);
+    const messages = getMessages(sessionId);
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const toggleGraphPanel = useSessionStore(s => s.toggleGraphPanel);
     const [userInput, setUserInput] = React.useState('');

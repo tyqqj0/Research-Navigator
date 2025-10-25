@@ -32,8 +32,9 @@ function SortableItem({ id, children }: { id: string; children: React.ReactNode 
 export function SessionList() {
     const router = useRouter();
     const pathname = usePathname();
-    // ✅ 优化：使用缓存的 sessions 数组，避免每次渲染都创建新数组
-    const sessions = useSessionStore(s => s.getSessions());
+    // 使用 store 级 memoized 派生，选择稳定 getter 引用
+    const getSessions = useSessionStore(s => s.getSessions);
+    const sessions = getSessions();
     const setSessionsOrder = useSessionStore(s => s.setSessionsOrder);
     const removeSession = useSessionStore(s => s.removeSession);
 

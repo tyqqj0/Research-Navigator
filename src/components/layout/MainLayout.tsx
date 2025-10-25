@@ -158,17 +158,22 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     }, [pinned]);
 
     const isOverlayActive = showSidebar && !pinned && hoverOpen;
-    // 计算当前侧边区域实际占用的左边距（与内容 marginLeft 保持一致）
+    // 侧边栏宽度（含与内容之间的间距 12px）；用于桌面端内容左偏移
     const currentSidebarLeftOffset = showSidebar ? ((pinned ? navigationUIConfig.panelWidth : navigationUIConfig.railWidth) + 12) : 0;
     // 遮罩从屏幕最左边开始，覆盖整个屏幕（侧边栏 z-50 会浮在上面）
     const overlayLeftOffset = 0;
     const isResearchRoot = pathname === '/research';
 
     return (
-        <div className={cn(
-            'relative h-screen theme-background-primary',
-            className
-        )}>
+        <div
+            className={cn('relative h-screen theme-background-primary', className)}
+            style={{
+                // 仅作为 CSS 变量提供给 md+ 断点下的内容容器使用
+                // 移动端不直接使用该变量（由类名控制为 0）
+                // 注意：不在此处直接设置 marginLeft，避免影响遮罩定位
+                ['--content-left-offset' as any]: `${currentSidebarLeftOffset}px`
+            }}
+        >
             {/* Floating sidebar host (desktop) */}
             {showSidebar && (
                 <>
@@ -217,16 +222,15 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
             {/* Content wrapper (blur/offset) */}
             <div
-                className={cn('flex flex-col min-w-0 theme-text h-full')}
+                className={cn('flex flex-col min-w-0 theme-text h-full', 'md:ml-[var(--content-left-offset)]')}
                 style={{
-                    marginLeft: currentSidebarLeftOffset,
                     // 保留轻微模糊提升焦点层级，但移除整体透明度降低，避免双重变暗
                     filter: isOverlayActive ? `blur(${navigationUIConfig.blurRadius}px)` : undefined,
                     transition: 'margin-left 200ms ease, filter 150ms ease'
                 }}
             >
-                {/* Header */}
-                {isResearchRoot ? (
+                {/* Header：移动端始终显示，桌面端可按场景显示 */}
+                <div className="md:hidden">
                     <Header
                         title={headerTitle}
                         actions={headerActions}
@@ -234,8 +238,21 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                         user={user}
                         hideUserInfo={effectiveHideUserInfo}
                         onOpenSidebar={showSidebar ? () => setMobileSidebarOpen(true) : undefined}
-                        variant="transparent"
+                        variant={isResearchRoot ? 'transparent' : 'default'}
                     />
+                </div>
+                {isResearchRoot ? (
+                    <div className="hidden md:block">
+                        <Header
+                            title={headerTitle}
+                            actions={headerActions}
+                            rightContent={headerRightContent}
+                            user={user}
+                            hideUserInfo={effectiveHideUserInfo}
+                            onOpenSidebar={showSidebar ? () => setMobileSidebarOpen(true) : undefined}
+                            variant="transparent"
+                        />
+                    </div>
                 ) : null}
 
                 {/* Main content */}

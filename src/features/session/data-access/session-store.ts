@@ -2,6 +2,10 @@ import { create } from 'zustand';
 const EMPTY_MESSAGES: ChatMessage[] = [] as any;
 import type { ChatMessage, ChatSession, MessageId, SessionId } from './types';
 import { authStoreUtils, useAuthStore } from '@/stores/auth.store';
+
+// Local memoization for derived selectors without mutating store state
+const NO_IDS_SENTINEL: Record<string, never> = {};
+const sessionsArrayCache = new WeakMap<Map<SessionId, ChatSession>, WeakMap<object, ChatSession[]>>();
 import { ArchiveManager } from '@/lib/archive/manager';
 
 const getRepo = () => ArchiveManager.getServices().sessionRepository;
@@ -71,14 +75,26 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
 
         getSessions() {
             const state = get();
+            const sessionsMap = state.sessions;
             const ids = state.orderedSessionIds;
+
+            // WeakMap-based memoization keyed by map and ids array references
+            let inner = sessionsArrayCache.get(sessionsMap);
+            if (!inner) {
+                inner = new WeakMap<object, ChatSession[]>();
+                sessionsArrayCache.set(sessionsMap, inner);
+            }
+            const key = (ids && ids.length > 0 ? (ids as unknown as object) : (NO_IDS_SENTINEL as object));
+            const cached = inner.get(key);
+            if (cached) return cached;
+
             let arr: ChatSession[];
             if (ids && ids.length > 0) {
-                const all = state.sessions;
-                arr = ids.map(id => all.get(id)).filter(Boolean) as ChatSession[];
+                arr = ids.map(id => sessionsMap.get(id)).filter(Boolean) as ChatSession[];
             } else {
-                arr = Array.from(state.sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+                arr = Array.from(sessionsMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);
             }
+            inner.set(key, arr);
             return arr;
         },
         getOrderedIds() { return get().orderedSessionIds || get().getSessions().map(s => s.id); },
