@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { MessageComposer } from '@/components/ui';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -105,6 +106,41 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: lastUserText } } as any);
     };
     const awaitingDecision = Boolean(meta?.direction?.awaitingDecision);
+    // Helpers for reference chip labels
+    const getLiterature = useLiteratureStore(s => s.getLiterature);
+    const [reportTitles, setReportTitles] = React.useState<Record<string, string>>({});
+    React.useEffect(() => {
+        let cancelled = false;
+        const run = async () => {
+            const tasks = (selectedRefs || []).filter(r => r.kind === 'report_final').map(async (r) => {
+                const key = String(r.id);
+                if (reportTitles[key]) return;
+                try {
+                    const a = await getRepo().getArtifact(key);
+                    if (!cancelled) setReportTitles(prev => ({ ...prev, [key]: String((a?.meta || {}).title || '') }));
+                } catch { /* ignore */ }
+            });
+            await Promise.all(tasks);
+        };
+        void run();
+        return () => { cancelled = true; };
+    }, [selectedRefs]);
+    const formatRefLabel = React.useCallback((r: ArtifactRef): string => {
+        if (r.kind === 'literature') {
+            const item = getLiterature(String(r.id));
+            const title = item?.literature?.title;
+            return title ? `文献: ${title.slice(0, 16)}...` : `文献:${String(r.id).slice(0, 12)}`;
+        }
+        if (r.kind === 'report_final') {
+            const title = reportTitles[String(r.id)];
+            return title ? `报告: ${title.slice(0, 16)}...` : `报告:${String(r.id).slice(0, 12)}`;
+        }
+        return `${r.kind}:${String(r.id).slice(0, 12)}`;
+    }, [getLiterature, reportTitles]);
+    const removeRef = (ref: ArtifactRef) => {
+        const key = `${ref.kind}:${ref.id}`;
+        setSelectedRefs(prev => prev.filter(r => `${r.kind}:${r.id}` !== key));
+    };
     return (
         // <div></div>
         <Card className="relative h-full md:h-[calc(100vh-5rem)] flex flex-col">
@@ -224,17 +260,66 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                     )}
                 </div>
 
-                <ComposerBar
-                    value={userInput}
-                    onChange={setUserInput}
-                    onSend={sendUserMessage}
-                    deep={deep}
-                    onToggleDeep={toggleDeep}
-                    awaitingDecision={awaitingDecision}
-                    selectedRefs={selectedRefs}
-                    onRefsChange={setSelectedRefs}
-                    onOpenDetail={onOpenDetail}
-                />
+                <div className="p-3">
+                    <div className="max-w-2xl md:max-w-3xl mx-auto">
+                        <MessageComposer
+                            value={userInput}
+                            onChange={setUserInput}
+                            onSend={sendUserMessage}
+                            placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认…' : '输入你的问题（普通对话）或让我们找到研究方向'}
+                            variant="chat"
+                            density="compact"
+                            sendKeyScheme="enterToSend"
+                            minRows={1}
+                            maxRows={8}
+                            textareaClassName="text-sm leading-5"
+                            leftTools={(
+                                <button
+                                    type="button"
+                                    title="Deep Research"
+                                    aria-label="Deep Research"
+                                    onClick={() => toggleDeep(!deep)}
+                                    className={cn(
+                                        'inline-flex items-center gap-1.5 rounded-full text-xs px-2.5 py-10 border transition-all',
+                                        deep
+                                            ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 shadow-sm'
+                                            : 'bg-white/80 dark:bg-slate-900/60 text-muted-foreground border-border hover:bg-white'
+                                    )}
+                                >
+                                    <Search className="w-3 h-3" />
+                                    <span>Deep Research</span>
+                                </button>
+                            )}
+                            rightTools={(
+                                <Button size="sm" className="h-8 w-8 rounded-full p-0" onClick={sendUserMessage} title="发送">
+                                    <Send className="w-4 h-4" />
+                                </Button>
+                            )}
+                            helperText={<span className="text-xs text-muted-foreground hidden md:inline">按 <b>Enter</b> 发送，<b>Shift+Enter</b> 换行</span>}
+                        />
+                        {/* Selected references chips */}
+                        {selectedRefs.length > 0 && (
+                            <div className="mt-2 px-1 flex items-center gap-2 flex-wrap">
+                                {selectedRefs.map((r) => (
+                                    <Badge key={`${r.kind}:${r.id}`} variant="secondary" className="flex items-center gap-0">
+                                        <button
+                                            type="button"
+                                            className="inline-flex items-center gap-1 hover:underline"
+                                            title={formatRefLabel(r)}
+                                            onClick={() => { if (r.kind === 'literature' && onOpenDetail) onOpenDetail(String(r.id)); }}
+                                        >
+                                            {r.kind === 'literature' ? <BookOpen className="w-3 h-3" /> : r.kind === 'report_final' ? <FileText className="w-3 h-3" /> : null}
+                                            {formatRefLabel(r)}
+                                        </button>
+                                        <button type="button" className="ml-1 hover:text-red-600" onClick={() => removeRef(r)}>
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </Badge>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </CardContent>
         </Card>
     );

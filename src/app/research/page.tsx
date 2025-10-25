@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { MainLayout, ProtectedLayout } from '@/components/layout';
-import { Button, Card, CardContent, Sheet, SheetContent, SheetHeader, SheetTitle, Input, Textarea } from '@/components/ui';
+import { Button, Card, CardContent, Sheet, SheetContent, SheetHeader, SheetTitle, Input, MessageComposer } from '@/components/ui';
 import { useSessionStore } from '@/features/session/data-access/session-store';
 import { useAuthStore } from '@/stores/auth.store';
 import { commandBus } from '@/features/session/runtime/command-bus';
@@ -110,7 +110,7 @@ export default function ResearchPage() {
                     <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
                         {/* 搜索面板 */}
                         <div className="max-w-4xl mx-auto">
-                            <Card className="mb-8 rounded-3xl overflow-hidden backdrop-blur-sm bg-gradient-to-br from-blue-50/40 to-purple-50/40 dark:from-blue-950/15 dark:to-purple-950/15 border shadow-lg">
+                            <Card className="mb-8 rounded-[28px] md:rounded-[32px] overflow-hidden backdrop-blur-sm bg-gradient-to-br from-blue-50/40 to-purple-50/40 dark:from-blue-950/15 dark:to-purple-950/15 border shadow-lg">
                                 <CardContent className="p-6 md:p-8">
                                     <div className="text-center mb-8">
                                         <h1 className="text-3xl md:text-4xl font-bold mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -120,48 +120,42 @@ export default function ResearchPage() {
                                             描述你的研究主题或问题，我们会为你创建一个新会话
                                         </p>
                                     </div>
-                                    <div className="relative">
-                                        <button
-                                            type="button"
-                                            title="Deep Research"
-                                            aria-label="Deep Research"
-                                            onClick={() => setDeepEnabled(!deepEnabled)}
-                                            className={cn(
-                                                'absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full text-xs font-medium px-3 py-1 border transition-all',
-                                                deepEnabled
-                                                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 shadow-sm'
-                                                    : 'bg-white/80 dark:bg-slate-900/60 text-muted-foreground border-border hover:bg-white'
-                                            )}
-                                        >
-                                            <Search className="w-3.5 h-3.5" />
-                                            <span>Deep Research</span>
-                                        </button>
-                                        <Textarea
-                                            value={topic}
-                                            onChange={(e) => setTopic(e.target.value)}
-                                            placeholder="例如：大型语言模型在生物医学信息抽取中的应用挑战？"
-                                            className="min-h-[132px] rounded-3xl pt-12 pl-32 pr-16 pb-12 text-base resize-none shadow-sm border focus-visible:ring-2 focus-visible:ring-blue-500 transition-all"
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && !e.shiftKey) {
-                                                    const anyEvt = e.nativeEvent as any;
-                                                    if (anyEvt && anyEvt.isComposing) return;
-                                                    e.preventDefault();
-                                                    void createSessionFromTopic();
-                                                }
-                                            }}
-                                        />
-                                        <Button
-                                            size="sm"
-                                            className="absolute right-3 bottom-3 h-9 w-9 rounded-full p-0"
-                                            onClick={() => void createSessionFromTopic()}
-                                            title="发送"
-                                        >
-                                            <Send className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground text-center mt-4">
-                                        提示：按 Enter 发送，Shift+Enter 换行
-                                    </p>
+                                    <MessageComposer
+                                        value={topic}
+                                        onChange={setTopic}
+                                        onSend={() => void createSessionFromTopic()}
+                                        placeholder="例如：大型语言模型在生物医学信息抽取中的应用挑战？"
+                                        variant="hero"
+                                        minRows={1}
+                                        maxRows={6}
+                                        sendKeyScheme="enterToSend"
+                                        leftTools={(
+                                            <button
+                                                type="button"
+                                                title="Deep Research"
+                                                aria-label="Deep Research"
+                                                onClick={() => setDeepEnabled(!deepEnabled)}
+                                                className={cn(
+                                                    'inline-flex items-center gap-1.5 rounded-full text-xs font-medium px-3 py-1 border transition-all',
+                                                    deepEnabled
+                                                        ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 shadow-sm'
+                                                        : 'bg-white/80 dark:bg-slate-900/60 text-muted-foreground border-border hover:bg-white'
+                                                )}
+                                            >
+                                                <Search className="w-3.5 h-3.5" />
+                                                <span>Deep Research</span>
+                                            </button>
+                                        )}
+                                        rightTools={(
+                                            <Button size="sm" className="h-8 w-8 rounded-full p-0" onClick={() => void createSessionFromTopic()} title="发送">
+                                                <Send className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                        leftAdornment={null}
+                                        helperText={(
+                                            <span>提示：按 <b>Enter</b> 发送（输入法安全），使用 <b>Shift+Enter</b> 换行</span>
+                                        )}
+                                    />
                                 </CardContent>
                             </Card>
                         </div>

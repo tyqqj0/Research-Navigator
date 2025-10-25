@@ -1,5 +1,5 @@
 import { MainLayout, ProtectedLayout } from '@/components/layout';
-import { Button, Card, CardContent, Input } from '@/components/ui';
+import { Button, Card, CardContent, MessageComposer } from '@/components/ui';
 
 export default function ChatPage() {
 
@@ -114,13 +114,15 @@ export default function ChatPage() {
                     {/* 输入区域 */}
                     <div className="border-t bg-white dark:bg-gray-900 p-4">
                         <div className="max-w-4xl mx-auto">
-                            <div className="flex space-x-4">
-                                <Input
-                                    placeholder="输入您的问题..."
-                                    className="flex-1"
-                                />
-                                <Button>发送</Button>
-                            </div>
+                            <MessageComposer
+                                value={""}
+                                onChange={() => { }}
+                                onSend={() => { }}
+                                placeholder="输入您的问题..."
+                                variant="chat"
+                                sendKeyScheme="enterToSend"
+                                helperText={<span className="hidden md:inline">按 <b>Enter</b> 发送，<b>Shift+Enter</b> 换行</span>}
+                            />
                         </div>
                     </div>
                 </div>
