@@ -23,9 +23,10 @@ function resolveUpstream(tailPath: string): { base: string; authHeader?: string;
     return { base: aiBase, authHeader: auth, kind: 'ai' };
 }
 
-async function proxy(req: Request, { params }: { params: { path: string[] } }) {
+async function proxy(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
     const url = new URL(req.url);
-    const tailPath = (params?.path || []).join('/');
+    const resolvedParams = await params;
+    const tailPath = (resolvedParams?.path || []).join('/');
     const upstream = resolveUpstream(tailPath);
     const targetUrl = `${upstream.base}/${tailPath}${url.search}`;
 

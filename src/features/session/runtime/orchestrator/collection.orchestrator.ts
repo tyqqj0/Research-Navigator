@@ -9,6 +9,7 @@ import { aiQueryGeneratorExecutor } from '../executors/ai-query-generator-execut
 import { pruneExecutor } from '../executors/prune-executor';
 import { paperMetadataExecutor } from '../executors/paper-metadata-executor';
 import { graphBuilderExecutor } from '../executors/graph-builder-executor';
+import { rankAndPickCandidates } from '../executors/candidate-selector';
 import { ArchiveManager } from '@/lib/archive/manager';
 const getRepo = () => ArchiveManager.getServices().sessionRepository;
 import { runtimeConfig } from '@/features/session/runtime/runtime-config';
@@ -130,9 +131,11 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 await emit({ id: newId(), type: 'SearchRoundStarted', ts: Date.now(), sessionId, payload: { round, query } });
 
                 // 第一步：仅搜索候选，供 UI 展示 query + 链接
+                // 使用配置的候选池大小，为质量筛选提供更多选择空间
+                const poolSize = runtimeConfig.CANDIDATE_POOL_SIZE || roundSize;
                 let candArtifact: Artifact;
                 try {
-                    candArtifact = await searchExecutor.searchCandidates(query, roundSize) as any;
+                    candArtifact = await searchExecutor.searchCandidates(query, poolSize) as any;
                 } catch (err: any) {
                     await emit({ id: newId(), type: 'SearchRoundFailed', ts: Date.now(), sessionId, payload: { round, stage: 'candidates', error: String(err?.message || err) } as any });
                     try { service.stop(); } catch { }
@@ -144,14 +147,35 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 await getRepo().putArtifact({ ...(candArtifact as any), meta: { sessionId, collectionId, round } } as Artifact);
                 await emit({ id: newId(), type: 'SearchCandidatesReady', ts: Date.now(), sessionId, payload: { round, artifactId: candArtifact.id } as any });
 
-                // 模拟用户可见时间（避免“瞬间几十篇”），并给 Tavily/后端一些响应时间
+                // 模拟用户可见时间（避免"瞬间几十篇"），并给 Tavily/后端一些响应时间
                 await new Promise(r => setTimeout(r, 600));
 
-                // 第二步：直接用候选 bestIdentifier 入库并构建 batch
-                const identifiers: string[] = ((candArtifact as any).data?.candidates || [])
+                // 第二步：通过候选筛选器选出高质量或随机候选
+                const allCandidates = ((candArtifact as any).data?.candidates || []);
+                let selectedCandidates = allCandidates;
+                try {
+                    const strategy = runtimeConfig.CANDIDATE_SELECTION_STRATEGY || 'quality';
+                    const mode = runtimeConfig.CANDIDATE_QUALITY_MODE || 'balanced';
+                    const weights = runtimeConfig.CANDIDATE_QUALITY_WEIGHTS;
+                    const minCitationCount = runtimeConfig.CANDIDATE_MIN_CITATION_COUNT || 0;
+                    selectedCandidates = await rankAndPickCandidates(allCandidates, {
+                        strategy,
+                        topK: roundSize,
+                        mode,
+                        weights,
+                        minCitationCount
+                    });
+                    await emit({ id: newId(), type: 'CandidatesRanked', ts: Date.now(), sessionId, payload: { round, strategy, mode, minCitationCount, total: allCandidates.length, selected: selectedCandidates.length } as any });
+                } catch (err: any) {
+                    // Fallback to old behavior on error
+                    console.warn('[orch][collection] Candidate selection failed, using fallback', err);
+                    selectedCandidates = allCandidates.slice(0, roundSize);
+                }
+
+                // 直接用候选 bestIdentifier 入库并构建 batch
+                const identifiers: string[] = selectedCandidates
                     .map((c: any) => c?.bestIdentifier)
-                    .filter((x: any) => typeof x === 'string' && x.length > 0)
-                    .slice(0, roundSize);
+                    .filter((x: any) => typeof x === 'string' && x.length > 0);
                 try {
                     const allCands = ((candArtifact as any).data?.candidates || []);
                     const total = allCands.length;
