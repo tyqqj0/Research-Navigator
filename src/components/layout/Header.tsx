@@ -3,7 +3,8 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { HeaderProps } from '@/types';
-import { AuthAvatar } from '@autolabz/oauth-sdk';
+import { UserMenu } from '@/components/auth/UserMenu';
+import { navigationUIConfig } from '@/config/ui/navigation.config';
 
 export const Header: React.FC<HeaderProps> = ({
     title = 'Research Navigator',
@@ -85,15 +86,8 @@ export const Header: React.FC<HeaderProps> = ({
                             </div>
                         )}
 
-                        {!hideUserInfo && (
-                            <AuthAvatar
-                                className="hidden md:inline-flex"
-                                redirectUri={redirectUri}
-                                scope={scope}
-                                profileUrl={profileUrl}
-                                state={buildState}
-                                align="end"
-                            />
+                        {!hideUserInfo && navigationUIConfig.headerShowUser && (
+                            <UserMenu className="hidden md:inline-flex h-12 w-12" expandDirection="bottom" align="end" />
                         )}
                     </div>
                 )}

@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils';
 import { LayoutProps, MenuActionItem } from '@/types';
 import { Home } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
+import { navigationUIConfig } from '@/config/ui/navigation.config';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { defaultSidebarItems as configuredSidebarItems } from '@/config/ui/menu.config';
 
 interface MainLayoutProps extends LayoutProps {
     sidebarItems?: SidebarItem[];
@@ -45,13 +47,38 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     const [collapsed, setCollapsed] = useState(sidebarCollapsed);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+    // Floating sidebar host state
+    const [pinned, setPinned] = useState<boolean>(false);
+    const [hoverOpen, setHoverOpen] = useState<boolean>(false);
+    const openTimerRef = React.useRef<number | null>(null);
+    const closeTimerRef = React.useRef<number | null>(null);
+
+    React.useEffect(() => {
+        try {
+            const v = localStorage.getItem('ui:sidebar:pinned');
+            if (v !== null) {
+                setPinned(v === '1');
+            } else {
+                setPinned(navigationUIConfig.defaultPinned);
+                localStorage.setItem('ui:sidebar:pinned', navigationUIConfig.defaultPinned ? '1' : '0');
+            }
+        } catch { /* noop */ }
+    }, []);
+    const togglePin = React.useCallback(() => {
+        setPinned(prev => {
+            const next = !prev;
+            try { localStorage.setItem('ui:sidebar:pinned', next ? '1' : '0'); } catch { /* noop */ }
+            return next;
+        });
+    }, []);
+
     const handleSidebarCollapse = (newCollapsed: boolean) => {
         setCollapsed(newCollapsed);
         onSidebarCollapse?.(newCollapsed);
     };
 
     // 默认侧边栏项目（按“研究 → 文库 → 图谱 → 仪表盘 → 文献发现 → 其他（笔记）”排列）
-    const defaultSidebarItems: SidebarItem[] = [
+    const defaultSidebarItems: SidebarItem[] = configuredSidebarItems ?? [
         {
             key: 'research',
             label: '研究',
@@ -113,32 +140,88 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     ];
 
     const activeSidebarItems = sidebarItems.length > 0 ? sidebarItems : defaultSidebarItems;
+    const effectiveHideUserInfo = hideUserInfo ?? !navigationUIConfig.headerShowUser;
+
+    // Hover intent handlers for floating sidebar
+    const beginOpenWithDelay = React.useCallback(() => {
+        if (pinned) return;
+        if (closeTimerRef.current) { window.clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+        if (openTimerRef.current) { window.clearTimeout(openTimerRef.current); }
+        openTimerRef.current = window.setTimeout(() => setHoverOpen(true), navigationUIConfig.hoverOpenDelayMs) as unknown as number;
+    }, [pinned]);
+    const closeWithDelay = React.useCallback(() => {
+        if (pinned) return;
+        if (openTimerRef.current) { window.clearTimeout(openTimerRef.current); openTimerRef.current = null; }
+        if (closeTimerRef.current) { window.clearTimeout(closeTimerRef.current); }
+        closeTimerRef.current = window.setTimeout(() => setHoverOpen(false), navigationUIConfig.hoverCloseDelayMs) as unknown as number;
+    }, [pinned]);
+
+    const isOverlayActive = showSidebar && !pinned && hoverOpen;
 
     return (
         <div className={cn(
-            'flex h-screen theme-background-primary',
+            'relative h-screen theme-background-primary',
             className
         )}>
-            {/* 侧边栏 */}
+            {/* Floating sidebar host (desktop) */}
             {showSidebar && (
-                <AppSidebar
-                    className="hidden md:flex"
-                    collapsed={collapsed}
-                    onCollapse={handleSidebarCollapse}
-                    items={activeSidebarItems}
-                />
+                <>
+                    {/* Sidebar panel (always render; toggles between rail and panel) */}
+                    <div
+                        className="hidden md:block fixed left-3 top-3 h-[calc(100vh-24px)] z-50"
+                        onMouseEnter={beginOpenWithDelay}
+                        onMouseLeave={closeWithDelay}
+                    >
+                        <AppSidebar
+                            className="h-full"
+                            collapsed={!pinned && !hoverOpen}
+                            onCollapse={handleSidebarCollapse}
+                            items={activeSidebarItems}
+                            width={navigationUIConfig.panelWidth}
+                            collapsedWidth={navigationUIConfig.railWidth}
+                            floating
+                            pinned={pinned}
+                            onTogglePin={navigationUIConfig.allowPin ? togglePin : undefined}
+                        />
+                    </div>
+
+                    {/* Overlay dimmer */}
+                    {isOverlayActive && (
+                        <div
+                            className="hidden md:block fixed z-40"
+                            style={{
+                                top: 0,
+                                right: 0,
+                                bottom: 0,
+                                // Exclude the sidebar area so only content is dimmed
+                                left: navigationUIConfig.panelWidth + 12,
+                                background: `rgba(0,0,0,${navigationUIConfig.overlayAlpha})`
+                            }}
+                            onClick={() => setHoverOpen(false)}
+                            aria-hidden
+                        />
+                    )}
+                </>
             )}
 
-            {/* 主内容区域 */}
-            <div className="flex flex-col flex-1 min-w-0 theme-text">
-                {/* 头部：桌面可隐藏，移动端保留极简顶栏 */}
+            {/* Content wrapper (blur/offset) */}
+            <div
+                className={cn('flex flex-col min-w-0 theme-text h-full')}
+                style={{
+                    marginLeft: showSidebar ? ((pinned ? navigationUIConfig.panelWidth : navigationUIConfig.railWidth) + 12) : 0,
+                    filter: isOverlayActive ? `blur(${navigationUIConfig.blurRadius}px)` : undefined,
+                    opacity: isOverlayActive ? 0.6 : 1,
+                    transition: 'margin-left 200ms ease, filter 150ms ease, opacity 150ms ease'
+                }}
+            >
+                {/* Header */}
                 {showHeader ? (
                     <Header
                         title={headerTitle}
                         actions={headerActions}
                         rightContent={headerRightContent}
                         user={user}
-                        hideUserInfo={hideUserInfo}
+                        hideUserInfo={effectiveHideUserInfo}
                         onOpenSidebar={showSidebar ? () => setMobileSidebarOpen(true) : undefined}
                     />
                 ) : (
@@ -148,20 +231,19 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                             actions={headerActions}
                             rightContent={headerRightContent}
                             user={user}
-                            hideUserInfo={hideUserInfo}
+                            hideUserInfo={effectiveHideUserInfo}
                             onOpenSidebar={showSidebar ? () => setMobileSidebarOpen(true) : undefined}
                         />
                     </div>
                 )}
 
-                {/* 主要内容 */}
+                {/* Main content */}
                 <main className="flex-1 min-h-0 flex flex-col">
                     {pageHeader && (
                         <div className="shrink-0 border-b border-border bg-background">
                             {pageHeader}
                         </div>
                     )}
-                    {/* 仅内容区域滚动，避免顶部边条引起整页1px滚动 */}
                     <div className="min-h-0 flex-1 overflow-auto">
                         <div className="h-full">
                             {children}
@@ -170,11 +252,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 </main>
             </div>
 
-            {/* 移动端覆盖式侧栏 */}
+            {/* Mobile overlay sidebar (unchanged) */}
             {showSidebar && (
                 <Dialog open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
                     <DialogContent className="md:hidden left-0 top-0 translate-x-0 translate-y-0 w-[280px] max-w-none h-screen p-0 rounded-none border-0 shadow-xl">
-                        {/* 无障碍：提供隐藏的标题与描述，消除 Radix 警告 */}
                         <DialogTitle className="sr-only">移动端导航</DialogTitle>
                         <DialogDescription className="sr-only">应用的侧边栏导航</DialogDescription>
                         <AppSidebar

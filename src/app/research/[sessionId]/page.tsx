@@ -135,17 +135,10 @@ export default function ResearchSessionPage() {
     return (
         <ProtectedLayout>
             <MainLayout showSidebar={true} showHeader={true} headerTitle="Research Navigator" headerRightContent={headerRightContent}>
-                <div className="h-full flex relative">
-                    {/* 子侧边栏：会话列表（桌面端显示，移动端隐藏） */}
-                    <div className="hidden md:block w-60 border-r bg-background p-3 h-[calc(100vh-4rem)]">
-                        <SessionList />
-                    </div>
+                {/* 动态布局：根据阶段和用户开关决定单列/三列，并带过渡动画 */}
+                <DynamicSessionBody sessionId={sessionId!} getPaperSummary={getPaperSummary} graphId={graphId} onOpenDetail={openDetail} />
 
-                    {/* 动态布局：根据阶段和用户开关决定单列/三列，并带过渡动画 */}
-                    <DynamicSessionBody sessionId={sessionId!} getPaperSummary={getPaperSummary} graphId={graphId} onOpenDetail={openDetail} />
-                </div>
-
-                {/* 移动端会话列表 Sheet */}
+                {/* 移动端会话列表 Sheet（保留移动端切换入口） */}
                 <Sheet open={mobileSessionsOpen} onOpenChange={setMobileSessionsOpen}>
                     <SheetContent side="bottom" className="h-[85vh] p-0">
                         <SheetHeader className="p-6 pb-4">
