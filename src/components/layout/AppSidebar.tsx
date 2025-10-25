@@ -31,6 +31,8 @@ interface AppSidebarProps {
     pinned?: boolean;
     /** 切换图钉固定 */
     onTogglePin?: () => void;
+    /** 浮动遮罩是否激活（用于在激活时切换为不透明背景） */
+    overlayActive?: boolean;
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
@@ -43,6 +45,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     floating = false,
     pinned: _pinned = false,
     onTogglePin: _onTogglePin,
+    overlayActive = false,
 }) => {
     const router = useRouter();
     const pathname = usePathname();
@@ -105,7 +108,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         <div className={cn('space-y-3', collapsed && 'px-0')}>
             {/* 顶部行：左侧搜索入口，右侧仅在展开时显示图钉 */}
             <div className={cn('flex items-center gap-2 px-2', collapsed ? 'justify-center' : 'justify-between')}>
-                <div className="flex items-center gap-2">
+                {/* <div className="flex items-center gap-2">
                     {!collapsed && (
                         <Button
                             type="button"
@@ -117,20 +120,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                             <span className="ml-2">搜索</span>
                         </Button>
                     )}
-                </div>
-                {!collapsed && floating && _onTogglePin && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 theme-pressable-flat"
-                        onClick={_onTogglePin}
-                        aria-label="固定侧边栏"
-                        title="固定侧边栏"
-                    >
-                        <Pin className="h-4 w-4" />
-                    </Button>
-                )}
+                </div> */}
             </div>
 
             {!collapsed && showSearch && (
@@ -149,30 +139,61 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
     const BottomSlot = (
         <div className={cn('space-y-2 py-2', collapsed && 'px-0')}>
-            {/* 用户菜单迁移至底部常驻位 */}
+            {/* 用户菜单与昵称：折叠仅头像，展开显示昵称 */}
             <div className="px-2">
-                <UserMenu className={cn('h-10 w-10 justify-start', collapsed && 'justify-center')} expandDirection="top" align="start" />
+                <div className={cn('flex items-center', collapsed ? 'justify-center' : 'justify-start gap-3')}>
+                    <div
+                        style={{
+                            width: collapsed ? 40 : 180,
+                            minWidth: collapsed ? 40 : 180,
+                            maxWidth: collapsed ? 40 : 180,
+                            height: 40,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: collapsed ? 'center' : 'flex-start',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <UserMenu className="h-10 w-12 flex-shrink-0" expandDirection="top" align="start" />
+                        {!collapsed && (
+                            <span
+                                className="text-sm text-foreground/80 truncate"
+                                style={{
+                                    marginLeft: 12,
+                                    maxWidth: 120,
+                                    flexGrow: 1,
+                                }}
+                            >
+                                个人中心
+                            </span>
+                        )}
+                    </div>
+                </div>
             </div>
             <div className="px-2">
                 <Button
                     type="button"
                     variant="ghost"
-                    className={cn('w-full justify-start', collapsed && 'justify-center')}
+                    className={cn('w-full', collapsed ? 'justify-center px-0' : 'justify-start px-3')}
                     onClick={() => setThemeMode(theme.isDark ? 'light' : 'dark')}
                 >
-                    {theme.isDark ? (
-                        <Sun className="w-4 h-4" />
-                    ) : (
-                        <Moon className="w-4 h-4" />
-                    )}
-                    {!collapsed && <span className="ml-2">主题</span>}
+                    <span className={cn('flex-shrink-0 w-5 h-5 flex items-center justify-center', !collapsed && 'mr-3')}>
+                        {theme.isDark ? (
+                            <Sun className="w-4 h-4" />
+                        ) : (
+                            <Moon className="w-4 h-4" />
+                        )}
+                    </span>
+                    {!collapsed && <span>主题</span>}
                 </Button>
             </div>
             <div className="px-2">
-                <Button asChild variant="ghost" className={cn('w-full justify-start', collapsed && 'justify-center')}>
+                <Button asChild variant="ghost" className={cn('w-full', collapsed ? 'justify-center px-0' : 'justify-start px-3')}>
                     <Link href="/settings">
-                        <Settings className="w-4 h-4" />
-                        {!collapsed && <span className="ml-2">设置</span>}
+                        <span className={cn('flex-shrink-0 w-5 h-5 flex items-center justify-center', !collapsed && 'mr-3')}>
+                            <Settings className="w-4 h-4" />
+                        </span>
+                        {!collapsed && <span>设置</span>}
                     </Link>
                 </Button>
             </div>
@@ -187,59 +208,82 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     };
 
     return (
-        <Sidebar
-            className={cn(
-                className,
-                floating && 'backdrop-blur-sm bg-background/60 dark:bg-neutral-950/50 shadow-lg border border-border/50 rounded-2xl'
+        <div className="relative h-full">
+            {/* 浮动图钉按钮 - 书签样式（不占位，不挤压内容） */}
+            {!collapsed && floating && _onTogglePin && (
+                <button
+                    type="button"
+                    onClick={_onTogglePin}
+                    aria-label="固定侧边栏"
+                    title="固定侧边栏"
+                    className={cn(
+                        'absolute -top-4 left-4 z-50',
+                        'w-9 h-9 rounded-full',
+                        'flex items-center justify-center',
+                        'transition-transform duration-200',
+                        'hover:scale-110 active:scale-95',
+                        'theme-background-primary shadow-lg border border-border',
+                        'hover:shadow-xl'
+                    )}
+                >
+                    <Pin className={cn('h-4 w-4 transition-transform', _pinned && 'rotate-45')} />
+                </button>
             )}
-            collapsed={collapsed}
-            onCollapse={onCollapse}
-            showCollapseButton={false}
-            topSlot={TopSlot}
-            bottomSlot={BottomSlot}
-            width={width}
-            collapsedWidth={collapsedWidth}
-        >
-            {/* 自定义滚动区域内容：导航 + 历史会话 */}
-            <nav className="space-y-1">
-                {items.map(item => (
-                    <Button
-                        key={item.key}
-                        variant="ghost"
-                        asChild
-                        className={cn(
-                            'theme-pressable-flat',
-                            sidebarItemVariants({
-                                variant: 'default',
-                                state: isActive(item.path) ? 'active' : 'default',
-                                level: 0
-                            })
-                        )}
-                        style={{ paddingLeft: collapsed ? '12px' : '12px' }}
-                    >
-                        <Link href={item.path || '#'} className="w-full">
-                            <div className="flex items-center justify-between w-full">
-                                <div className="flex items-center flex-1 min-w-0">
-                                    {item.icon && (
-                                        <span className="flex-shrink-0 w-5 h-5 mr-3 text-muted-foreground">{item.icon}</span>
-                                    )}
-                                    {!collapsed && <span className="truncate">{item.label}</span>}
-                                </div>
-                            </div>
-                        </Link>
-                    </Button>
-                ))}
-            </nav>
-
-            {/* 历史会话列表（折叠时隐藏，且不重复标题） */}
-            <div className="mt-4">
-                {!collapsed && (
-                    <>
-                        <SessionList />
-                    </>
+            <Sidebar
+                className={cn(
+                    className,
+                    floating && (
+                        overlayActive
+                            // 遮罩激活时使用不透明背景，确保侧边栏内容清晰可见
+                            ? 'theme-background-primary shadow-xl border border-border rounded-2xl'
+                            : 'backdrop-blur-sm bg-background/60 dark:bg-neutral-900/50 shadow-lg border border-border/50 rounded-2xl'
+                    )
                 )}
-            </div>
-        </Sidebar>
+                collapsed={collapsed}
+                onCollapse={onCollapse}
+                showCollapseButton={false}
+                topSlot={TopSlot}
+                bottomSlot={BottomSlot}
+                width={width}
+                collapsedWidth={collapsedWidth}
+            >
+                {/* 自定义滚动区域内容：导航 + 历史会话 */}
+                <nav className="space-y-1">
+                    {items.map(item => (
+                        <Button
+                            key={item.key}
+                            variant="ghost"
+                            asChild
+                            className={cn(
+                                'theme-pressable-flat',
+                                collapsed ? 'justify-center px-0' : 'justify-start px-3',
+                                sidebarItemVariants({
+                                    variant: 'default',
+                                    state: isActive(item.path) ? 'active' : 'default',
+                                    level: 0
+                                })
+                            )}
+                        >
+                            <Link href={item.path || '#'} className="flex items-center w-full">
+                                {item.icon && (
+                                    <span className={cn('flex-shrink-0 w-5 h-5 flex items-center justify-center text-muted-foreground', !collapsed && 'mr-3')}>
+                                        {item.icon}
+                                    </span>
+                                )}
+                                {!collapsed && <span className="truncate">{item.label}</span>}
+                            </Link>
+                        </Button>
+                    ))}
+                </nav>
+
+                {/* 历史会话列表（折叠时隐藏，且不重复标题） */}
+                {!collapsed && (
+                    <div className="mt-4">
+                        <SessionList />
+                    </div>
+                )}
+            </Sidebar>
+        </div>
     );
 };
 

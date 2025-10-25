@@ -9,7 +9,7 @@ import { Home } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
 import { navigationUIConfig } from '@/config/ui/navigation.config';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { defaultSidebarItems as configuredSidebarItems } from '@/config/ui/menu.config';
+import { usePathname } from 'next/navigation';
 
 interface MainLayoutProps extends LayoutProps {
     sidebarItems?: SidebarItem[];
@@ -46,6 +46,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 }) => {
     const [collapsed, setCollapsed] = useState(sidebarCollapsed);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+    const pathname = usePathname();
 
     // Floating sidebar host state
     const [pinned, setPinned] = useState<boolean>(false);
@@ -78,7 +79,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     };
 
     // 默认侧边栏项目（按“研究 → 文库 → 图谱 → 仪表盘 → 文献发现 → 其他（笔记）”排列）
-    const defaultSidebarItems: SidebarItem[] = configuredSidebarItems ?? [
+    const defaultSidebarItems: SidebarItem[] = [
         {
             key: 'research',
             label: '研究',
@@ -157,6 +158,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     }, [pinned]);
 
     const isOverlayActive = showSidebar && !pinned && hoverOpen;
+    // 计算当前侧边区域实际占用的左边距（与内容 marginLeft 保持一致）
+    const currentSidebarLeftOffset = showSidebar ? ((pinned ? navigationUIConfig.panelWidth : navigationUIConfig.railWidth) + 12) : 0;
+    // 遮罩从屏幕最左边开始，覆盖整个屏幕（侧边栏 z-50 会浮在上面）
+    const overlayLeftOffset = 0;
+    const isResearchRoot = pathname === '/research';
 
     return (
         <div className={cn(
@@ -168,9 +174,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 <>
                     {/* Sidebar panel (always render; toggles between rail and panel) */}
                     <div
-                        className="hidden md:block fixed left-3 top-3 h-[calc(100vh-24px)] z-50"
+                        className="hidden md:block fixed left-3 z-50"
                         onMouseEnter={beginOpenWithDelay}
                         onMouseLeave={closeWithDelay}
+                        style={{
+                            top: navigationUIConfig.floatingMarginY,
+                            bottom: navigationUIConfig.floatingMarginY
+                        }}
                     >
                         <AppSidebar
                             className="h-full"
@@ -182,10 +192,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                             floating
                             pinned={pinned}
                             onTogglePin={navigationUIConfig.allowPin ? togglePin : undefined}
+                            overlayActive={isOverlayActive}
                         />
                     </div>
 
-                    {/* Overlay dimmer */}
+                    {/* Overlay dimmer - 从侧边栏右边缘开始覆盖整个右侧区域 */}
                     {isOverlayActive && (
                         <div
                             className="hidden md:block fixed z-40"
@@ -193,9 +204,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                                 top: 0,
                                 right: 0,
                                 bottom: 0,
-                                // Exclude the sidebar area so only content is dimmed
-                                left: navigationUIConfig.panelWidth + 12,
-                                background: `rgba(0,0,0,${navigationUIConfig.overlayAlpha})`
+                                left: overlayLeftOffset,
+                                // 使用主题感知的柔和遮罩：与背景色做混合
+                                background: `color-mix(in srgb, var(--color-background-inverse) ${Math.round(navigationUIConfig.overlayAlpha * 100)}%, transparent)`
                             }}
                             onClick={() => setHoverOpen(false)}
                             aria-hidden
@@ -208,14 +219,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             <div
                 className={cn('flex flex-col min-w-0 theme-text h-full')}
                 style={{
-                    marginLeft: showSidebar ? ((pinned ? navigationUIConfig.panelWidth : navigationUIConfig.railWidth) + 12) : 0,
+                    marginLeft: currentSidebarLeftOffset,
+                    // 保留轻微模糊提升焦点层级，但移除整体透明度降低，避免双重变暗
                     filter: isOverlayActive ? `blur(${navigationUIConfig.blurRadius}px)` : undefined,
-                    opacity: isOverlayActive ? 0.6 : 1,
-                    transition: 'margin-left 200ms ease, filter 150ms ease, opacity 150ms ease'
+                    transition: 'margin-left 200ms ease, filter 150ms ease'
                 }}
             >
                 {/* Header */}
-                {showHeader ? (
+                {isResearchRoot ? (
                     <Header
                         title={headerTitle}
                         actions={headerActions}
@@ -223,19 +234,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                         user={user}
                         hideUserInfo={effectiveHideUserInfo}
                         onOpenSidebar={showSidebar ? () => setMobileSidebarOpen(true) : undefined}
+                        variant="transparent"
                     />
-                ) : (
-                    <div className="md:hidden">
-                        <Header
-                            title={headerTitle}
-                            actions={headerActions}
-                            rightContent={headerRightContent}
-                            user={user}
-                            hideUserInfo={effectiveHideUserInfo}
-                            onOpenSidebar={showSidebar ? () => setMobileSidebarOpen(true) : undefined}
-                        />
-                    </div>
-                )}
+                ) : null}
 
                 {/* Main content */}
                 <main className="flex-1 min-h-0 flex flex-col">

@@ -1,6 +1,8 @@
 export interface NavigationUIConfig {
     railWidth: number;
     panelWidth: number;
+    /** 垂直方向的浮动边距（px），用于浮动侧边栏的上下留白 */
+    floatingMarginY: number;
     hoverOpenDelayMs: number;
     hoverCloseDelayMs: number;
     overlayAlpha: number; // 0..1
@@ -13,9 +15,10 @@ export interface NavigationUIConfig {
 export const navigationUIConfig: NavigationUIConfig = {
     railWidth: 64,
     panelWidth: 340,
+    floatingMarginY: 40,
     hoverOpenDelayMs: 500,
     hoverCloseDelayMs: 200,
-    overlayAlpha: 0.4,
+    overlayAlpha: 0.15,
     blurRadius: 4,
     allowPin: true,
     headerShowUser: false,

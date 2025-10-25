@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@autolabz/oauth-sdk':
-        specifier: ^1.1.4
-        version: 1.1.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: ^1.1.5
+        version: 1.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -217,8 +217,8 @@ packages:
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
-  '@autolabz/oauth-sdk@1.1.4':
-    resolution: {integrity: sha512-dJMcz3mTC0CNEnjXa1UoldTT6sTGPFEwYkjPE0LPvgT9HFDpgZLum2RPhPdSSUcoNCrCdDqmPIQ5qBhZSGFyQw==}
+  '@autolabz/oauth-sdk@1.1.5':
+    resolution: {integrity: sha512-v8+LeyfHJkDJOKD10TroV/amy5c9O3Jh4qxIC+xFeEk3mlSYN8aiiYAouQls+TQvUCTRvhz7Rl3mLbUT+fDJPw==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
@@ -3459,7 +3459,7 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@autolabz/oauth-sdk@1.1.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+  '@autolabz/oauth-sdk@1.1.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
     dependencies:
       axios: 1.12.2
       react: 19.1.0

@@ -14,7 +14,8 @@ export const Header: React.FC<HeaderProps> = ({
     user,
     hideUserInfo,
     className,
-    onOpenSidebar
+    onOpenSidebar,
+    variant = 'default'
 }) => {
     const redirectUri = (() => {
         if (typeof window !== 'undefined') {
@@ -37,7 +38,9 @@ export const Header: React.FC<HeaderProps> = ({
     return (
         <header
             className={cn(
-                'h-16 border-b border-gray-200 bg-white shadow-sm theme-primary-background relative z-40',
+                'h-16 relative z-40',
+                variant === 'default' && 'border-b border-gray-200 bg-white shadow-sm theme-primary-background',
+                variant === 'transparent' && 'bg-transparent border-transparent shadow-none',
                 className
             )}
         >

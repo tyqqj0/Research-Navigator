@@ -121,7 +121,7 @@ export const ExpandableUserMenu: React.FC<ExpandableUserMenuProps> = ({
                 <Button
                     variant="ghost"
                     className={cn(
-                        'relative h-10 w-10 rounded-full p-0 overflow-hidden',
+                        'relative h-10 w-12 rounded-full p-0 overflow-hidden',
                         'theme-pressable-flat transition-all duration-200',
                         'hover:ring-2 hover:ring-primary/20',
                         className
