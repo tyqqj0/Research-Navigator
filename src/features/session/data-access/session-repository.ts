@@ -2,12 +2,15 @@
 import Dexie, { Table } from 'dexie';
 import type { ChatMessage, ChatSession, EventEnvelope, Artifact, SessionLayout } from './types';
 import { authStoreUtils } from '@/stores/auth.store';
+import { notifyLocalSessionWrite } from '@/lib/sync/sync-events';
 
 class SessionDatabase extends Dexie {
     sessions!: Table<ChatSession, string>;
     messages!: Table<ChatMessage, string>;
     events!: Table<EventEnvelope, string>;
     artifacts!: Table<Artifact, string>;
+    // sync meta table (per-archive)
+    syncMeta!: Table<SyncMeta, string>;
     // v3 layout table (no userId in primary key)
     sessionLayouts!: Table<SessionLayout, [string, string]>; // [viewId, sessionId]
     // v4 layout table (scoped by user)
@@ -99,6 +102,11 @@ class SessionDatabase extends Dexie {
             } catch { /* ignore */ }
             try { console.debug('[repo][session][migrate_v4][done]', { dbName: this.name, userId: uid }); } catch { /* noop */ }
         });
+
+        // v4 -> v5: add syncMeta table for versioned KV revisions & dirty flags
+        this.version(5).stores({
+            syncMeta: 'key'
+        });
     }
 
     public async ensureOpen(): Promise<void> {
@@ -165,6 +173,16 @@ export const orderKeyUtils = {
     after: (a?: string) => keyBetween(a, undefined)
 };
 
+export interface SyncMeta {
+    key: string;
+    localRevision?: string;
+    remoteRevision?: string;
+    lastPulledAt?: number;
+    lastPushedAt?: number;
+    dirty?: boolean;
+    tombstone?: boolean;
+}
+
 export function createSessionRepository(archiveId: string) {
     const safeId = String(archiveId || 'anonymous').slice(0, 64);
     const dbName = `ResearchNavigatorSession__${safeId}`;
@@ -180,6 +198,7 @@ export function createSessionRepository(archiveId: string) {
             await sessionDb.withDexieRetry(async () => {
                 await sessionDb.sessions.put({ ...s, userId });
             });
+            try { notifyLocalSessionWrite({ sessionId: s.id, kind: 'session' }); } catch { /* noop */ }
         },
         async getSession(id: string) {
             const userId = this._requireUserId();
@@ -260,6 +279,7 @@ export function createSessionRepository(archiveId: string) {
             await sessionDb.withDexieRetry(async () => {
                 await sessionDb.sessions.bulkPut(s.map(x => ({ ...x, userId })));
             });
+            try { for (const x of s) notifyLocalSessionWrite({ sessionId: x.id, kind: 'session' }); } catch { /* noop */ }
         },
         async deleteSession(id: string) {
             // Best-effort: ensure only current user's session is deleted
@@ -269,6 +289,7 @@ export function createSessionRepository(archiveId: string) {
                 const s = await sessionDb.sessions.get(id);
                 if (s && (s as any).userId === userId) await sessionDb.sessions.delete(id);
             });
+            try { notifyLocalSessionWrite({ sessionId: id, kind: 'delete' }); } catch { /* noop */ }
         },
 
         async deleteMessagesBySession(sessionId: string) {
@@ -283,6 +304,7 @@ export function createSessionRepository(archiveId: string) {
                     } catch { /* ignore */ }
                 }
             });
+            try { notifyLocalSessionWrite({ sessionId, kind: 'message' }); } catch { /* noop */ }
         },
 
         async deleteEventsBySession(sessionId: string) {
@@ -297,6 +319,7 @@ export function createSessionRepository(archiveId: string) {
                     } catch { /* ignore */ }
                 }
             });
+            try { notifyLocalSessionWrite({ sessionId, kind: 'event' }); } catch { /* noop */ }
         },
 
         // Layout APIs
@@ -318,6 +341,7 @@ export function createSessionRepository(archiveId: string) {
             try { console.debug('[repo][session][putLayout]', { dbName, viewId: layout.viewId, sessionId: layout.sessionId }); } catch { /* noop */ }
             if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.put(payload));
             return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.put(payload));
+            // notify below won't run if early return above executed; duplicate for both branches:
         },
         async bulkPutLayouts(layouts: SessionLayout[]) {
             const dbAny = sessionDb as any;
@@ -352,6 +376,7 @@ export function createSessionRepository(archiveId: string) {
                 try { console.debug('[repo][session][ensureLayoutTop][done]', { dbName, viewId, sessionId, orderKey: newKey }); } catch { /* noop */ }
                 return layout;
             });
+            try { notifyLocalSessionWrite({ sessionId, kind: 'layout' }); } catch { /* noop */ }
         },
         async reorderSessions(viewId: string, moves: Array<{ sessionId: string; beforeId?: string; afterId?: string }>) {
             const userId = this._requireUserId();
@@ -391,11 +416,11 @@ export function createSessionRepository(archiveId: string) {
             return updated;
         },
 
-        async putMessage(m: ChatMessage) { await sessionDb.withDexieRetry(async () => { await sessionDb.messages.put({ ...m, userId: this._requireUserId() } as any); }); },
+        async putMessage(m: ChatMessage) { await sessionDb.withDexieRetry(async () => { await sessionDb.messages.put({ ...m, userId: this._requireUserId() } as any); }); try { notifyLocalSessionWrite({ sessionId: m.sessionId as any, kind: 'message' }); } catch { /* noop */ } },
         async listMessages(sessionId: string) { return await sessionDb.withDexieRetry(async () => (sessionDb.messages as any).where('[userId+sessionId]').equals([this._requireUserId(), sessionId]).sortBy('createdAt')); },
         async getMessage(id: string) { const userId = this._requireUserId(); const m: any = await sessionDb.withDexieRetry(async () => await sessionDb.messages.get(id)); return m && m.userId === userId ? m : null; },
 
-        async appendEvent(e: EventEnvelope) { await sessionDb.withDexieRetry(async () => { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); }); },
+        async appendEvent(e: EventEnvelope) { await sessionDb.withDexieRetry(async () => { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); }); try { notifyLocalSessionWrite({ sessionId: e.sessionId as any, kind: 'event' }); } catch { /* noop */ } },
         async listEvents(sessionId?: string) {
             const userId = this._requireUserId();
             try { console.debug('[repo][session][listEvents]', { dbName, userId, sessionId: sessionId || null }); } catch { /* noop */ }
@@ -429,6 +454,26 @@ export function createSessionRepository(archiveId: string) {
                 return head.includes(q);
             });
             return typeof limit === 'number' ? filtered.slice(0, Math.max(0, limit)) : filtered;
+        },
+        // SyncMeta accessors (for DataSyncService)
+        async getSyncMeta(key: string): Promise<SyncMeta | null> {
+            return await sessionDb.withDexieRetry(async () => await sessionDb.syncMeta.get(key) || null);
+        },
+        async setSyncMeta(meta: SyncMeta): Promise<void> {
+            await sessionDb.withDexieRetry(async () => { await sessionDb.syncMeta.put(meta); });
+        },
+        async markSyncDirty(key: string, dirty = true): Promise<void> {
+            await sessionDb.withDexieRetry(async () => {
+                const prev = (await sessionDb.syncMeta.get(key)) || ({ key } as SyncMeta);
+                await sessionDb.syncMeta.put({ ...prev, key, dirty });
+            });
+        },
+        async listSyncDirtyKeys(): Promise<string[]> {
+            const all = await sessionDb.withDexieRetry(async () => await sessionDb.syncMeta.toArray());
+            return all.filter(m => !!m.dirty).map(m => m.key);
+        },
+        async clearSyncMeta(key: string): Promise<void> {
+            await sessionDb.withDexieRetry(async () => { await sessionDb.syncMeta.delete(key); });
         },
         close() { try { sessionDb.close(); } catch { /* ignore */ } }
     };
