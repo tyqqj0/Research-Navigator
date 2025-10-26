@@ -15,7 +15,7 @@ export const runtimeConfig = {
     // Candidate pool size: how many candidates to fetch from search
     // Larger pool = more choices for quality filter, but slower
     // Recommended: 50-100
-    CANDIDATE_POOL_SIZE: 70,
+    CANDIDATE_POOL_SIZE: 50,
     
     // Quality mode preset: 'balanced' | 'classic' | 'emerging'
     // - balanced: 平衡经典与新作（推荐）

@@ -70,7 +70,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
             setSelectedRefs(prev => [...prev, { kind: 'report_final', id: finalId }]);
             autoAttachedReportsRef.current.add(key);
         }
-    }, [meta.report, messages]);
+    }, [meta.report, messages, selectedRefs]);
 
     // Remove "新一轮研究" button behavior from ChatPanel; new round will be driven by deep toggle + next message
 
@@ -181,7 +181,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                         };
                         const label = labelMap[type] || undefined;
                         return (
-                            <div key={m.id} className="p-3 text-sm">
+                            <div key={`${m.id}-${idx}`} className="p-3 text-sm">
                                 {showDivider && label && (
                                     <div className="my-2 flex items-center gap-2 text-xs text-muted-foreground">
                                         <div className="h-px bg-border flex-1" />
@@ -438,7 +438,7 @@ const ComposerBar: React.FC<{
         };
         void run();
         return () => { cancelled = true; };
-    }, [selectedRefs]);
+    }, [selectedRefs, reportTitles]);
 
     // Debounced search for mentions (local library + reports)
     React.useEffect(() => {

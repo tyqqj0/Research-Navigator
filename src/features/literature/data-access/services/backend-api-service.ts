@@ -85,7 +85,7 @@ export class BackendApiService {
         for (let attempt = 1; attempt <= 3; attempt += 1) {
             try {
                 // console.log('[BackendAPI] Fetching paper:', { input: paperIdInput, normalizedId, idForPath, attempt });
-                const response = await this.apiRequest('GET', `/api/v1/paper/${idForPath}`);
+                const response = await this.apiRequest('GET', `/api/v1/paper/${idForPath}`, undefined, attempt);
                 const literature = this.mapBackendToFrontend(response);
                 this.cache.set(cacheKey, { data: literature, timestamp: Date.now() });
                 return literature;
@@ -122,15 +122,42 @@ export class BackendApiService {
                 }
             });
 
-            // 批量获取未缓存的文献
+            // 批量获取未缓存的文献（带重试）
             let fetched: LibraryItem[] = [];
             if (needFetch.length > 0) {
                 try { console.debug('[BackendAPI] getPapersBatch request body preview', { idsPreview: needFetch.slice(0, 5), idsCount: needFetch.length }); } catch { /* noop */ }
-                const response = await this.apiRequest('POST', '/api/v1/paper/batch', {
-                    ids: needFetch,
-                    // Some backends require explicit request to include references to save rate limits
-                    includeReferences: options?.includeReferences === true
-                });
+                
+                // 重试逻辑：最多 3 次，仅针对网络/超时错误
+                let lastError: any;
+                let response: any;
+                for (let attempt = 1; attempt <= 3; attempt += 1) {
+                    try {
+                        response = await this.apiRequest('POST', '/api/v1/paper/batch', {
+                            ids: needFetch,
+                            // Some backends require explicit request to include references to save rate limits
+                            includeReferences: options?.includeReferences === true
+                        }, attempt);
+                        break; // Success, exit retry loop
+                    } catch (err: any) {
+                        lastError = err;
+                        const msg = String(err?.message || '');
+                        const isRetryable = msg.includes('Network timeout') || msg.includes('Network error');
+                        if (attempt < 3 && isRetryable) {
+                            // 指数退避
+                            const base = 200;
+                            const backoff = base * Math.pow(2, attempt - 1);
+                            const jitter = Math.floor(Math.random() * 120);
+                            try { await new Promise(r => setTimeout(r, backoff + jitter)); } catch { /* noop */ }
+                            continue;
+                        }
+                        break;
+                    }
+                }
+                
+                if (!response) {
+                    console.error('[BackendAPI] getPapersBatch failed after retries:', lastError);
+                    throw lastError || new Error('Failed to fetch batch papers');
+                }
 
                 const items = Array.isArray(response) ? response : (response.papers || response.items || []);
                 try {
@@ -350,7 +377,7 @@ export class BackendApiService {
             let lastError: any;
             for (let attempt = 1; attempt <= 3; attempt += 1) {
                 try {
-                    const response = await this.apiRequest('GET', `/api/v1/paper/search?${params.toString()}`);
+                    const response = await this.apiRequest('GET', `/api/v1/paper/search?${params.toString()}`, undefined, attempt);
                     // 兼容空响应或非 JSON 响应
                     const list = Array.isArray(response)
                         ? response
@@ -427,7 +454,8 @@ export class BackendApiService {
     private async apiRequest(
         method: 'GET' | 'POST' | 'PUT' | 'DELETE',
         endpoint: string,
-        data?: any
+        data?: any,
+        attempt?: number
     ): Promise<any> {
         const url = `${this.baseUrl}${endpoint}`;
 
@@ -460,7 +488,16 @@ export class BackendApiService {
 
         try {
             const controller = new AbortController();
-            const timeoutMs = 15000; // 15s 上限，避免卡死
+            // Progressive timeout: 90s for first attempt, 180s for retries
+            // Very generous timeouts for slow backend with large candidate pools
+            const timeoutMs = (attempt && attempt > 1) ? 180000 : 90000;
+            try {
+                console.debug('[BackendAPI][timeout]', { 
+                    attempt: attempt || 1, 
+                    timeoutMs: `${timeoutMs/1000}s`, 
+                    isRetry: attempt ? attempt > 1 : false 
+                });
+            } catch { /* noop */ }
             const timeout = setTimeout(() => controller.abort(), timeoutMs);
             const response = await fetch(url, { ...config, signal: controller.signal });
             clearTimeout(timeout);

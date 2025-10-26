@@ -88,46 +88,128 @@ const DEFAULT_WEIGHTS: Required<QualityWeights> = {
 
 /**
  * Fetch metadata for candidates using backendApiService
+ * Uses batch fetching when possible to reduce request overhead
  */
 async function fetchCandidateMetadata(
     candidates: Array<{ title?: string; bestIdentifier?: string; sourceUrl: string; [key: string]: any }>
 ): Promise<Map<number, PaperMetadata>> {
     const metadataMap = new Map<number, PaperMetadata>();
     
-    // Try to fetch metadata for each candidate
-    await Promise.allSettled(
-        candidates.map(async (candidate, idx) => {
+    // Separate candidates with IDs from those needing title search
+    const withIds: Array<{ id: string; idx: number }> = [];
+    const needTitleSearch: Array<{ candidate: typeof candidates[0]; idx: number }> = [];
+    
+    candidates.forEach((candidate, idx) => {
+        const id = candidate.bestIdentifier;
+        if (!id || /^URL:/i.test(id)) {
+            needTitleSearch.push({ candidate, idx });
+        } else {
+            withIds.push({ id, idx });
+        }
+    });
+    
+    try {
+        console.debug('[candidateSelector] Fetching metadata', {
+            totalCandidates: candidates.length,
+            withIds: withIds.length,
+            needTitleSearch: needTitleSearch.length
+        });
+    } catch { /* noop */ }
+    
+    // Batch fetch papers with IDs (more efficient)
+    if (withIds.length > 0) {
+        let batchSucceeded = false;
+        
+        try {
+            // Try batch fetch with a timeout wrapper
+            const batchTimeout = 90000; // 90s timeout for batch
+            const batchPromise = backendApiService.getPapersBatch(
+                withIds.map(w => w.id),
+                { includeReferences: false }
+            );
+            
+            const papers = await Promise.race([
+                batchPromise,
+                new Promise<never>((_, reject) => 
+                    setTimeout(() => reject(new Error('Batch fetch timeout')), batchTimeout)
+                )
+            ]);
+            
+            // Map results back to indices
+            papers.forEach((paper) => {
+                const match = withIds.find(w => w.id === paper.paperId);
+                if (match) {
+                    metadataMap.set(match.idx, extractMetadata(paper as any));
+                }
+            });
+            
+            batchSucceeded = true;
+            
             try {
-                const id = candidate.bestIdentifier;
-                if (!id || /^URL:/i.test(id)) {
-                    // Fallback: search by title
-                    if (candidate.title) {
-                        const searchRes = await backendApiService.searchPapers({
-                            query: candidate.title,
-                            limit: 1,
-                            fields: ['paperId', 'title', 'year', 'publicationDate', 'citationCount', 'influentialCitationCount', 'isOpenAccess', 'venue']
-                        });
-                        if (searchRes.results && searchRes.results.length > 0) {
-                            const paper = searchRes.results[0];
-                            metadataMap.set(idx, extractMetadata(paper));
+                console.debug('[candidateSelector] Batch fetch complete', {
+                    requested: withIds.length,
+                    received: papers.length,
+                    coverage: `${((papers.length / withIds.length) * 100).toFixed(1)}%`
+                });
+            } catch { /* noop */ }
+        } catch (err) {
+            try {
+                console.warn('[candidateSelector] Batch fetch failed, falling back to individual requests', { 
+                    error: String(err),
+                    willRetry: true
+                });
+            } catch { /* noop */ }
+            
+            // Fallback: individual requests with concurrency limit
+            const CONCURRENCY = 10;
+            for (let i = 0; i < withIds.length; i += CONCURRENCY) {
+                const batch = withIds.slice(i, i + CONCURRENCY);
+                await Promise.allSettled(
+                    batch.map(async ({ id, idx }) => {
+                        try {
+                            const paper = await backendApiService.getPaper(id);
+                            if (paper) {
+                                metadataMap.set(idx, extractMetadata(paper as any));
+                            }
+                        } catch (err) {
+                            try {
+                                console.debug('[candidateSelector] Failed to fetch paper', { idx, id, error: String(err) });
+                            } catch { /* noop */ }
                         }
-                    }
-                    return;
-                }
-
-                // Fetch paper details by identifier
-                const paper = await backendApiService.getPaper(id);
-                if (paper) {
-                    metadataMap.set(idx, extractMetadata(paper));
-                }
-            } catch (err) {
-                // Silently skip metadata fetch failures
-                try {
-                    console.debug('[candidateSelector] Failed to fetch metadata for candidate', { idx, error: String(err) });
-                } catch { /* noop */ }
+                    })
+                );
             }
-        })
-    );
+        }
+    }
+    
+    // Handle title searches with concurrency limit
+    if (needTitleSearch.length > 0) {
+        const CONCURRENCY = 5; // Lower concurrency for searches
+        for (let i = 0; i < needTitleSearch.length; i += CONCURRENCY) {
+            const batch = needTitleSearch.slice(i, i + CONCURRENCY);
+            await Promise.allSettled(
+                batch.map(async ({ candidate, idx }) => {
+                    try {
+                        if (candidate.title) {
+                            const searchRes = await backendApiService.searchPapers({
+                                query: candidate.title,
+                                limit: 1,
+                                fields: ['paperId', 'title', 'year', 'publicationDate', 'citationCount', 'influentialCitationCount', 'isOpenAccess', 'venue']
+                            });
+                            if (searchRes.results && searchRes.results.length > 0) {
+                                const paper = searchRes.results[0];
+                                metadataMap.set(idx, extractMetadata(paper as any));
+                            }
+                        }
+                    } catch (err) {
+                        try {
+                            console.debug('[candidateSelector] Failed to search by title', { idx, error: String(err) });
+                        } catch { /* noop */ }
+                    }
+                })
+            );
+        }
+    }
 
     return metadataMap;
 }
@@ -235,7 +317,35 @@ export async function rankAndPickCandidates(
 
     // Quality strategy: fetch metadata, score, and ε-greedy select
     const fullWeights = getQualityWeights(opts.mode, opts.weights);
-    const metadataMap = await fetchCandidateMetadata(candidates);
+    
+    // Try to fetch metadata, but fall back to random if it times out
+    let metadataMap: Map<number, PaperMetadata>;
+    try {
+        metadataMap = await fetchCandidateMetadata(candidates);
+        try {
+            console.debug('[candidateSelector] Metadata fetch succeeded', {
+                totalCandidates: candidates.length,
+                metadataFetched: metadataMap.size,
+                coverage: `${((metadataMap.size / candidates.length) * 100).toFixed(1)}%`
+            });
+        } catch { /* noop */ }
+    } catch (err) {
+        // If metadata fetch fails/times out, fall back to random selection
+        try {
+            console.warn('[candidateSelector] Metadata fetch failed, falling back to random selection', {
+                error: String(err),
+                candidates: candidates.length
+            });
+        } catch { /* noop */ }
+        
+        // Use random selection as fallback
+        const shuffled = [...candidates];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled.slice(0, topK);
+    }
 
     // Compute scores for all candidates
     const scored: CandidateWithScore[] = candidates.map((candidate, idx) => {
