@@ -73,10 +73,7 @@ NEXT_PUBLIC_AI_BASE_URL=/api/backend/v1
 Add these to `.env.local` for OAuth login integration:
 
 ```bash
-# Same-origin proxy will be used by the browser: /api/auth
-# Point the server-only upstream to your real auth service (HTTPS in prod)
-AUTH_UPSTREAM_BASE_URL=http://114.132.91.247/api
-
+NEXT_PUBLIC_AUTH_API_BASE_URL=http://114.132.91.247/api
 NEXT_PUBLIC_OAUTH_CLIENT_ID=your_client_id
 NEXT_PUBLIC_OAUTH_REDIRECT_URI=http://localhost:3000/oauth-app/callback
 NEXT_PUBLIC_OAUTH_SCOPE=openid profile email
@@ -87,7 +84,6 @@ Then visit `/oauth-app/login` to start the OAuth login flow.
 
 Notes:
 - The frontend never includes an API key. Authorization is injected by the server in `Authorization: Bearer $BACKEND_API_KEY`.
-- OAuth calls are proxied via `/api/auth/...` to avoid mixed content; set `AUTH_UPSTREAM_BASE_URL` on the server.
 - SSE streaming is passed through without buffering for responsive token-by-token updates.
 
 ### How routing works

@@ -28,8 +28,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Always prefer same-origin proxy to avoid mixed content; fallback env allows local dev.
-  const authServiceUrl = '/api/auth';
+  const authServiceUrl = process.env.NEXT_PUBLIC_AUTH_API_BASE_URL as string | undefined;
   const oauthClientId = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID as string | undefined;
   return (
     <html lang="zh-CN" suppressHydrationWarning>
@@ -38,7 +37,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <ThemeProvider>
-          {oauthClientId ? (
+          {authServiceUrl && oauthClientId ? (
             <OAuthClientProvider authServiceUrl={authServiceUrl} clientId={oauthClientId}>
               <ArchiveProvider>
                 {children}
