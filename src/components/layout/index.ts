@@ -4,6 +4,7 @@ export { Header } from './Header';
 // export { Sidebar } from './Sidebar';
 export { MainLayout } from './MainLayout';
 export { AppSidebar } from './AppSidebar';
+export { ProtectedLayout } from './ProtectedLayout';
 
 // 导出布局相关类型
 export type { HeaderProps, LayoutProps } from '@/types';

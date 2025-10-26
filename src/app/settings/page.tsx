@@ -5,6 +5,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ProtectedLayout } from '@/components/layout';
 import { ArrowLeft, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,83 +20,84 @@ export default function SettingsPage() {
     const router = useRouter();
 
     return (
-        <div className="min-h-screen bg-background theme-text">
-            {/* 顶部导航栏 */}
-            <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                <div className="container flex items-center justify-between h-16 px-4">
-                    <div className="flex items-center gap-4">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => router.back()}
-                            className="h-8 w-8"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                        </Button>
-                        <div className="flex items-center gap-2">
-                            <Settings className="w-5 h-5 text-blue-600" />
-                            <h1 className="text-xl font-semibold">设置</h1>
+        <ProtectedLayout>
+            <div className="min-h-screen bg-background theme-text">
+                {/* 顶部导航栏 */}
+                <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                    <div className="container flex items-center justify-between h-16 px-4">
+                        <div className="flex items-center gap-4">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => router.back()}
+                                className="h-8 w-8"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                            </Button>
+                            <div className="flex items-center gap-2">
+                                <Settings className="w-5 h-5 text-blue-600" />
+                                <h1 className="text-xl font-semibold">设置</h1>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* 主内容区 */}
-            <div className="container px-4 py-6">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <div className="flex gap-6">
-                        {/* 左侧导航 */}
-                        <div className="w-64 flex-shrink-0">
-                            <div className="sticky top-6">
-                                <ScrollArea className="h-[calc(100vh-12rem)]">
-                                    <TabsList className="w-full flex-col h-auto p-1 bg-muted/50">
-                                        {/* <TabsTrigger
+                {/* 主内容区 */}
+                <div className="container px-4 py-6">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                        <div className="flex gap-6">
+                            {/* 左侧导航 */}
+                            <div className="w-64 flex-shrink-0">
+                                <div className="sticky top-6">
+                                    <ScrollArea className="h-[calc(100vh-12rem)]">
+                                        <TabsList className="w-full flex-col h-auto p-1 bg-muted/50">
+                                            {/* <TabsTrigger
                                             value="ai"
                                             className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             🤖 AI设置
                                         </TabsTrigger> */}
-                                        {/* <TabsTrigger
+                                            {/* <TabsTrigger
                                             value="search"
                                             className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             🔍 搜索设置
                                         </TabsTrigger> */}
-                                        <TabsTrigger
-                                            value="ui"
-                                            className="w-full justify-start px-3 py-2 text-left theme-text"
-                                        >
-                                            🎨 界面设置
-                                        </TabsTrigger>
-                                        {/* <TabsTrigger
+                                            <TabsTrigger
+                                                value="ui"
+                                                className="w-full justify-start px-3 py-2 text-left theme-text"
+                                            >
+                                                🎨 界面设置
+                                            </TabsTrigger>
+                                            {/* <TabsTrigger
                                             value="research"
                                             className="w-full justify-start px-3 py-2 text-left theme-text"
                                         >
                                             📚 研究设置
                                         </TabsTrigger> */}
-                                        <TabsTrigger
-                                            value="dataset"
-                                            className="w-full justify-start px-3 py-2 text-left theme-text"
-                                        >
-                                            🔗 外部数据
-                                        </TabsTrigger>
-                                        <Separator className="my-2" />
-                                        <TabsTrigger
-                                            value="backup"
-                                            className="w-full justify-start px-3 py-2 text-left theme-text"
-                                        >
-                                            💾 备份管理
-                                        </TabsTrigger>
-                                    </TabsList>
-                                </ScrollArea>
+                                            <TabsTrigger
+                                                value="dataset"
+                                                className="w-full justify-start px-3 py-2 text-left theme-text"
+                                            >
+                                                🔗 外部数据
+                                            </TabsTrigger>
+                                            <Separator className="my-2" />
+                                            <TabsTrigger
+                                                value="backup"
+                                                className="w-full justify-start px-3 py-2 text-left theme-text"
+                                            >
+                                                💾 备份管理
+                                            </TabsTrigger>
+                                        </TabsList>
+                                    </ScrollArea>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* 右侧内容 */}
-                        <div className="flex-1 min-w-0">
-                            <ScrollArea className="h-[calc(100vh-12rem)]">
-                                <div className="pr-4">
-                                    {/* <TabsContent value="ai" className="mt-0">
+                            {/* 右侧内容 */}
+                            <div className="flex-1 min-w-0">
+                                <ScrollArea className="h-[calc(100vh-12rem)]">
+                                    <div className="pr-4">
+                                        {/* <TabsContent value="ai" className="mt-0">
                                         <AISettingsTab />
                                     </TabsContent>
 
@@ -103,26 +105,27 @@ export default function SettingsPage() {
                                         <SearchSettingsTab />
                                     </TabsContent> */}
 
-                                    <TabsContent value="ui" className="mt-0">
-                                        <UISettingsTab />
-                                    </TabsContent>
+                                        <TabsContent value="ui" className="mt-0">
+                                            <UISettingsTab />
+                                        </TabsContent>
 
-                                    <TabsContent value="research" className="mt-0">
-                                        <ResearchSettingsTab />
-                                    </TabsContent>
+                                        <TabsContent value="research" className="mt-0">
+                                            <ResearchSettingsTab />
+                                        </TabsContent>
 
-                                    <TabsContent value="backup" className="mt-0">
-                                        <BackupSettingsTab />
-                                    </TabsContent>
-                                    <TabsContent value="dataset" className="mt-0">
-                                        <DatasetSettingsTab />
-                                    </TabsContent>
-                                </div>
-                            </ScrollArea>
+                                        <TabsContent value="backup" className="mt-0">
+                                            <BackupSettingsTab />
+                                        </TabsContent>
+                                        <TabsContent value="dataset" className="mt-0">
+                                            <DatasetSettingsTab />
+                                        </TabsContent>
+                                    </div>
+                                </ScrollArea>
+                            </div>
                         </div>
-                    </div>
-                </Tabs>
+                    </Tabs>
+                </div>
             </div>
-        </div>
+        </ProtectedLayout>
     );
 }

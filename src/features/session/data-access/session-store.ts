@@ -2,6 +2,10 @@ import { create } from 'zustand';
 const EMPTY_MESSAGES: ChatMessage[] = [] as any;
 import type { ChatMessage, ChatSession, MessageId, SessionId } from './types';
 import { authStoreUtils, useAuthStore } from '@/stores/auth.store';
+
+// Local memoization for derived selectors without mutating store state
+const NO_IDS_SENTINEL: Record<string, never> = {};
+const sessionsArrayCache = new WeakMap<Map<SessionId, ChatSession>, WeakMap<object, ChatSession[]>>();
 import { ArchiveManager } from '@/lib/archive/manager';
 
 const getRepo = () => ArchiveManager.getServices().sessionRepository;
@@ -71,44 +75,32 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
 
         getSessions() {
             const state = get();
-            // ✅ 返回缓存的数组，避免每次调用都创建新数组
-            if (state._cachedSessions) {
-                return state._cachedSessions;
-            }
-
+            const sessionsMap = state.sessions;
             const ids = state.orderedSessionIds;
+
+            // WeakMap-based memoization keyed by map and ids array references
+            let inner = sessionsArrayCache.get(sessionsMap);
+            if (!inner) {
+                inner = new WeakMap<object, ChatSession[]>();
+                sessionsArrayCache.set(sessionsMap, inner);
+            }
+            const key = (ids && ids.length > 0 ? (ids as unknown as object) : (NO_IDS_SENTINEL as object));
+            const cached = inner.get(key);
+            if (cached) return cached;
+
             let arr: ChatSession[];
             if (ids && ids.length > 0) {
-                const all = state.sessions;
-                arr = ids.map(id => all.get(id)).filter(Boolean) as ChatSession[];
-                try { console.debug('[store][sessions][getSessions][ordered]', { count: arr.length }); } catch { /* noop */ }
+                arr = ids.map(id => sessionsMap.get(id)).filter(Boolean) as ChatSession[];
             } else {
-                arr = Array.from(state.sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
-                try { console.debug('[store][sessions][getSessions][by_updatedAt]', { count: arr.length }); } catch { /* noop */ }
+                arr = Array.from(sessionsMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);
             }
-
-            // 缓存结果
-            set({ _cachedSessions: arr } as Partial<SessionProjectionState>);
+            inner.set(key, arr);
             return arr;
         },
         getOrderedIds() { return get().orderedSessionIds || get().getSessions().map(s => s.id); },
         getMessages(sessionId) {
             const state = get();
-            // ✅ 检查缓存
-            const cached = state._cachedMessagesBySession?.get(sessionId);
-            if (cached !== undefined) {
-                return cached;
-            }
-
-            // 计算新值
             const list = state.messagesBySession.get(sessionId) ?? EMPTY_MESSAGES;
-            try { console.debug('[store][messages][getMessages]', { sessionId, count: list.length }); } catch { /* noop */ }
-
-            // ✅ 缓存结果
-            const cache = state._cachedMessagesBySession || new Map();
-            cache.set(sessionId, list);
-            set({ _cachedMessagesBySession: cache } as Partial<SessionProjectionState>);
-
             return list;
         },
 
@@ -118,7 +110,6 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
                 sessions.set(s.id, s);
                 // keep orderedSessionIds in sync if present
                 const orderedSessionIds = state.orderedSessionIds && (state.orderedSessionIds.includes(s.id) ? state.orderedSessionIds : [s.id, ...state.orderedSessionIds]);
-                try { console.debug('[store][sessions][upsert]', { id: s.id, title: (s as any)?.title, orderedPreset: Boolean(state.orderedSessionIds) }); } catch { /* noop */ }
                 // ✅ 清除缓存
                 return { sessions, orderedSessionIds, _cachedSessions: undefined } as Partial<SessionProjectionState>;
             });
@@ -160,7 +151,6 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
                 const messagesBySession = new Map(state.messagesBySession);
                 sessions.delete(sessionId);
                 messagesBySession.delete(sessionId);
-                try { console.debug('[store][sessions][remove]', { sessionId }); } catch { /* noop */ }
                 // ✅ 清除缓存
                 const cache = state._cachedMessagesBySession ? new Map(state._cachedMessagesBySession) : new Map();
                 cache.delete(sessionId);
@@ -240,23 +230,27 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
             const isLoggedIn = (() => { try { return !!authStoreUtils.getStoreInstance().getCurrentUserId(); } catch { return false; } })();
             if (!isLoggedIn) return;
             const userId = authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
-            if (ArchiveManager.getCurrentArchiveId() !== userId) {
-                try { console.debug('[store][loadSessionProjection][skip_not_ready]', { archiveId: ArchiveManager.getCurrentArchiveId(), userId }); } catch { /* noop */ }
-                return;
-            }
+            if (ArchiveManager.getCurrentArchiveId() !== userId) { return; }
             const startGen = ArchiveManager.getGeneration();
             const [s, msgsRaw] = await Promise.all([
                 getRepo().getSession(sessionId),
                 getRepo().listMessages(sessionId)
             ]);
             // Drop stale results if archive switched during load
-            if (startGen !== ArchiveManager.getGeneration() || ArchiveManager.getCurrentArchiveId() !== userId) {
-                try { console.debug('[store][loadSessionProjection][drop_stale]', { startGen, currGen: ArchiveManager.getGeneration() }); } catch { /* noop */ }
-                return;
-            }
+            if (startGen !== ArchiveManager.getGeneration() || ArchiveManager.getCurrentArchiveId() !== userId) { return; }
             set((state) => {
                 const sessions = new Map(state.sessions);
-                if (s) sessions.set(sessionId, s);
+                if (s) {
+                    const curr = sessions.get(sessionId);
+                    if (!curr) {
+                        sessions.set(sessionId, s);
+                    } else {
+                        const newer = s.updatedAt > curr.updatedAt ? s : curr;
+                        const older = newer === s ? curr : s;
+                        const merged = { ...newer, meta: { ...(older.meta || {}), ...(newer.meta || {}) } } as ChatSession;
+                        sessions.set(sessionId, merged);
+                    }
+                }
                 const messagesBySession = new Map(state.messagesBySession);
                 // Deduplicate by id while preserving order (first occurrence kept)
                 const seen = new Set<string>();
@@ -279,7 +273,6 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
             const curr = get().getOrderedIds();
             // ✅ 清除缓存
             set({ orderedSessionIds: ids, _cachedSessions: undefined } as Partial<SessionProjectionState>);
-            try { console.debug('[store][order][setSessionsOrder]', { curr: curr.length, next: ids.length }); } catch { /* noop */ }
             // compute minimal moves from curr -> ids
             const moves: Array<{ sessionId: string; beforeId?: string; afterId?: string }> = [];
             for (let i = 0; i < ids.length; i++) {
@@ -338,9 +331,20 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
                 try { console.debug('[store][loadAllSessions][drop_stale]', { startGen, currGen: ArchiveManager.getGeneration() }); } catch { /* noop */ }
                 return;
             }
-            set(() => {
-                const map = new Map(sessions.map((s: ChatSession) => [s.id, s] as const));
-                const orderedSessionIds = sessions.map((s: ChatSession) => s.id);
+            set((state) => {
+                const map = new Map<string, ChatSession>();
+                for (const s of sessions as ChatSession[]) {
+                    const curr = (state.sessions as Map<string, ChatSession>).get(s.id);
+                    if (!curr) {
+                        map.set(s.id, s);
+                    } else {
+                        const newer = s.updatedAt > curr.updatedAt ? s : curr;
+                        const older = newer === s ? curr : s;
+                        const merged = { ...newer, meta: { ...(older.meta || {}), ...(newer.meta || {}) } } as ChatSession;
+                        map.set(s.id, merged);
+                    }
+                }
+                const orderedSessionIds = (sessions as ChatSession[]).map((s: ChatSession) => s.id);
                 try { console.debug('[store][loadAllSessions][done]', { count: sessions.length, userId }); } catch { /* noop */ }
                 // ✅ 清除缓存
                 return { sessions: map, orderedSessionIds, __activeUserId: userId, _cachedSessions: undefined, _cachedMessagesBySession: new Map() } as Partial<SessionProjectionState & { __activeUserId?: string }>;

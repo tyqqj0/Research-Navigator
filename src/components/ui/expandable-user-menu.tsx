@@ -36,6 +36,8 @@ export interface ExpandableUserMenuProps {
      * 对齐方式
      */
     align?: 'start' | 'center' | 'end';
+    /** 是否从触发器“变形”扩展为卡片的动画 */
+    morphFromTrigger?: boolean;
 }
 
 /**
@@ -54,6 +56,7 @@ export const ExpandableUserMenu: React.FC<ExpandableUserMenuProps> = ({
     className,
     expandDirection = 'bottom',
     align = 'end',
+    morphFromTrigger = true,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -68,6 +71,49 @@ export const ExpandableUserMenu: React.FC<ExpandableUserMenuProps> = ({
 
     // 用户名首字母（用于头像占位符）
     const userInitial = user.name.charAt(0).toUpperCase();
+
+    // 根据展开方向与对齐方式计算动画锚点（让动画从对齐的角/边缘开始）
+    const anchor = (() => {
+        if (expandDirection === 'bottom') {
+            switch (align) {
+                case 'start':
+                    return { transformOrigin: 'top left', circleAt: '0% 0%', yIn: -6 } as const;
+                case 'end':
+                    return { transformOrigin: 'top right', circleAt: '100% 0%', yIn: -6 } as const;
+                default:
+                    return { transformOrigin: 'top center', circleAt: '50% 0%', yIn: -6 } as const;
+            }
+        }
+        if (expandDirection === 'top') {
+            switch (align) {
+                case 'start':
+                    return { transformOrigin: 'bottom left', circleAt: '0% 100%', yIn: 6 } as const;
+                case 'end':
+                    return { transformOrigin: 'bottom right', circleAt: '100% 100%', yIn: 6 } as const;
+                default:
+                    return { transformOrigin: 'bottom center', circleAt: '50% 100%', yIn: 6 } as const;
+            }
+        }
+        if (expandDirection === 'left') {
+            switch (align) {
+                case 'start':
+                    return { transformOrigin: 'top right', circleAt: '100% 0%', yIn: 0 } as const;
+                case 'end':
+                    return { transformOrigin: 'bottom right', circleAt: '100% 100%', yIn: 0 } as const;
+                default:
+                    return { transformOrigin: 'center right', circleAt: '100% 50%', yIn: 0 } as const;
+            }
+        }
+        // right
+        switch (align) {
+            case 'start':
+                return { transformOrigin: 'top left', circleAt: '0% 0%', yIn: 0 } as const;
+            case 'end':
+                return { transformOrigin: 'bottom left', circleAt: '0% 100%', yIn: 0 } as const;
+            default:
+                return { transformOrigin: 'center left', circleAt: '0% 50%', yIn: 0 } as const;
+        }
+    })();
 
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -101,15 +147,32 @@ export const ExpandableUserMenu: React.FC<ExpandableUserMenuProps> = ({
             <PopoverContent
                 align={align}
                 side={expandDirection}
-                sideOffset={8}
-                className="w-72 p-0 overflow-hidden"
+                sideOffset={0}
+                avoidCollisions={false}
+                className="z-50 w-72 p-0"
+                unstyled
+                disableAnimations
                 asChild
             >
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden border rounded-lg shadow-md bg-[color:var(--popover,#fff)] text-[color:var(--popover-foreground,#0b1324)]"
+                    style={{ transformOrigin: anchor.transformOrigin as any, willChange: morphFromTrigger ? 'clip-path, opacity, transform' : 'opacity, transform' }}
+                    initial={
+                        morphFromTrigger
+                            ? { opacity: 0, clipPath: `circle(20px at ${anchor.circleAt})`, scale: 0.8, y: anchor.yIn }
+                            : { opacity: 0, scale: 0.95, y: anchor.yIn }
+                    }
+                    animate={
+                        morphFromTrigger
+                            ? { opacity: 1, clipPath: 'circle(200% at 50% 50%)', scale: 1, y: 0 }
+                            : { opacity: 1, scale: 1, y: 0 }
+                    }
+                    exit={
+                        morphFromTrigger
+                            ? { opacity: 0, clipPath: `circle(20px at ${anchor.circleAt})`, scale: 0.85, y: anchor.yIn }
+                            : { opacity: 0, scale: 0.96, y: anchor.yIn }
+                    }
+                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1], opacity: { duration: 0.2 } }}
                 >
                     {/* 用户信息头部 */}
                     <div className="p-4 bg-gradient-to-br from-primary/5 to-primary/10">

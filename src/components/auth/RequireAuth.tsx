@@ -25,7 +25,7 @@ export const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
             const returnTo = encodeURIComponent(
                 pathname + (searchParams?.toString() ? `?${searchParams?.toString()}` : '')
             );
-            router.replace(`/login?returnTo=${returnTo}`);
+            router.replace(`/?returnTo=${returnTo}`);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAuthenticated, isLoading, pathname]);

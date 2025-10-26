@@ -74,6 +74,13 @@
   --icon-purple: #8b5cf6;  /* 默认值，将被覆盖 */
   --icon-pink: #ec4899;    /* 默认值，将被覆盖 */
   --icon-orange: #f97316;  /* 默认值，将被覆盖 */
+
+  /* UI overlay/blur tokens for glass surfaces */
+  --overlay-alpha: 0.4;
+  --glass-blur-radius: 4px;
+  --elevation-1: var(--shadow-sm);
+  --elevation-2: var(--shadow-md);
+  --elevation-3: var(--shadow-lg);
 }
 
 /* 动态颜色映射表 */

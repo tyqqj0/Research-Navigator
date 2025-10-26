@@ -5,7 +5,8 @@ import { useSessionStore } from '@/features/session/data-access/session-store';
 
 export function useMessageStream(input: { sessionId: string; messageId: string }) {
     const { sessionId, messageId } = input;
-    const messages = useSessionStore(s => s.getMessages(sessionId));
+    const getMessages = useSessionStore(s => s.getMessages);
+    const messages = getMessages(sessionId);
     const memo = React.useMemo(() => {
         const m = (messages || []).find(x => x.id === messageId);
         const text = m?.content || '';

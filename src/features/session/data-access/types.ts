@@ -147,6 +147,7 @@ export type SessionEvent =
     | EventEnvelope<'ExpansionEvaluated', { lastAdded: number; recentGrowth: number; coverageScore?: number }>
     | EventEnvelope<'ExpansionStopped', { by: 'user' | 'ai' | 'rule'; reason?: string }>
     | EventEnvelope<'SearchCandidatesReady', { round: number; artifactId: ArtifactId }>
+    | EventEnvelope<'CandidatesRanked', { round: number; strategy: string; total: number; selected: number }>
     | EventEnvelope<'CollectionPruned', { removed: number; from: number; to: number; rule: string }>
     | EventEnvelope<'CandidatesSelected', { candidateId: ArtifactId; size: number; ruleSet: string }>
     // Graph construction

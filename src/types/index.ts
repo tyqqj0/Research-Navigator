@@ -22,6 +22,8 @@ export interface HeaderProps {
         menu?: MenuActionItem[];
     };
     theme?: 'light' | 'dark';
+    /** Visual variant of the header */
+    variant?: 'default' | 'transparent';
     hideUserInfo?: boolean;
     className?: string;
     /** Called when hamburger button is clicked on small screens */
