@@ -34,6 +34,8 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
 
         if (cmd.type === 'GenerateReport') {
             const sessionId = cmd.params.sessionId;
+            try { (globalThis as any).__diagMark?.('orch:report:start', { sessionId, cmdId: cmd.id }); } catch { }
+            try { console.debug('[orch][report][start]', { sessionId, cmdId: cmd.id }); } catch { }
             if (running.has(sessionId)) {
                 try { console.warn('[report][running_abort_prev]', sessionId); } catch { }
                 try { running.get(sessionId)?.abort(); } catch { }
@@ -70,6 +72,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
 
             // Outline stage
             await emit({ id: newId(), type: 'ReportOutlineStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
+            try { (globalThis as any).__diagMark?.('orch:report:outline:start', { sessionId, reportMid }); } catch { }
             currentController = new AbortController();
             const outlineStream = startTextStream(
                 { messages },
@@ -92,9 +95,11 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             const outlineArtifact: Artifact<string> = { id: newId(), kind: 'report_outline', version: 1, data: outline.trim(), meta: { sessionId }, createdAt: Date.now() } as any;
             await getRepo().putArtifact(outlineArtifact);
             await emit({ id: newId(), type: 'ReportOutlineCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, outlineArtifactId: outlineArtifact.id } as any });
+            try { (globalThis as any).__diagMark?.('orch:report:outline:done', { sessionId, reportMid }); } catch { }
 
             // Expansion stage
             await emit({ id: newId(), type: 'ReportExpandStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
+            try { (globalThis as any).__diagMark?.('orch:report:expand:start', { sessionId, reportMid }); } catch { }
             const expandPrompt = [
                 '基于以下大纲与图谱数据，请逐节扩写成完整中文报告（请使用 Markdown 格式）。要求：',
                 '- 保留并充分使用 cite 键（形如 [@key]），覆盖尽可能多的相关节点。',
@@ -128,9 +133,11 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             const draftArtifact: Artifact<string> = { id: newId(), kind: 'report_draft', version: 1, data: draft.trim(), meta: { sessionId }, createdAt: Date.now() } as any;
             await getRepo().putArtifact(draftArtifact);
             await emit({ id: newId(), type: 'ReportExpandCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, draftArtifactId: draftArtifact.id } as any });
+            try { (globalThis as any).__diagMark?.('orch:report:expand:done', { sessionId, reportMid }); } catch { }
 
             // Abstract stage
             await emit({ id: newId(), type: 'ReportAbstractStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
+            try { (globalThis as any).__diagMark?.('orch:report:abstract:start', { sessionId, reportMid }); } catch { }
             const abstractPrompt = [
                 '请基于以下完整报告生成“单段落”中文学术摘要（150-220字）。只输出摘要正文一段，不要标题，不要列点：',
                 '',
@@ -151,6 +158,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             const abstractArtifact: Artifact<string> = { id: newId(), kind: 'report_abstract', version: 1, data: abstract.trim(), meta: { sessionId }, createdAt: Date.now() } as any;
             await getRepo().putArtifact(abstractArtifact);
             await emit({ id: newId(), type: 'ReportAbstractCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid, abstractArtifactId: abstractArtifact.id } as any });
+            try { (globalThis as any).__diagMark?.('orch:report:abstract:done', { sessionId, reportMid }); } catch { }
 
             // Assemble final
             const finalText = `# 摘要\n\n${abstract.trim()}\n\n${draft.replace(/^#\s*摘要[\s\S]*?(?:\n{2,}|$)/i, '').trim()}`;
@@ -170,6 +178,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             } as any;
             await getRepo().putArtifact(finalArtifact);
             await emit({ id: newId(), type: 'ReportFinalAssembled', ts: Date.now(), sessionId, payload: { messageId: reportMid, finalArtifactId: finalArtifact.id, citeKeys, bibtexByKey } as any });
+            try { (globalThis as any).__diagMark?.('orch:report:final:assembled', { sessionId, reportMid, finalId: finalArtifact.id }); } catch { }
 
             // Emit final outline rendering for UI (derived from outline text)
             await emit({ id: newId(), type: 'ReportOutlineRendered', ts: Date.now(), sessionId, payload: { messageId: reportMid, outlineText: outline.trim() } as any });
@@ -180,6 +189,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             // Back-compat events for existing UI behavior
             emit({ id: newId(), type: 'AssistantMessageCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid } });
             emit({ id: newId(), type: 'ReportGenerationCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid } } as any);
+            try { (globalThis as any).__diagMark?.('orch:report:completed', { sessionId, reportMid }); } catch { }
 
             try { const { toast } = require('sonner'); toast.message('开始生成报告…'); } catch { }
             running.delete(sessionId);

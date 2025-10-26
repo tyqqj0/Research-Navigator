@@ -7,6 +7,7 @@ import { ArchiveProvider } from "@/lib/archive/provider";
 import "@/lib/immer-config";
 import { Toaster } from "@/components/ui";
 import { OAuthClientProvider } from "@/components/providers/OAuthClientProvider";
+import ClientDiagnostics from "@/components/ClientDiagnostics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({
           {authServiceUrl && oauthClientId ? (
             <OAuthClientProvider authServiceUrl={authServiceUrl} clientId={oauthClientId}>
               <ArchiveProvider>
+                <ClientDiagnostics />
                 {children}
                 {/* Global toast portal */}
                 <Toaster richColors expand />
@@ -47,6 +49,7 @@ export default function RootLayout({
             </OAuthClientProvider>
           ) : (
             <ArchiveProvider>
+              <ClientDiagnostics />
               {children}
               {/* Global toast portal */}
               <Toaster richColors expand />

@@ -28,6 +28,7 @@ import { literatureDataAccess } from '@/features/literature/data-access';
 // import { SessionStatusStrip } from './SessionStatusStrip';
 import { SessionStageIndicator } from './SessionStageIndicator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 interface ChatPanelProps {
     sessionId: SessionId;
@@ -102,6 +103,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
     const canResumeProposal = Boolean(deep && !directionConfirmed && !Boolean(meta?.direction?.awaitingDecision) && lastUserText.trim());
     const onResumeProposal = async () => {
         if (!canResumeProposal) return;
+        try {
+            (window as any).__diagMark?.('cmd:ProposeDirection:dispatch', { sessionId });
+        } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: lastUserText } } as any);
     };
     const awaitingDecision = Boolean(meta?.direction?.awaitingDecision);
@@ -789,6 +793,11 @@ const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) =>
     const info = (session as any)?.meta?.graphDecision || {};
     const locked = Boolean((session as any)?.meta?.graphDecision?.locked);
     const onConfirm = async () => {
+        try {
+            (window as any).__diagMark?.('cmd:GenerateReport:dispatch', { sessionId });
+            console.debug('[ui][cmd] GenerateReport', { sessionId });
+            toast.message('已提交：生成报告');
+        } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any);
     };
     return (
