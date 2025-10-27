@@ -75,13 +75,14 @@ export default function ResearchSessionPage() {
     // Ensure supervisors started once on client
     useEffect(() => { startDirectionSupervisor(); startCollectionSupervisor(); startTitleSupervisor(); }, []);
 
-    // 消费从主页带来的 initPrompt 与 deep 参数（一次性）
+    // 消费从主页带来的 initPrompt / initRefs / deep 参数（一次性）
     useEffect(() => {
         try {
             if (!sessionId) return;
             if (consumedInitQueryForSession.has(sessionId)) return; // StrictMode 双挂载保护
             const initPrompt = (searchParams?.get('initPrompt') || '').trim();
             const deep = searchParams?.get('deep') === '1';
+            const rawInitRefs = searchParams?.get('initRefs') || '';
             if (!initPrompt && !deep) return;
 
             // 立刻标记与清理 URL，避免并发的第二次 effect 再次读取到参数
@@ -127,7 +128,15 @@ export default function ResearchSessionPage() {
                 }
                 // Deep 模式已就绪后再发送初始输入，以触发方向/搜索流程
                 if (initPrompt) {
-                    await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text: initPrompt } } as any);
+                    let inputRefs: any[] | undefined = undefined;
+                    if (rawInitRefs) {
+                        try {
+                            const decoded = decodeURIComponent(rawInitRefs);
+                            const parsed = JSON.parse(decoded);
+                            if (Array.isArray(parsed)) inputRefs = parsed.filter(r => r && typeof r === 'object');
+                        } catch { /* ignore */ }
+                    }
+                    await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text: initPrompt }, inputRefs } as any);
                 }
             })();
         } catch { /* noop */ }

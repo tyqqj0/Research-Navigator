@@ -77,6 +77,57 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
         }
     }, [meta.report, messages]);
 
+    // Mentions state (for MessageComposer)
+    const [mentionOpen, setMentionOpen] = React.useState(false);
+    const [mentionQuery, setMentionQuery] = React.useState('');
+    const [litResults, setLitResults] = React.useState<any[]>([]);
+    const [repResults, setRepResults] = React.useState<any[]>([]);
+    const [mentionLoading, setMentionLoading] = React.useState(false);
+
+    // Debounced search for mentions (local library + reports)
+    React.useEffect(() => {
+        let cancelled = false;
+        const q = mentionQuery.trim();
+        if (!mentionOpen) return;
+        const t = setTimeout(async () => {
+            if (!q) { setLitResults([]); setRepResults([]); return; }
+            setMentionLoading(true);
+            try {
+                const [litPage, reps] = await Promise.all([
+                    literatureDataAccess.literatures
+                        .search({ searchTerm: q }, { field: 'createdAt', order: 'desc' }, 1, 8)
+                        .catch(() => ({ items: [] })),
+                    getRepo().searchReports({ query: q, limit: 8 }).catch(() => [])
+                ]);
+                const friendly = Array.isArray(litPage?.items)
+                    ? (litPage.items as any[]).map((it: any) => it?.literature || it).filter(Boolean)
+                    : [];
+                if (!cancelled) { setLitResults(friendly); setRepResults(reps || []); }
+            } finally { if (!cancelled) setMentionLoading(false); }
+        }, 250);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [mentionQuery, mentionOpen]);
+
+    const addRef = (ref: ArtifactRef) => {
+        const key = `${ref.kind}:${ref.id}`;
+        const setKeys = new Set(selectedRefs.map(r => `${r.kind}:${r.id}`));
+        if (setKeys.has(key)) return;
+        setSelectedRefs(prev => [...prev, ref]);
+    };
+
+    const handleSelectRef = (ref: ArtifactRef) => {
+        addRef(ref);
+        const lastAt = userInput.lastIndexOf('@');
+        if (lastAt >= 0) {
+            let end = lastAt + 1;
+            while (end < userInput.length && !/\s/.test(userInput[end])) end++;
+            const newVal = (userInput.slice(0, lastAt) + userInput.slice(end)).replace(/\s+$/, '');
+            setUserInput(newVal);
+        }
+        setMentionOpen(false);
+        setMentionQuery('');
+    };
+
     // Remove "新一轮研究" button behavior from ChatPanel; new round will be driven by deep toggle + next message
 
     const sendUserMessage = async () => {
@@ -307,6 +358,70 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                                 </Button>
                             )}
                             helperText={<span className="text-xs text-muted-foreground hidden md:inline">按 <b>Enter</b> 发送，<b>Shift+Enter</b> 换行</span>}
+                            mentionEnabled
+                            mentionOpen={mentionOpen}
+                            onMentionOpenChange={setMentionOpen}
+                            mentionQuery={mentionQuery}
+                            onMentionQueryChange={setMentionQuery}
+                            mentionTriggerTitle="添加参考 (@)"
+                            renderMentionContent={({ query, close }) => (
+                                <div className="space-y-2">
+                                    <Input autoFocus placeholder="搜索文献/报告…" value={mentionQuery} onChange={(e) => setMentionQuery(e.target.value)} />
+                                    <div className="text-xs text-muted-foreground">按 Enter 发送消息；使用 @ 添加上下文参考</div>
+                                    <div className="max-h-64 overflow-auto space-y-2">
+                                        {mentionLoading && <div className="px-1 py-1 text-xs text-muted-foreground">正在搜索…</div>}
+                                        {litResults && litResults.length > 0 && (
+                                            <div>
+                                                <div className="px-1 py-1 text-xs font-medium text-muted-foreground">文献</div>
+                                                <div className="space-y-1">
+                                                    {litResults.map((it: any) => (
+                                                        <button
+                                                            key={it.paperId}
+                                                            type="button"
+                                                            className="w-full text-left px-2 py-1 rounded hover:bg-muted"
+                                                            onClick={() => { handleSelectRef({ kind: 'literature', id: it.paperId }); close(); }}
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm truncate">{it.title || it.paperId}</div>
+                                                                    <div className="text-[11px] text-muted-foreground truncate">{(it.authors || []).slice(0, 3).join(', ')}{it.year ? ` · ${it.year}` : ''}</div>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {repResults && repResults.length > 0 && (
+                                            <div>
+                                                <div className="px-1 py-1 text-xs font-medium text-muted-foreground">报告</div>
+                                                <div className="space-y-1">
+                                                    {repResults.map((a: any) => (
+                                                        <button
+                                                            key={a.id}
+                                                            type="button"
+                                                            className="w-full text-left px-2 py-1 rounded hover:bg-muted"
+                                                            onClick={() => { handleSelectRef({ kind: 'report_final', id: a.id }); close(); }}
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <FileText className="w-3.5 h-3.5 text-purple-600" />
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm truncate">{String((a.meta || {}).title || a.id)}</div>
+                                                                    <div className="text-[11px] text-muted-foreground truncate">{String(a.data || '').slice(0, 80)}</div>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {!mentionLoading && mentionQuery.trim() && litResults.length === 0 && repResults.length === 0 && (
+                                            <div className="px-1 py-1 text-xs text-muted-foreground">无结果</div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         />
                         {/* Selected references chips */}
                         {selectedRefs.length > 0 && (
