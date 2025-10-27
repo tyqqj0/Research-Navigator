@@ -17,15 +17,14 @@ export function buildDirectionPrompt(input: { userQuery: string; version: number
     // - 若意图不清晰：不要输出 <direction>，只输出“澄清问题”（项目列表，具体可回答的要点）
     // - 不要输出任何额外标签或元信息（如“报告：”“原始输入：”“意图标签：”等）
     const base = `你是一名研究策划助理。判断用户意图是否清晰：
-清晰 → 第一行必须仅为 <direction>，随后给出完整方向说明（结构化 Markdown）：
+若清晰或已有大致方向，则第一行必须仅为 <direction>，随后给出完整方向说明（结构化 Markdown）：
 - 标题
-- 研究网站（列出重点来源）
-- 分析结果（边界：范围/方法/对象/场景）
+- 研究方向（列出重点）
+- 分析边界（范围/方法/对象/场景）
 - 关键问题（3-5）
-- 建议与下一步（3-5）
 - 年份范围与论证依据（简述理由）
 
-不清晰 → 不要输出 <direction>。只输出“澄清问题”：
+仅当完全无法判定方向，才不要输出 <direction>。只输出“澄清问题”：
 - 用项目符号列出需要补充的具体信息点（目标/范围/时间/数据来源/预期输出等）
 - 内容简洁、可操作，避免泛泛而谈
 
@@ -35,16 +34,16 @@ export function buildDirectionPrompt(input: { userQuery: string; version: number
 `;
     const refine = version > 1 ? `基于用户补充/反馈进行改写：
 - 保留有效信息并提升清晰度与可执行性
-- 若仍然不清晰，继续输出“澄清问题”；若已清晰，则按上面的“清晰”规范输出（第一行 <direction>）
+- **若已可以确认大致方向**，请尽快按“清晰”规范产出方案（第一行 <direction>）。
 
 用户补充：
 ${feedback || ''}
 ` : '';
     return [
         base,
-        refine,
         '用户意图：',
-        userQuery
+        userQuery,
+        refine
     ].filter(Boolean).join('\n');
 }
 

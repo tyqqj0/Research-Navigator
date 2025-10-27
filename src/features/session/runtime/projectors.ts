@@ -143,7 +143,17 @@ export function applyEventToProjection(e: SessionEvent) {
 
     // Direction phase projection additions (minimal):
     if (e.type === 'DirectionProposalStarted') {
-        // 改为占位：不再预先创建“提案”消息，直到确认是有效提案
+        // 立即创建占位的提案消息，用于显示“正在判定意图...”占位卡片
+        const sid = e.sessionId!;
+        const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
+        try {
+            const list = (useSessionStore.getState() as any).messagesBySession.get(sid) || [];
+            const exists = list.find((m: any) => m.id === msgId);
+            if (!exists) store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+            else store.markMessage(msgId, sid, { status: 'streaming', content: '' } as any);
+        } catch {
+            store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+        }
         return;
     }
     if (e.type === 'DirectionProposalDelta') {
@@ -179,10 +189,10 @@ export function applyEventToProjection(e: SessionEvent) {
         } catch {
             store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content, status: 'done', createdAt: e.ts });
         }
-        // 如果之前已创建占位的 proposal 消息，则标记为 aborted，避免与澄清卡并存
+        // 如果之前已创建占位的 proposal 消息，直接删除占位，避免“已中止”卡片残留
         try {
             const pMsgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
-            store.markMessage(pMsgId, sid, { status: 'aborted' } as any);
+            (useSessionStore.getState() as any).removeMessage(pMsgId, sid);
         } catch { /* ignore */ }
         // mark awaitingClarification in meta
         try {
@@ -196,7 +206,7 @@ export function applyEventToProjection(e: SessionEvent) {
     }
     if (e.type === 'DirectionProposalAborted') {
         const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
-        try { store.markMessage(msgId, sid, { status: 'aborted' }); } catch { }
+        try { (useSessionStore.getState() as any).removeMessage(msgId, sid); } catch { }
         return;
     }
     if (e.type === 'DecisionRequested') {

@@ -419,6 +419,14 @@ export function createSessionRepository(archiveId: string) {
         async putMessage(m: ChatMessage) { await sessionDb.withDexieRetry(async () => { await sessionDb.messages.put({ ...m, userId: this._requireUserId() } as any); }); try { notifyLocalSessionWrite({ sessionId: m.sessionId as any, kind: 'message' }); } catch { /* noop */ } },
         async listMessages(sessionId: string) { return await sessionDb.withDexieRetry(async () => (sessionDb.messages as any).where('[userId+sessionId]').equals([this._requireUserId(), sessionId]).sortBy('createdAt')); },
         async getMessage(id: string) { const userId = this._requireUserId(); const m: any = await sessionDb.withDexieRetry(async () => await sessionDb.messages.get(id)); return m && m.userId === userId ? m : null; },
+        async deleteMessage(id: string) {
+            const userId = this._requireUserId();
+            await sessionDb.withDexieRetry(async () => {
+                const m: any = await sessionDb.messages.get(id);
+                if (m && m.userId === userId) await sessionDb.messages.delete(id);
+            });
+            try { notifyLocalSessionWrite({ sessionId: String((await this.getMessage(id))?.sessionId || ''), kind: 'message' }); } catch { /* noop */ }
+        },
 
         async appendEvent(e: EventEnvelope) { await sessionDb.withDexieRetry(async () => { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); }); try { notifyLocalSessionWrite({ sessionId: e.sessionId as any, kind: 'event' }); } catch { /* noop */ } },
         async listEvents(sessionId?: string) {

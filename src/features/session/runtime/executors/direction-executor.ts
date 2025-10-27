@@ -20,7 +20,7 @@ export const directionExecutor = {
         (async () => {
             try {
                 const prompt = buildPrompt({ userQuery: opts.userQuery, version: opts.version, feedback: opts.feedback });
-                try { console.debug('[exec][direction][prompt]', { version: opts.version, hasFeedback: Boolean(opts.feedback), preview: String(prompt).slice(0, 160) }); } catch { }
+                try { console.debug('[exec][direction][prompt]', { version: opts.version, hasFeedback: Boolean(opts.feedback), preview: String(prompt).slice(0, 1600) }); } catch { }
                 const model = resolveModelForPurpose('thinking');
                 const stream = startTextStream({ prompt }, { signal: controller.signal, modelOverride: model, temperature: 0.6 });
                 for await (const ev of stream) {

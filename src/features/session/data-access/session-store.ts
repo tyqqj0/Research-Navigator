@@ -33,6 +33,7 @@ interface SessionProjectionState {
     addMessage(m: ChatMessage): void;
     appendToMessage(messageId: MessageId, sessionId: SessionId, delta: string): void;
     markMessage(messageId: MessageId, sessionId: SessionId, patch: Partial<ChatMessage>): void;
+    removeMessage(messageId: MessageId, sessionId: SessionId): void;
 
     // ordering
     setSessionsOrder(ids: string[]): Promise<void>;
@@ -223,6 +224,22 @@ export const useSessionStore = create<SessionProjectionState & { __activeUserId?
                 const m = await getRepo().getMessage(messageId);
                 if (m) await getRepo().putMessage({ ...m, ...patch });
             })();
+        },
+        removeMessage(messageId, sessionId) {
+            set((state) => {
+                const list = state.messagesBySession.get(sessionId) || [];
+                const nextList = list.filter(x => x.id !== messageId);
+                if (nextList.length === list.length) return {} as Partial<SessionProjectionState>;
+                const messagesBySession = new Map(state.messagesBySession);
+                messagesBySession.set(sessionId, nextList);
+
+                // ✅ 清除该 sessionId 的消息缓存
+                const cache = state._cachedMessagesBySession ? new Map(state._cachedMessagesBySession) : new Map();
+                cache.delete(sessionId);
+
+                return { messagesBySession, _cachedMessagesBySession: cache } as Partial<SessionProjectionState>;
+            });
+            void (async () => { try { await getRepo().deleteMessage(messageId); } catch { /* noop */ } })();
         },
 
         async loadSessionProjection(sessionId) {
