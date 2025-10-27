@@ -198,6 +198,7 @@ export function createSessionRepository(archiveId: string) {
             await sessionDb.withDexieRetry(async () => {
                 await sessionDb.sessions.put({ ...s, userId });
             });
+            await this.markSyncDirty(`rn.v1.session.${s.id}`, true);
             try { notifyLocalSessionWrite({ sessionId: s.id, kind: 'session' }); } catch { /* noop */ }
         },
         async getSession(id: string) {
@@ -279,6 +280,9 @@ export function createSessionRepository(archiveId: string) {
             await sessionDb.withDexieRetry(async () => {
                 await sessionDb.sessions.bulkPut(s.map(x => ({ ...x, userId })));
             });
+            for (const x of s) {
+                await this.markSyncDirty(`rn.v1.session.${x.id}`, true);
+            }
             try { for (const x of s) notifyLocalSessionWrite({ sessionId: x.id, kind: 'session' }); } catch { /* noop */ }
         },
         async deleteSession(id: string) {
@@ -289,6 +293,7 @@ export function createSessionRepository(archiveId: string) {
                 const s = await sessionDb.sessions.get(id);
                 if (s && (s as any).userId === userId) await sessionDb.sessions.delete(id);
             });
+            await this.markSyncDirty(`rn.v1.session.${id}`, true);
             try { notifyLocalSessionWrite({ sessionId: id, kind: 'delete' }); } catch { /* noop */ }
         },
 
@@ -304,6 +309,7 @@ export function createSessionRepository(archiveId: string) {
                     } catch { /* ignore */ }
                 }
             });
+            await this.markSyncDirty(`rn.v1.session.${sessionId}`, true);
             try { notifyLocalSessionWrite({ sessionId, kind: 'message' }); } catch { /* noop */ }
         },
 
@@ -319,6 +325,7 @@ export function createSessionRepository(archiveId: string) {
                     } catch { /* ignore */ }
                 }
             });
+            await this.markSyncDirty(`rn.v1.session.${sessionId}`, true);
             try { notifyLocalSessionWrite({ sessionId, kind: 'event' }); } catch { /* noop */ }
         },
 
@@ -339,31 +346,47 @@ export function createSessionRepository(archiveId: string) {
             const dbAny = sessionDb as any;
             const payload = { ...layout, userId: this._requireUserId() } as any;
             try { console.debug('[repo][session][putLayout]', { dbName, viewId: layout.viewId, sessionId: layout.sessionId }); } catch { /* noop */ }
-            if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.put(payload));
-            return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.put(payload));
-            // notify below won't run if early return above executed; duplicate for both branches:
+            if (dbAny.sessionLayoutsV4) {
+                await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.put(payload));
+            } else {
+                await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.put(payload));
+            }
+            await this.markSyncDirty(`rn.v1.session.${layout.sessionId}`, true);
+            try { notifyLocalSessionWrite({ sessionId: layout.sessionId, kind: 'layout' }); } catch { /* noop */ }
         },
         async bulkPutLayouts(layouts: SessionLayout[]) {
             const dbAny = sessionDb as any;
             const userId = this._requireUserId();
             const items = layouts.map(l => ({ ...l, userId } as any));
             try { console.debug('[repo][session][bulkPutLayouts]', { dbName, count: items.length }); } catch { /* noop */ }
-            if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.bulkPut(items));
-            return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.bulkPut(items));
+            if (dbAny.sessionLayoutsV4) {
+                await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.bulkPut(items));
+            } else {
+                await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.bulkPut(items));
+            }
+            for (const l of layouts) {
+                await this.markSyncDirty(`rn.v1.session.${l.sessionId}`, true);
+                try { notifyLocalSessionWrite({ sessionId: l.sessionId, kind: 'layout' }); } catch { /* noop */ }
+            }
         },
         async deleteLayout(viewId: string, sessionId: string) {
             const dbAny = sessionDb as any;
             try { console.debug('[repo][session][deleteLayout]', { dbName, viewId, sessionId }); } catch { /* noop */ }
-            if (dbAny.sessionLayoutsV4) return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.delete([this._requireUserId(), viewId, sessionId]));
-            // v3 primary key is [viewId, sessionId]
-            return await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.delete([viewId, sessionId]));
+            if (dbAny.sessionLayoutsV4) {
+                await sessionDb.withDexieRetry(async () => await dbAny.sessionLayoutsV4.delete([this._requireUserId(), viewId, sessionId]));
+            } else {
+                // v3 primary key is [viewId, sessionId]
+                await sessionDb.withDexieRetry(async () => await dbAny.sessionLayouts.delete([viewId, sessionId]));
+            }
+            await this.markSyncDirty(`rn.v1.session.${sessionId}`, true);
+            try { notifyLocalSessionWrite({ sessionId, kind: 'layout' }); } catch { /* noop */ }
         },
         async ensureLayoutTop(viewId: string, sessionId: string) {
             const userId = this._requireUserId();
             const now = Date.now();
             const dbAny = sessionDb as any;
             try { console.debug('[repo][session][ensureLayoutTop][begin]', { dbName, userId, viewId, sessionId }); } catch { /* noop */ }
-            return await sessionDb.withDexieRetry(async () => {
+            const layout = await sessionDb.withDexieRetry(async () => {
                 let first: any | undefined;
                 if (dbAny.sessionLayoutsV4) {
                     first = (await dbAny.sessionLayoutsV4.where('[userId+viewId]').equals([userId, viewId]).sortBy('orderKey'))[0];
@@ -376,7 +399,9 @@ export function createSessionRepository(archiveId: string) {
                 try { console.debug('[repo][session][ensureLayoutTop][done]', { dbName, viewId, sessionId, orderKey: newKey }); } catch { /* noop */ }
                 return layout;
             });
+            await this.markSyncDirty(`rn.v1.session.${sessionId}`, true);
             try { notifyLocalSessionWrite({ sessionId, kind: 'layout' }); } catch { /* noop */ }
+            return layout;
         },
         async reorderSessions(viewId: string, moves: Array<{ sessionId: string; beforeId?: string; afterId?: string }>) {
             const userId = this._requireUserId();
@@ -413,14 +438,28 @@ export function createSessionRepository(archiveId: string) {
                 if (dbAny.sessionLayoutsV4) await dbAny.sessionLayoutsV4.bulkPut(updated as any); else await dbAny.sessionLayouts.bulkPut(updated as any);
             });
             try { console.debug('[repo][session][reorder][done]', { dbName, viewId, count: updated.length }); } catch { /* noop */ }
+            for (const l of updated) {
+                await this.markSyncDirty(`rn.v1.session.${l.sessionId}`, true);
+                try { notifyLocalSessionWrite({ sessionId: l.sessionId, kind: 'layout' }); } catch { /* noop */ }
+            }
             return updated;
         },
 
-        async putMessage(m: ChatMessage) { await sessionDb.withDexieRetry(async () => { await sessionDb.messages.put({ ...m, userId: this._requireUserId() } as any); }); try { notifyLocalSessionWrite({ sessionId: m.sessionId as any, kind: 'message' }); } catch { /* noop */ } },
+        async putMessage(m: ChatMessage) {
+            await sessionDb.withDexieRetry(async () => { await sessionDb.messages.put({ ...m, userId: this._requireUserId() } as any); });
+            await this.markSyncDirty(`rn.v1.session.${m.sessionId}`, true);
+            try { notifyLocalSessionWrite({ sessionId: m.sessionId as any, kind: 'message' }); } catch { /* noop */ }
+        },
         async listMessages(sessionId: string) { return await sessionDb.withDexieRetry(async () => (sessionDb.messages as any).where('[userId+sessionId]').equals([this._requireUserId(), sessionId]).sortBy('createdAt')); },
         async getMessage(id: string) { const userId = this._requireUserId(); const m: any = await sessionDb.withDexieRetry(async () => await sessionDb.messages.get(id)); return m && m.userId === userId ? m : null; },
 
-        async appendEvent(e: EventEnvelope) { await sessionDb.withDexieRetry(async () => { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); }); try { notifyLocalSessionWrite({ sessionId: e.sessionId as any, kind: 'event' }); } catch { /* noop */ } },
+        async appendEvent(e: EventEnvelope) {
+            await sessionDb.withDexieRetry(async () => { await sessionDb.events.put({ ...e, userId: this._requireUserId() } as any); });
+            if ((e as any)?.sessionId) {
+                await this.markSyncDirty(`rn.v1.session.${(e as any).sessionId}`, true);
+            }
+            try { notifyLocalSessionWrite({ sessionId: e.sessionId as any, kind: 'event' }); } catch { /* noop */ }
+        },
         async listEvents(sessionId?: string) {
             const userId = this._requireUserId();
             try { console.debug('[repo][session][listEvents]', { dbName, userId, sessionId: sessionId || null }); } catch { /* noop */ }

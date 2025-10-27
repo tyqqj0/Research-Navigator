@@ -73,6 +73,11 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
             const existing = await this.findByUserAndLiterature(userId, paperId);
             if (!existing) return;
             await this.update(existing.id, updates);
+            try {
+                const { ArchiveManager } = require('@/lib/archive/manager');
+                const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                await sessionRepo.markSyncDirty(`rn.v1.lit.meta.${paperId}`, true);
+            } catch { /* noop */ }
         } catch (error) {
             console.error('[UserMetaRepository] updateByUserAndLiterature failed:', error);
             throw new Error('Failed to update user meta by composite key');
@@ -197,6 +202,11 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                     ...input,
                     updatedAt: DatabaseUtils.now()
                 });
+                try {
+                    const { ArchiveManager } = require('@/lib/archive/manager');
+                    const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                    await sessionRepo.markSyncDirty(`rn.v1.lit.meta.${paperId}`, true);
+                } catch { /* noop */ }
                 return existing.id;
             } else {
                 // 创建新元数据
@@ -216,6 +226,11 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                 // 验证数据
                 const validatedMeta = UserLiteratureMetaSchema.parse(newMeta);
                 await this.table.add(validatedMeta as any);
+                try {
+                    const { ArchiveManager } = require('@/lib/archive/manager');
+                    const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                    await sessionRepo.markSyncDirty(`rn.v1.lit.meta.${paperId}`, true);
+                } catch { /* noop */ }
 
                 return newMeta.id;
             }
@@ -236,6 +251,11 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
                 if (!meta.tags.includes(tag)) {
                     const updatedTags = [...meta.tags, tag];
                     await this.table.update([userId, paperId] as any, { tags: updatedTags } as any);
+                    try {
+                        const { ArchiveManager } = require('@/lib/archive/manager');
+                        const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                        await sessionRepo.markSyncDirty(`rn.v1.lit.meta.${paperId}`, true);
+                    } catch { /* noop */ }
                 }
             } else {
                 // 创建新元数据
@@ -261,6 +281,11 @@ export class UserMetaRepository extends BaseRepository<UserLiteratureMeta, strin
             if (meta && meta.tags.includes(tag)) {
                 const updatedTags = meta.tags.filter(t => t !== tag);
                 await this.table.update([userId, paperId] as any, { tags: updatedTags } as any);
+                try {
+                    const { ArchiveManager } = require('@/lib/archive/manager');
+                    const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                    await sessionRepo.markSyncDirty(`rn.v1.lit.meta.${paperId}`, true);
+                } catch { /* noop */ }
             }
         } catch (error) {
             console.error('[UserMetaRepository] removeTag failed:', error);

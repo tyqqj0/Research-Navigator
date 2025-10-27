@@ -253,6 +253,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             // 验证数据
             const validatedCollection = CollectionSchema.parse(collection);
             await this.table.add(validatedCollection);
+            try {
+                const { ArchiveManager } = require('@/lib/archive/manager');
+                const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                await sessionRepo.markSyncDirty(`rn.v1.collection.${collection.id}`, true);
+            } catch { /* noop */ }
 
             return collection.id;
         } catch (error) {
@@ -285,6 +290,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                     itemCount: updatedLiteratureIds.length,
                     lastItemAddedAt: DatabaseUtils.now()
                 });
+                try {
+                    const { ArchiveManager } = require('@/lib/archive/manager');
+                    const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                    await sessionRepo.markSyncDirty(`rn.v1.collection.${collectionId}`, true);
+                } catch { /* noop */ }
             }
         } catch (error) {
             console.error('[CollectionRepository] addLiterature failed:', error);
@@ -314,6 +324,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                 paperIds: updatedLiteratureIds,
                 itemCount: updatedLiteratureIds.length
             });
+            try {
+                const { ArchiveManager } = require('@/lib/archive/manager');
+                const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                await sessionRepo.markSyncDirty(`rn.v1.collection.${collectionId}`, true);
+            } catch { /* noop */ }
         } catch (error) {
             console.error('[CollectionRepository] removeLiterature failed:', error);
             throw new Error('Failed to remove literature from collection');
@@ -332,6 +347,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                     const updated = c.paperIds.filter(id => id !== paperId);
                     await this.update(c.id, { paperIds: updated, itemCount: updated.length });
                     affected++;
+                    try {
+                        const { ArchiveManager } = require('@/lib/archive/manager');
+                        const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                        await sessionRepo.markSyncDirty(`rn.v1.collection.${c.id}`, true);
+                    } catch { /* noop */ }
                 }
             }
             return affected;
@@ -353,6 +373,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                     const updated = c.paperIds.filter(id => id !== paperId);
                     await this.update(c.id, { paperIds: updated, itemCount: updated.length });
                     affected++;
+                    try {
+                        const { ArchiveManager } = require('@/lib/archive/manager');
+                        const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                        await sessionRepo.markSyncDirty(`rn.v1.collection.${c.id}`, true);
+                    } catch { /* noop */ }
                 }
             }
             return affected;
@@ -388,6 +413,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                         throw new Error('Target collection ID required for copy operation');
                     }
                     await this.addLiterature(operation.targetCollectionId, operation.paperIds);
+                    try {
+                        const { ArchiveManager } = require('@/lib/archive/manager');
+                        const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                        await sessionRepo.markSyncDirty(`rn.v1.collection.${operation.targetCollectionId}`, true);
+                    } catch { /* noop */ }
                     break;
             }
         } catch (error) {
@@ -426,6 +456,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
                 itemCount: matchedItems.length,
                 lastItemAddedAt: addedItems.length > 0 ? DatabaseUtils.now() : collection.lastItemAddedAt
             });
+            try {
+                const { ArchiveManager } = require('@/lib/archive/manager');
+                const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                await sessionRepo.markSyncDirty(`rn.v1.collection.${collectionId}`, true);
+            } catch { /* noop */ }
 
             const result: SmartCollectionResult = {
                 collectionId,
@@ -480,6 +515,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             await this.update(collectionId, {
                 isArchived: true,
             } as any);
+            try {
+                const { ArchiveManager } = require('@/lib/archive/manager');
+                const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                await sessionRepo.markSyncDirty(`rn.v1.collection.${collectionId}`, true);
+            } catch { /* noop */ }
         } catch (error) {
             console.error('[CollectionRepository] archiveCollection failed:', error);
             throw new Error('Failed to archive collection');
@@ -494,6 +534,11 @@ export class CollectionRepository extends BaseRepository<Collection, string> {
             await this.update(collectionId, {
                 isArchived: false,
             } as any);
+            try {
+                const { ArchiveManager } = require('@/lib/archive/manager');
+                const sessionRepo = ArchiveManager.getServices().sessionRepository;
+                await sessionRepo.markSyncDirty(`rn.v1.collection.${collectionId}`, true);
+            } catch { /* noop */ }
         } catch (error) {
             console.error('[CollectionRepository] restoreCollection failed:', error);
             throw new Error('Failed to restore collection');

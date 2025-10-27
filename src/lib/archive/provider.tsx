@@ -4,7 +4,8 @@ import { ArchiveManager, type ArchiveId, type ArchiveServices } from './manager'
 import { useAuthStore } from '@/stores/auth.store';
 import { syncConfig } from '@/config/sync.config';
 import { NoopKVClient } from '@/lib/sync/kv-client';
-import { DataSyncService } from '@/lib/sync/data-sync-service';
+import { DataSDKKVClient } from '@/lib/sync/kv-client-data-sdk';
+import { DataSyncService, LiteratureSyncService, CollectionsSyncService } from '@/lib/sync/data-sync-service';
 import { SyncController } from '@/lib/sync/sync-controller';
 
 const ArchiveServicesContext = React.createContext<ArchiveServices | null>(null);
@@ -28,9 +29,13 @@ export function ArchiveProvider({ archiveIdOverride, children }: { archiveIdOver
             if (!syncConfig.enabled) return;
             if (!currentUser?.id) return;
             const services = ArchiveManager.getServices();
-            const kv = new NoopKVClient(); // replace with real client when backend available
+            const kv = syncConfig.dataApiBaseUrl ? new DataSDKKVClient(syncConfig.dataApiBaseUrl) : new NoopKVClient();
             const svc = new DataSyncService({ kv, repo: services.sessionRepository, archiveId });
-            const ctrl = new SyncController(svc);
+            const domainServices = [
+                new LiteratureSyncService(kv, services.sessionRepository, { membershipRepo: services.membershipRepository }),
+                new CollectionsSyncService(kv, services.sessionRepository, { collectionsRepo: services.collectionsRepository }),
+            ];
+            const ctrl = new SyncController(svc, domainServices);
             ctrl.start();
             setController(ctrl);
         } catch { /* noop */ }

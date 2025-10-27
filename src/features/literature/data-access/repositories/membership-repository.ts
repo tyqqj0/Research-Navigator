@@ -38,12 +38,22 @@ export class MembershipRepository {
         await this.withDexieRetry(async () => {
             return await this.db.userLibraryMemberships.put({ userId, paperId, addedAt: now } as UserLibraryMembership);
         });
+        try {
+            const { ArchiveManager } = require('@/lib/archive/manager');
+            const sessionRepo = ArchiveManager.getServices().sessionRepository;
+            await sessionRepo.markSyncDirty('rn.v1.lit.membership', true);
+        } catch { /* noop */ }
     }
 
     async remove(userId: string, paperId: string): Promise<void> {
         await this.withDexieRetry(async () => {
             return await this.db.userLibraryMemberships.delete([userId, paperId]);
         });
+        try {
+            const { ArchiveManager } = require('@/lib/archive/manager');
+            const sessionRepo = ArchiveManager.getServices().sessionRepository;
+            await sessionRepo.markSyncDirty('rn.v1.lit.membership', true);
+        } catch { /* noop */ }
     }
 
     async listByUser(userId: string): Promise<UserLibraryMembership[]> {

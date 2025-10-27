@@ -1,16 +1,18 @@
 import { subscribeLocalWrites } from './sync-events';
-import type { DataSyncService } from './data-sync-service';
+import type { DataSyncService, DomainSyncService } from './data-sync-service';
 import { syncConfig } from '@/config/sync.config';
 
 export class SyncController {
     private service: DataSyncService;
+    private domainServices: DomainSyncService[] = [];
     private unsub: (() => void) | null = null;
     private timer: any = null;
     private poller: any = null;
     private pending = new Set<string>();
 
-    constructor(service: DataSyncService) {
+    constructor(service: DataSyncService, domains?: DomainSyncService[]) {
         this.service = service;
+        if (Array.isArray(domains)) this.domainServices = domains;
     }
 
     start(): void {
@@ -54,12 +56,19 @@ export class SyncController {
 
     private safePull = async (): Promise<void> => {
         try { await this.service.pullIndexAndSessions(); } catch { /* noop */ }
+        // pull for other domains in background (fire-and-forget sequencing)
+        for (const d of this.domainServices) {
+            try { await d.pull(); } catch { /* noop */ }
+        }
     };
 
     async flush(): Promise<void> {
         if (this.pending.size === 0) return;
         try {
             await this.service.pushDirtySessions();
+            for (const d of this.domainServices) {
+                try { await d.push(); } catch { /* noop */ }
+            }
         } finally {
             this.pending.clear();
         }

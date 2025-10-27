@@ -1,6 +1,10 @@
 import type { VersionedKVClient, VersionedValue } from './kv-client';
 import type { SessionRepository } from '@/features/session/data-access/session-repository';
 import { syncConfig } from '@/config/sync.config';
+import { authStoreUtils } from '@/stores/auth.store';
+import type { MembershipRepository } from '@/features/literature/data-access/repositories/membership-repository';
+import type { CollectionRepository } from '@/features/literature/data-access/repositories/collection-repository';
+import { userMetaRepository as defaultUserMetaRepo, UserMetaRepository } from '@/features/literature/data-access/repositories/user-meta-repository';
 
 export type SessionIndex = {
     version: 1;
@@ -161,5 +165,157 @@ export class DataSyncService {
         }
     }
 }
+
+// Generic multi-domain interface and two concrete domain sync services (literature and collections)
+export interface DomainSyncService {
+    pull(): Promise<void>;
+    push(): Promise<void>;
+}
+
+// Literature domain service: membership + user metas (per-paper)
+export class LiteratureSyncService implements DomainSyncService {
+    private kv: VersionedKVClient;
+    private repo: SessionRepository; // using repo.syncMeta for meta storage
+    private membershipRepo: MembershipRepository;
+    private userMetaRepo: UserMetaRepository;
+    constructor(kv: VersionedKVClient, repo: SessionRepository, opts: { membershipRepo: MembershipRepository; userMetaRepo?: UserMetaRepository }) {
+        this.kv = kv;
+        this.repo = repo;
+        this.membershipRepo = opts.membershipRepo;
+        this.userMetaRepo = opts.userMetaRepo || defaultUserMetaRepo as any;
+    }
+    private readonly KEY_MEMBERSHIP = 'rn.v1.lit.membership';
+    private readonly META_PREFIX = 'rn.v1.lit.meta.';
+    private isMetaKey(k: string): boolean { return k.startsWith(this.META_PREFIX); }
+    async pull(): Promise<void> {
+        if (!syncConfig.enabled) return;
+        // Pull membership blob
+        try {
+            const prev = await this.repo.getSyncMeta(this.KEY_MEMBERSHIP);
+            const l = await this.kv.load<any>(this.KEY_MEMBERSHIP, prev?.remoteRevision);
+            if (l !== 304) {
+                // Application of membership is deferred to upper services for now (MVP leaves as meta only)
+                await this.repo.setSyncMeta({ key: this.KEY_MEMBERSHIP, remoteRevision: l.revision, dirty: false, lastPulledAt: Date.now() });
+            }
+        } catch { /* noop */ }
+        // Pull metas via listing is not supported in MVP without an index; skip for now
+    }
+    async push(): Promise<void> {
+        if (!syncConfig.enabled) return;
+        const dirty = await this.repo.listSyncDirtyKeys();
+        // Push membership blob if dirty
+        if (dirty.includes(this.KEY_MEMBERSHIP)) {
+            try {
+                const meta = await this.repo.getSyncMeta(this.KEY_MEMBERSHIP);
+                const userId = authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                const memberships = await this.membershipRepo.listByUser(userId);
+                const paperIds = Array.from(new Set(memberships.map(m => m.paperId)));
+                const local: any = { userId, paperIds, updatedAt: new Date().toISOString() };
+                const saved = await this.kv.save(this.KEY_MEMBERSHIP, local, meta?.remoteRevision || meta?.localRevision);
+                await this.repo.setSyncMeta({ key: this.KEY_MEMBERSHIP, localRevision: saved.revision, remoteRevision: saved.revision, dirty: false, lastPushedAt: Date.now() });
+            } catch (e: any) {
+                // on 412, skip for MVP
+            }
+        }
+        // Push individual metas
+        const metaKeys = dirty.filter(k => this.isMetaKey(k));
+        for (const k of metaKeys) {
+            try {
+                const meta = await this.repo.getSyncMeta(k);
+                const userId = authStoreUtils.getStoreInstance().getCurrentUserId() || 'anonymous';
+                const paperId = k.replace(this.META_PREFIX, '');
+                const metaObj = await this.userMetaRepo.findByUserAndLiterature(userId, paperId);
+                const payload: any = metaObj ? {
+                    id: metaObj.id,
+                    userId: metaObj.userId,
+                    paperId: metaObj.paperId,
+                    tags: metaObj.tags,
+                    readingStatus: metaObj.readingStatus,
+                    rating: metaObj.rating,
+                    priority: metaObj.priority,
+                    customFields: metaObj.customFields,
+                    personalNotes: (metaObj as any).personalNotes,
+                    readingProgress: (metaObj as any).readingProgress,
+                    updatedAt: metaObj.updatedAt,
+                } : { userId, paperId, deleted: true, updatedAt: new Date().toISOString() };
+                const saved = await this.kv.save(k, payload, meta?.remoteRevision || meta?.localRevision);
+                await this.repo.setSyncMeta({ key: k, localRevision: saved.revision, remoteRevision: saved.revision, dirty: false, lastPushedAt: Date.now() });
+            } catch (e: any) {
+                // ignore errors for MVP
+            }
+        }
+    }
+}
+
+// Collections domain service: index + items
+export class CollectionsSyncService implements DomainSyncService {
+    private kv: VersionedKVClient;
+    private repo: SessionRepository; // using repo.syncMeta for meta storage
+    private collectionsRepo: CollectionRepository;
+    constructor(kv: VersionedKVClient, repo: SessionRepository, opts: { collectionsRepo: CollectionRepository }) {
+        this.kv = kv;
+        this.repo = repo;
+        this.collectionsRepo = opts.collectionsRepo;
+    }
+    private readonly INDEX_KEY = 'rn.v1.collections.index';
+    private readonly ITEM_PREFIX = 'rn.v1.collection.';
+    private isItemKey(k: string) { return k.startsWith(this.ITEM_PREFIX); }
+    async pull(): Promise<void> {
+        if (!syncConfig.enabled) return;
+        try {
+            const prev = await this.repo.getSyncMeta(this.INDEX_KEY);
+            const res = await this.kv.load<any>(this.INDEX_KEY, prev?.remoteRevision);
+            if (res !== 304) {
+                await this.repo.setSyncMeta({ key: this.INDEX_KEY, remoteRevision: res.revision, dirty: false, lastPulledAt: Date.now() });
+            }
+        } catch { /* noop */ }
+        // Per-item pulls would require enumerating IDs; MVP defers
+    }
+    async push(): Promise<void> {
+        if (!syncConfig.enabled) return;
+        const dirty = await this.repo.listSyncDirtyKeys();
+        const itemKeys = dirty.filter(k => this.isItemKey(k));
+        for (const k of itemKeys) {
+            try {
+                const meta = await this.repo.getSyncMeta(k);
+                const id = k.replace(this.ITEM_PREFIX, '');
+                const c = await this.collectionsRepo.findById(id);
+                const payload: any = c ? {
+                    id: c.id,
+                    ownerUid: c.ownerUid,
+                    name: c.name,
+                    description: c.description,
+                    type: c.type,
+                    isPublic: c.isPublic,
+                    parentId: c.parentId,
+                    paperIds: c.paperIds,
+                    itemCount: c.itemCount,
+                    isArchived: c.isArchived,
+                    createdAt: c.createdAt,
+                    updatedAt: c.updatedAt,
+                    lastItemAddedAt: c.lastItemAddedAt,
+                } : { id, deleted: true, updatedAt: new Date().toISOString() };
+                const saved = await this.kv.save(k, payload, meta?.remoteRevision || meta?.localRevision);
+                await this.repo.setSyncMeta({ key: k, localRevision: saved.revision, remoteRevision: saved.revision, dirty: false, lastPushedAt: Date.now() });
+            } catch { /* noop */ }
+        }
+        // Update collections index after items
+        if (itemKeys.length > 0) {
+            try {
+                const prev = await this.repo.getSyncMeta(this.INDEX_KEY);
+                const items: Record<string, { updatedAt?: string; deleted?: boolean }> = {};
+                for (const k of itemKeys) {
+                    const id = k.replace(this.ITEM_PREFIX, '');
+                    const c = await this.collectionsRepo.findById(id);
+                    items[id] = { updatedAt: new Date((c?.updatedAt || new Date()) as any).toISOString(), deleted: !c } as any;
+                }
+                const index: any = { version: 1, items };
+                const saved = await this.kv.save(this.INDEX_KEY, index, prev?.remoteRevision || prev?.localRevision);
+                await this.repo.setSyncMeta({ key: this.INDEX_KEY, remoteRevision: saved.revision, lastPushedAt: Date.now() });
+            } catch { /* noop */ }
+        }
+    }
+}
+
 
 

@@ -11,8 +11,10 @@ export interface HttpOptions {
 
 async function request(method: string, url: string, body?: any, options?: HttpOptions): Promise<any> {
     const headers = {
-        'Content-Type': 'application/json',
+        ...(body != null ? { 'Content-Type': 'application/json' } : {}),
+        'Accept': 'application/json',
         ...getAuthHeaders(),
+        ...(process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID ? { 'X-Client-Id': String(process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID) } : {}),
         ...(options?.headers || {}),
     } as Record<string, string>;
     const res = await fetch(url, {
