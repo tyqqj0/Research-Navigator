@@ -247,7 +247,7 @@ export default function ResearchPage() {
                                         )}
                                         leftAdornment={null}
                                         helperText={(
-                                            <span>提示：按 <b>Enter</b> 发送（输入法安全），使用 <b>Shift+Enter</b> 换行</span>
+                                            <span>提示：按 <b>Enter</b> 发送，使用 <b>Shift+Enter</b> 换行</span>
                                         )}
                                         mentionEnabled
                                         mentionOpen={mentionOpen}
