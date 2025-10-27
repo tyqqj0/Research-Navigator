@@ -167,10 +167,44 @@ export class BackendApiService {
                 });
             }
 
-            // 合并缓存和新获取的数据，按原顺序返回
-            const result = paperIds.map(paperId => {
-                return cached.find(item => item.paperId === paperId) ||
-                    fetched.find(item => item.paperId === paperId);
+            // 合并缓存和新获取的数据，按原顺序返回（支持 DOI/ARXIV 请求ID 重映射）
+            const allItems = [...cached, ...fetched];
+            const byPaperId = new Map<string, LibraryItem>();
+            const byDoi = new Map<string, LibraryItem>();
+            const byArxiv = new Map<string, LibraryItem>();
+            const normDoi = (s: string) => String(s || '').trim().toLowerCase();
+            const normArxiv = (s: string) => String(s || '').trim().toLowerCase();
+            for (const it of allItems) {
+                if (!it) continue;
+                if (it.paperId) byPaperId.set(it.paperId, it);
+                const d = (it as any).doi as string | undefined;
+                if (d && typeof d === 'string') {
+                    const v = d.trim();
+                    if (/^10\./i.test(v)) {
+                        byDoi.set(normDoi(v), it);
+                    } else if (/^\d{4}\.\d{4,5}(v\d+)?$/i.test(v) || /^arxiv:/i.test(v)) {
+                        const val = v.replace(/^arxiv:/i, '');
+                        byArxiv.set(normArxiv(val), it);
+                    }
+                }
+            }
+
+            const result = paperIds.map(reqId => {
+                // 1) 直接按后端 paperId 命中
+                if (byPaperId.has(reqId)) return byPaperId.get(reqId)!;
+                // 2) DOI: 前缀
+                const mDoi = reqId.match(/^DOI:(.+)$/i);
+                if (mDoi) {
+                    const key = normDoi(mDoi[1]);
+                    if (byDoi.has(key)) return byDoi.get(key)!;
+                }
+                // 3) ARXIV: 前缀
+                const mAx = reqId.match(/^ARXIV:(.+)$/i);
+                if (mAx) {
+                    const key = normArxiv(mAx[1]);
+                    if (byArxiv.has(key)) return byArxiv.get(key)!;
+                }
+                return undefined as unknown as LibraryItem;
             }).filter(Boolean) as LibraryItem[];
 
             return result;

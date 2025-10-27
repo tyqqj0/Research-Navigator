@@ -35,7 +35,7 @@ export const QUALITY_PRESETS: Record<QualityMode, Required<QualityWeights>> = {
         tau: 8,
         epsilon: 0.25
     },
-    
+
     // Classic: 重视高引经典论文，适合文献综述、领域全景
     classic: {
         influentialPerYear: 2.0,   // 大幅提高引用权重
@@ -46,7 +46,7 @@ export const QUALITY_PRESETS: Record<QualityMode, Required<QualityWeights>> = {
         tau: 10,                   // 长半衰期
         epsilon: 0.3               // 多探索，确保不漏经典
     },
-    
+
     // Emerging: 重视新兴潜力论文，适合前沿追踪、趋势分析
     emerging: {
         influentialPerYear: 1.0,   // 适中的引用权重
@@ -60,7 +60,7 @@ export const QUALITY_PRESETS: Record<QualityMode, Required<QualityWeights>> = {
 };
 
 interface CandidateWithScore {
-    candidate: { title?: string; bestIdentifier?: string; sourceUrl: string; [key: string]: any };
+    candidate: { title?: string; bestIdentifier?: string; sourceUrl: string;[key: string]: any };
     score: number;
     metadata?: PaperMetadata;
 }
@@ -90,41 +90,68 @@ const DEFAULT_WEIGHTS: Required<QualityWeights> = {
  * Fetch metadata for candidates using backendApiService
  */
 async function fetchCandidateMetadata(
-    candidates: Array<{ title?: string; bestIdentifier?: string; sourceUrl: string; [key: string]: any }>
+    candidates: Array<{ title?: string; bestIdentifier?: string; sourceUrl: string;[key: string]: any }>
 ): Promise<Map<number, PaperMetadata>> {
     const metadataMap = new Map<number, PaperMetadata>();
-    
-    // Try to fetch metadata for each candidate
+
+    // Batch first: collect identifiers that are resolvable (non-URL)
+    const resolvable = candidates.map((c, idx) => ({ idx, id: c.bestIdentifier })).filter(x => x.id && !/^URL:/i.test(String(x.id!))) as Array<{ idx: number; id: string }>;
+    const unique = Array.from(new Set(resolvable.map(x => x.id)));
+    if (unique.length > 0) {
+        try {
+            const batch = await backendApiService.getPapersBatch(unique);
+            const byPaperId = new Map<string, any>();
+            const byDoi = new Map<string, any>();
+            const byArxiv = new Map<string, any>();
+            const normDoi = (s: string) => String(s || '').trim().toLowerCase();
+            const normArxiv = (s: string) => String(s || '').trim().toLowerCase();
+            for (const it of batch || []) {
+                if (!it) continue;
+                if (it.paperId) byPaperId.set(String(it.paperId), it);
+                const d = (it as any).doi as string | undefined;
+                if (d) {
+                    const v = d.trim();
+                    if (/^10\./i.test(v)) byDoi.set(normDoi(v), it);
+                    else if (/^\d{4}\.\d{4,5}(v\d+)?$/i.test(v) || /^arxiv:/i.test(v)) byArxiv.set(normArxiv(v.replace(/^arxiv:/i, '')), it);
+                }
+            }
+            const resolve = (identifier: string): any | undefined => {
+                const s = String(identifier);
+                if (byPaperId.has(s)) return byPaperId.get(s);
+                const mD = s.match(/^DOI:(.+)$/i); if (mD) { const k = normDoi(mD[1]); if (byDoi.has(k)) return byDoi.get(k); }
+                const mA = s.match(/^ARXIV:(.+)$/i); if (mA) { const k = normArxiv(mA[1]); if (byArxiv.has(k)) return byArxiv.get(k); }
+                return undefined;
+            };
+            for (const { idx, id } of resolvable) {
+                const hit = resolve(id);
+                if (hit) metadataMap.set(idx, extractMetadata(hit));
+            }
+        } catch { /* ignore batch failure */ }
+    }
+
+    // For those still missing, fallback to singles or title search
     await Promise.allSettled(
         candidates.map(async (candidate, idx) => {
+            if (metadataMap.has(idx)) return;
             try {
                 const id = candidate.bestIdentifier;
-                if (!id || /^URL:/i.test(id)) {
-                    // Fallback: search by title
-                    if (candidate.title) {
-                        const searchRes = await backendApiService.searchPapers({
-                            query: candidate.title,
-                            limit: 1,
-                            fields: ['paperId', 'title', 'year', 'publicationDate', 'citationCount', 'influentialCitationCount', 'isOpenAccess', 'venue']
-                        });
-                        if (searchRes.results && searchRes.results.length > 0) {
-                            const paper = searchRes.results[0];
-                            metadataMap.set(idx, extractMetadata(paper));
-                        }
-                    }
-                    return;
+                if (id && !/^URL:/i.test(id)) {
+                    const paper = await backendApiService.getPaper(id);
+                    if (paper) { metadataMap.set(idx, extractMetadata(paper)); return; }
                 }
-
-                // Fetch paper details by identifier
-                const paper = await backendApiService.getPaper(id);
-                if (paper) {
-                    metadataMap.set(idx, extractMetadata(paper));
+                if (candidate.title) {
+                    const searchRes = await backendApiService.searchPapers({
+                        query: candidate.title,
+                        limit: 1,
+                        fields: ['paperId', 'title', 'year', 'publicationDate', 'citationCount', 'influentialCitationCount', 'isOpenAccess', 'venue']
+                    });
+                    if (searchRes.results && searchRes.results.length > 0) {
+                        const paper = searchRes.results[0];
+                        metadataMap.set(idx, extractMetadata(paper));
+                    }
                 }
             } catch (err) {
-                // Silently skip metadata fetch failures
-                try {
-                    console.debug('[candidateSelector] Failed to fetch metadata for candidate', { idx, error: String(err) });
-                } catch { /* noop */ }
+                try { console.debug('[candidateSelector] metadata fetch fallback failed', { idx, error: String(err) }); } catch { /* noop */ }
             }
         })
     );
@@ -153,7 +180,7 @@ function extractMetadata(paper: any): PaperMetadata {
  */
 function calculateQualityScore(metadata: PaperMetadata, weights: Required<QualityWeights>): number {
     const currentYear = new Date().getFullYear();
-    
+
     // Compute age in years (minimum 1 year to avoid division by zero)
     let ageYears = 1;
     if (metadata.year) {
@@ -182,10 +209,10 @@ function calculateQualityScore(metadata: PaperMetadata, weights: Required<Qualit
     const s4 = calculateVenueScore(metadata.venue);
 
     // Combined score
-    const score = weights.influentialPerYear * s1 + 
-                  weights.recency * s2 + 
-                  weights.velocity * s3 + 
-                  weights.venue * s4;
+    const score = weights.influentialPerYear * s1 +
+        weights.recency * s2 +
+        weights.velocity * s3 +
+        weights.venue * s4;
 
     return score;
 }
@@ -208,10 +235,10 @@ export function getQualityWeights(
  * Rank and pick top candidates using specified strategy
  */
 export async function rankAndPickCandidates(
-    candidates: Array<{ title?: string; bestIdentifier?: string; sourceUrl: string; [key: string]: any }>,
-    opts: { 
-        strategy: CandidateSelectionStrategy; 
-        topK: number; 
+    candidates: Array<{ title?: string; bestIdentifier?: string; sourceUrl: string;[key: string]: any }>,
+    opts: {
+        strategy: CandidateSelectionStrategy;
+        topK: number;
         mode?: QualityMode;  // New: quality preset mode
         weights?: Partial<QualityWeights>;
         minCitationCount?: number;  // New: minimum citation count filter
@@ -248,7 +275,7 @@ export async function rankAndPickCandidates(
     const minCitations = opts.minCitationCount || 0;
     let filtered = scored;
     if (minCitations > 0) {
-        const passFilter = scored.filter(s => 
+        const passFilter = scored.filter(s =>
             s.metadata && (s.metadata.citationCount || 0) >= minCitations
         );
         // If too aggressive (less than topK papers pass), keep some low-citation papers
@@ -262,7 +289,7 @@ export async function rankAndPickCandidates(
                 });
             } catch { /* noop */ }
             // Keep papers that passed + fill remaining with best of those that didn't
-            const failed = scored.filter(s => 
+            const failed = scored.filter(s =>
                 !s.metadata || (s.metadata.citationCount || 0) < minCitations
             ).sort((a, b) => b.score - a.score);
             filtered = [...passFilter, ...failed.slice(0, topK - passFilter.length)];
@@ -331,7 +358,7 @@ export async function rankAndPickCandidates(
  * Get summary statistics for selected candidates (for UI/event emission)
  */
 export function getCandidateStats(
-    candidates: Array<{ title?: string; bestIdentifier?: string; sourceUrl: string; [key: string]: any }>,
+    candidates: Array<{ title?: string; bestIdentifier?: string; sourceUrl: string;[key: string]: any }>,
     metadataMap?: Map<number, PaperMetadata>
 ): { meanScore: number; ageMix: { recent: number; mid: number; old: number } } {
     if (!metadataMap || metadataMap.size === 0) {
