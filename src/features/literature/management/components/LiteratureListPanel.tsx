@@ -536,74 +536,10 @@ export function LiteratureListPanel({
                         </div>
 
                         {/* 操作栏 */}
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                {/* 结果统计 */}
-                                <div className="text-sm text-muted-foreground">
-                                    {/* 显示 {paginatedItems.length} / {filteredAndSortedItems.length} 条结果 */}
-                                    {selectedItems.size > 0 && (
-                                        <Badge variant="secondary" className="ml-2">
-                                            已选择 {selectedItems.size} 项
-                                        </Badge>
-                                    )}
-                                </div>
 
-                                {/* 批量操作 */}
-                                {selectedItems.size > 0 && (
-                                    <div className="flex items-center gap-2 w-32">
-                                        {/* <Button variant="outline" size="sm">
-                                            <Edit className="h-4 w-4 mr-1" />
-                                            批量编辑
-                                        </Button> */}
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            className="text-red-600"
-                                            onClick={async () => {
-                                                const ids = Array.from(selectedItems);
-                                                if (ids.length === 0) return;
-                                                try {
-                                                    if (onBulkDelete) {
-                                                        // 交给上层根据上下文处理（可能弹出确认对话框或仅移出集合）
-                                                        void onBulkDelete(ids);
-                                                    } else {
-                                                        await batchDeleteLiteratures(ids);
-                                                        setSelectedItems(new Set());
-                                                    }
-                                                } catch (e) {
-                                                    console.warn('[LiteratureListPanel] Batch delete failed', e);
-                                                }
-                                            }}
-                                        >
-                                            <Trash2 className="h-4 w-4 mr-1" />
-                                            删除
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* 右侧：新增与排序 */}
-                            {/* <div className="flex items-center gap-2"> */}
-                                {/* 添加入口在列表工具栏右上角 */}
-                                {/* <div className="hidden md:flex items-center gap-2 mr-2">
-                                    <Input
-                                        placeholder="输入DOI/URL/S2Id添加"
-                                        className="w-49"
-                                        value={addInput}
-                                        onChange={(e) => setAddInput(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-                                        disabled={adding}
-                                    />
-                                    <Button size="sm" onClick={handleAdd} disabled={adding || !addInput.trim()}>
-                                        新建
-                                    </Button>
-                                </div> */}
-
-                            {/* </div> */}
-                        </div>
-                        {addError && (
+                        {/* {addError && (
                             <div className="text-xs text-red-600">添加错误：{addError}</div>
-                        )}
+                        )} */}
                     </div>
                 </CardHeader>
             )}
@@ -636,7 +572,72 @@ export function LiteratureListPanel({
                                         </Button>
                                     )}
                                 </div>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        {/* 结果统计 */}
+                                        <div className="text-sm text-muted-foreground">
+                                            {/* 显示 {paginatedItems.length} / {filteredAndSortedItems.length} 条结果 */}
+                                            {selectedItems.size > 0 && (
+                                                <Badge variant="secondary" className="ml-2">
+                                                    已选 {selectedItems.size} 项
+                                                </Badge>
+                                            )}
+                                        </div>
+
+                                        {/* 批量操作 */}
+                                        {selectedItems.size > 0 && (
+                                            <div className="flex items-center gap-2 w-32">
+                                                {/* <Button variant="outline" size="sm">
+                                            <Edit className="h-4 w-4 mr-1" />
+                                            批量编辑
+                                        </Button> */}
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    className="text-red-600"
+                                                    onClick={async () => {
+                                                        const ids = Array.from(selectedItems);
+                                                        if (ids.length === 0) return;
+                                                        try {
+                                                            if (onBulkDelete) {
+                                                                // 交给上层根据上下文处理（可能弹出确认对话框或仅移出集合）
+                                                                void onBulkDelete(ids);
+                                                            } else {
+                                                                await batchDeleteLiteratures(ids);
+                                                                setSelectedItems(new Set());
+                                                            }
+                                                        } catch (e) {
+                                                            console.warn('[LiteratureListPanel] Batch delete failed', e);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 右侧：新增与排序 */}
+                                    {/* <div className="flex items-center gap-2"> */}
+                                    {/* 添加入口在列表工具栏右上角 */}
+                                    {/* <div className="hidden md:flex items-center gap-2 mr-2">
+                                    <Input
+                                        placeholder="输入DOI/URL/S2Id添加"
+                                        className="w-49"
+                                        value={addInput}
+                                        onChange={(e) => setAddInput(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+                                        disabled={adding}
+                                    />
+                                    <Button size="sm" onClick={handleAdd} disabled={adding || !addInput.trim()}>
+                                        新建
+                                    </Button>
+                                </div> */}
+
+                                    {/* </div> */}
+                                </div>
                             </div>
+                            
                         )}
 
                         {/* 文献列表 */}

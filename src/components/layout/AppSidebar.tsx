@@ -222,8 +222,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                         'flex items-center justify-center',
                         'transition-transform duration-200',
                         'hover:scale-110 active:scale-95',
-                        'theme-background-primary shadow-lg border border-border',
-                        'hover:shadow-xl'
+                        'theme-card-orange-soft shadow-lg border border-border theme-border-primary',
+                        'hover:shadow-xl '
                     )}
                 >
                     <Pin className={cn('h-4 w-4 transition-transform', _pinned && 'rotate-45')} />
