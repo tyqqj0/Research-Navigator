@@ -9,9 +9,10 @@ import { Markdown } from '@/components/ui/markdown';
 interface DirectionProposalCardProps { sessionId: string; content: string; status?: 'streaming' | 'done' | 'error' | 'aborted' }
 
 export const DirectionProposalCard: React.FC<DirectionProposalCardProps> = ({ sessionId, content, status = 'done' }) => {
+    const title = status === 'streaming' ? '正在判定意图…' : '研究方向提案';
     return (
         <StreamCard
-            title="研究方向提案"
+            title={title}
             status={status}
             headerVariant="blue"
             headerRight={status === 'streaming' ? (
@@ -19,7 +20,11 @@ export const DirectionProposalCard: React.FC<DirectionProposalCardProps> = ({ se
             ) : undefined}
             contentClassName="text-sm"
         >
-            <Markdown text={content} />
+            {status === 'streaming' ? (
+                <div className="text-sm text-muted-foreground">正在分析您的输入是否足够明确，如需补充信息，将在下方给出具体问题。</div>
+            ) : (
+                <Markdown text={content} />
+            )}
         </StreamCard>
     );
 };

@@ -6,6 +6,7 @@
 import './chat.orchestrator';
 import './direction.orchestrator';
 import './collection.orchestrator';
+import './report.orchestrator';
 // Note: title.orchestrator doesn't exist; title logic is handled by title.supervisor
 
 // Export a dummy value to prevent tree-shaking

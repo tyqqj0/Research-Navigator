@@ -48,10 +48,68 @@ export function applyEventToProjection(e: SessionEvent) {
     }
     if (e.type === 'AssistantMessageAborted') {
         store.markMessage(e.payload.messageId, e.sessionId!, { status: 'aborted' });
+        // If this was a report message, also mark current running stage as aborted in meta
+        try {
+            const sid = e.sessionId!; const mid = e.payload.messageId;
+            if (String(mid || '').startsWith('report_')) {
+                const s = (useSessionStore.getState() as any).sessions.get(sid);
+                if (s) {
+                    const prevReport = ((s.meta as any)?.report) || {};
+                    const prevEntry = prevReport[mid] || {};
+                    const stageKey = ((): 'outlineStatus' | 'expandStatus' | 'abstractStatus' | undefined => {
+                        if (prevEntry.abstractStatus === 'streaming') return 'abstractStatus';
+                        if (prevEntry.expandStatus === 'streaming') return 'expandStatus';
+                        if (prevEntry.outlineStatus === 'streaming') return 'outlineStatus';
+                        return undefined;
+                    })();
+                    const next = {
+                        ...s,
+                        meta: {
+                            ...s.meta,
+                            report: {
+                                ...prevReport,
+                                [mid]: stageKey ? { ...prevEntry, [stageKey]: 'aborted' } : prevEntry
+                            }
+                        },
+                        updatedAt: e.ts
+                    } as any;
+                    useSessionStore.getState().upsertSession(next);
+                }
+            }
+        } catch { /* ignore */ }
         return;
     }
     if (e.type === 'AssistantMessageFailed') {
         store.markMessage(e.payload.messageId, e.sessionId!, { status: 'error', error: e.payload.error });
+        // If this was a report message, mark current running stage as error
+        try {
+            const sid = e.sessionId!; const mid = e.payload.messageId;
+            if (String(mid || '').startsWith('report_')) {
+                const s = (useSessionStore.getState() as any).sessions.get(sid);
+                if (s) {
+                    const prevReport = ((s.meta as any)?.report) || {};
+                    const prevEntry = prevReport[mid] || {};
+                    const stageKey = ((): 'outlineStatus' | 'expandStatus' | 'abstractStatus' | undefined => {
+                        if (prevEntry.abstractStatus === 'streaming') return 'abstractStatus';
+                        if (prevEntry.expandStatus === 'streaming') return 'expandStatus';
+                        if (prevEntry.outlineStatus === 'streaming') return 'outlineStatus';
+                        return undefined;
+                    })();
+                    const next = {
+                        ...s,
+                        meta: {
+                            ...s.meta,
+                            report: {
+                                ...prevReport,
+                                [mid]: stageKey ? { ...prevEntry, [stageKey]: 'error' } : prevEntry
+                            }
+                        },
+                        updatedAt: e.ts
+                    } as any;
+                    useSessionStore.getState().upsertSession(next);
+                }
+            }
+        } catch { /* ignore */ }
         return;
     }
 
@@ -85,17 +143,21 @@ export function applyEventToProjection(e: SessionEvent) {
 
     // Direction phase projection additions (minimal):
     if (e.type === 'DirectionProposalStarted') {
-        const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
+        // 立即创建占位的提案消息，用于显示“正在判定意图...”占位卡片
+        const sid = e.sessionId!;
+        const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
         try {
             const list = (useSessionStore.getState() as any).messagesBySession.get(sid) || [];
             const exists = list.find((m: any) => m.id === msgId);
             if (!exists) store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
-        } catch { store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts }); }
+            else store.markMessage(msgId, sid, { status: 'streaming', content: '' } as any);
+        } catch {
+            store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
+        }
         return;
     }
     if (e.type === 'DirectionProposalDelta') {
-        const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
-        store.appendToMessage(msgId, sid, e.payload.delta);
+        // 忽略 delta：只有在确认 <direction> 后再一次性展示
         return;
     }
     if (e.type === 'DirectionProposed') {
@@ -116,16 +178,42 @@ export function applyEventToProjection(e: SessionEvent) {
         }
         return;
     }
+    if (e.type === 'DirectionClarificationRequested') {
+        const sid = e.sessionId!;
+        const msgId = `clarify_${(e as any).payload.runId}_${e.payload.version}`;
+        const content = (e as any)?.payload?.questions || '请补充您的意图，例如目标、范围、时间、来源与输出期望。';
+        try {
+            const list = (useSessionStore.getState() as any).messagesBySession.get(sid) || [];
+            const exists = list.find((m: any) => m.id === msgId);
+            if (!exists) store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content, status: 'done', createdAt: e.ts });
+        } catch {
+            store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content, status: 'done', createdAt: e.ts });
+        }
+        // 如果之前已创建占位的 proposal 消息，直接删除占位，避免“已中止”卡片残留
+        try {
+            const pMsgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
+            (useSessionStore.getState() as any).removeMessage(pMsgId, sid);
+        } catch { /* ignore */ }
+        // mark awaitingClarification in meta
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(sid);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), version: e.payload.version, awaitingClarification: true, awaitingDecision: false } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
     if (e.type === 'DirectionProposalAborted') {
         const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
-        try { store.markMessage(msgId, sid, { status: 'aborted' }); } catch { }
+        try { (useSessionStore.getState() as any).removeMessage(msgId, sid); } catch { }
         return;
     }
     if (e.type === 'DecisionRequested') {
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
             if (s) {
-                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), version: e.payload.version, awaitingDecision: true } }, updatedAt: e.ts } as any;
+                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), version: e.payload.version, awaitingDecision: true, awaitingClarification: false } }, updatedAt: e.ts } as any;
                 store.upsertSession(next);
             }
         } catch { /* ignore */ }
@@ -137,7 +225,7 @@ export function applyEventToProjection(e: SessionEvent) {
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
             if (s) {
-                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), awaitingDecision: false } }, updatedAt: e.ts } as any;
+                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), awaitingDecision: false, awaitingClarification: false } }, updatedAt: e.ts } as any;
                 store.upsertSession(next);
             }
         } catch { /* ignore */ }
@@ -438,7 +526,8 @@ export function applyEventToProjection(e: SessionEvent) {
                 const prevEntry = prevReport[e.payload.messageId] || {};
                 const next = {
                     ...s,
-                    meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, outlineStatus: 'streaming', outlineText: '' } } },
+                    // reset downstream stages when outline restarts
+                    meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, outlineStatus: 'streaming', outlineText: '', expandStatus: undefined, draftText: undefined, abstractStatus: undefined, abstractText: undefined, finalArtifactId: undefined } } },
                     updatedAt: e.ts
                 } as any;
                 useSessionStore.getState().upsertSession(next);
@@ -483,7 +572,8 @@ export function applyEventToProjection(e: SessionEvent) {
             if (s) {
                 const prevReport = ((s.meta as any)?.report) || {};
                 const prevEntry = prevReport[e.payload.messageId] || {};
-                const next = { ...s, meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, expandStatus: 'streaming', draftText: '' } } }, updatedAt: e.ts } as any;
+                // reset abstract when expand restarts
+                const next = { ...s, meta: { ...s.meta, report: { ...prevReport, [e.payload.messageId]: { ...prevEntry, expandStatus: 'streaming', draftText: '', abstractStatus: undefined, abstractText: undefined, finalArtifactId: undefined } } }, updatedAt: e.ts } as any;
                 useSessionStore.getState().upsertSession(next);
             }
         } catch { /* ignore */ }

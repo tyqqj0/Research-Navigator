@@ -29,6 +29,8 @@ export { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, Tabl
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 export { Textarea } from './textarea';
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
+export { default as MessageComposer } from './message-composer';
+export type { MessageComposerProps, SendKeyScheme } from './message-composer';
 
 // Custom UI Components
 export { StatCard } from './stat-card';

@@ -84,6 +84,11 @@ export const SessionStageIndicator: React.FC<{ sessionId: string }> = ({ session
                     <div className="relative h-4 w-4">
                         <div key={stage} className="inset-0.2 flex items-center justify-center animate-in fade-in-0 zoom-in-95">
                             {style.icon}
+                            {stage !== 'report_done' && (
+                                <span className="absolute ">
+                                    <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+                                </span>
+                            )}
                         </div>
                     </div>
                 </button>

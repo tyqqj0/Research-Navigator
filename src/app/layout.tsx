@@ -6,6 +6,8 @@ import { ThemeProvider } from "@/providers";
 import { ArchiveProvider } from "@/lib/archive/provider";
 import "@/lib/immer-config";
 import { Toaster } from "@/components/ui";
+import { OAuthClientProvider } from "@/components/providers/OAuthClientProvider";
+import ClientDiagnostics from "@/components/ClientDiagnostics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,6 +29,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const authServiceUrl = process.env.NEXT_PUBLIC_AUTH_API_BASE_URL as string | undefined;
+  const oauthClientId = process.env.NEXT_PUBLIC_OAUTH_CLIENT_ID as string | undefined;
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body
@@ -34,11 +38,23 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <ThemeProvider>
-          <ArchiveProvider>
-            {children}
-            {/* Global toast portal */}
-            <Toaster richColors expand />
-          </ArchiveProvider>
+          {authServiceUrl && oauthClientId ? (
+            <OAuthClientProvider authServiceUrl={authServiceUrl} clientId={oauthClientId}>
+              <ArchiveProvider>
+                <ClientDiagnostics />
+                {children}
+                {/* Global toast portal */}
+                <Toaster richColors expand />
+              </ArchiveProvider>
+            </OAuthClientProvider>
+          ) : (
+            <ArchiveProvider>
+              <ClientDiagnostics />
+              {children}
+              {/* Global toast portal */}
+              <Toaster richColors expand />
+            </ArchiveProvider>
+          )}
         </ThemeProvider>
       </body>
     </html>

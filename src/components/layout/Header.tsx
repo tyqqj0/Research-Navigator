@@ -1,12 +1,10 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { HeaderProps } from '@/types';
-import { ExpandableUserMenu } from '@/components/ui/expandable-user-menu';
-import useAuthStore from '@/stores/auth.store';
-import { authApi } from '@/lib/auth/auth-api';
+import { UserMenu } from '@/components/auth/UserMenu';
+import { navigationUIConfig } from '@/config/ui/navigation.config';
 
 export const Header: React.FC<HeaderProps> = ({
     title = 'Research Navigator',
@@ -16,29 +14,33 @@ export const Header: React.FC<HeaderProps> = ({
     user,
     hideUserInfo,
     className,
-    onOpenSidebar
+    onOpenSidebar,
+    variant = 'default'
 }) => {
-    const router = useRouter();
-    const authUser = useAuthStore((s) => s.currentUser);
-    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-    const logoutStore = useAuthStore((s) => s.logout);
-
-    const displayUser = isAuthenticated && authUser ? {
-        name: authUser.name,
-        avatar: authUser.avatar,
-    } : user; // 未登录时回退到传入的user（兼容旧实现）
-
-    const handleLogout = async () => {
+    const redirectUri = (() => {
+        if (typeof window !== 'undefined') {
+            return process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || `${window.location.origin}/oauth-app/callback`;
+        }
+        return process.env.NEXT_PUBLIC_OAUTH_REDIRECT_URI || '/oauth-app/callback';
+    })();
+    const scope = process.env.NEXT_PUBLIC_OAUTH_SCOPE || 'openid profile email';
+    const profileUrl = process.env.NEXT_PUBLIC_OAUTH_PROFILE_URL;
+    const buildState = () => {
         try {
-            await authApi.logout();
-        } catch { }
-        logoutStore();
-        router.push('/login');
+            const payload = {
+                returnTo: typeof window !== 'undefined' ? window.location.href : '/',
+                nonce: (typeof crypto !== 'undefined' && (crypto as any).randomUUID?.()) || String(Date.now()),
+            };
+            const json = JSON.stringify(payload);
+            return btoa(encodeURIComponent(json));
+        } catch { return ''; }
     };
     return (
         <header
             className={cn(
-                'h-16 border-b border-gray-200 bg-white shadow-sm theme-primary-background relative z-40',
+                'h-16 relative z-40',
+                variant === 'default' && 'border-b border-gray-200 bg-white shadow-sm theme-primary-background',
+                variant === 'transparent' && 'bg-transparent border-transparent shadow-none',
                 className
             )}
         >
@@ -87,18 +89,8 @@ export const Header: React.FC<HeaderProps> = ({
                             </div>
                         )}
 
-                        {displayUser && !hideUserInfo && (
-                            <ExpandableUserMenu
-                                className="hidden md:inline-flex"
-                                user={{
-                                    name: displayUser.name,
-                                    email: authUser?.email,
-                                    avatar: displayUser.avatar,
-                                }}
-                                onLogout={handleLogout}
-                                align="end"
-                                expandDirection="bottom"
-                            />
+                        {!hideUserInfo && navigationUIConfig.headerShowUser && (
+                            <UserMenu className="hidden md:inline-flex h-12 w-12" expandDirection="bottom" align="end" />
                         )}
                     </div>
                 )}

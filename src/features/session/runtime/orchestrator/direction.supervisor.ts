@@ -1,6 +1,7 @@
 import { eventBus } from '../event-bus';
 import { commandBus } from '../command-bus';
 import type { SessionEvent } from '../../data-access/types';
+import { not } from 'node_modules/xstate/dist/declarations/src/guards';
 
 // 监听用户消息，在 Deep Research 开启且未确认方向时自动触发提案
 const g: any = globalThis as any;
@@ -10,7 +11,12 @@ export function startDirectionSupervisor() {
     try { console.debug('[supervisor][direction][start]'); } catch { }
     eventBus.subscribe(async (e: SessionEvent) => {
         const sessionId = e.sessionId!;
-        try { console.debug('[supervisor][direction][event]', e.type, { sessionId }); } catch { }
+        try {
+            // 跳过*Delta类型事件的日志
+            if (!e.type.endsWith('Delta')) {
+                try { console.debug('[supervisor][direction][event]', e.type, { sessionId }); } catch { }
+            }
+        } catch { }
 
         // 1) 正常触发：监听用户消息
         if (e.type === 'UserMessageAdded') {

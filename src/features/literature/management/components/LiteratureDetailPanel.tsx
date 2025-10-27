@@ -173,7 +173,21 @@ export function LiteratureDetailPanel({ open, onOpenChange, paperId, item, onUpd
                                                 </div>
                                                 <div className="text-xs text-muted-foreground flex flex-col gap-1">
                                                     <div className="flex gap-3">
-                                                        <span className="font-mono">S2 ID: {currentItem.literature.paperId}</span>
+                                                        <span className="font-mono">
+                                                            S2 ID:{" "}
+                                                            {currentItem.literature.paperId ? (
+                                                                <a
+                                                                    href={`https://www.semanticscholar.org/paper/${currentItem.literature.paperId}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="underline text-blue-600 hover:text-blue-800"
+                                                                >
+                                                                    {currentItem.literature.paperId}
+                                                                </a>
+                                                            ) : (
+                                                                currentItem.literature.paperId
+                                                            )}
+                                                        </span>
                                                         {currentItem.literature.year && (<span>发布日期: {currentItem.literature.publicationDate}</span>)}
                                                     </div>
                                                     <div className="flex gap-3">

@@ -496,6 +496,7 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
         successful: LibraryItem[];
         failed: Array<{ entry: any; error: string }>;
     }> {
+        try { console.debug('[LiteratureEntry] batchImport start', { entries: entries.length }); } catch { }
         const successful: LibraryItem[] = [];
         const failed: Array<{ entry: any; error: string }> = [];
 
@@ -535,17 +536,34 @@ class LiteratureEntryPointImpl implements LiteratureEntryPoint {
             batchItems = [];
         }
 
-        // 快速索引
-        const paperIdToItem = new Map<string, LibraryItem>();
-        batchItems.forEach(it => { if (it?.paperId) paperIdToItem.set(it.paperId, it); });
+        // 建立映射：paperId / DOI / ARXIV 多键索引，提升批量命中率，减少单条回退
+        const byPaperId = new Map<string, LibraryItem>();
+        const byDoi = new Map<string, LibraryItem>();
+        const byArxiv = new Map<string, LibraryItem>();
+        const normDoi = (s: string) => String(s || '').trim().toLowerCase();
+        const normArxiv = (s: string) => String(s || '').trim().toLowerCase();
+        batchItems.forEach(it => {
+            if (!it) return;
+            if (it.paperId) byPaperId.set(it.paperId, it);
+            const d = (it as any).doi as string | undefined;
+            if (d && typeof d === 'string') {
+                const v = d.trim();
+                if (/^10\./i.test(v)) {
+                    byDoi.set(normDoi(v), it);
+                } else if (/^\d{4}\.\d{4,5}(v\d+)?$/i.test(v) || /^arxiv:/i.test(v)) {
+                    const val = v.replace(/^arxiv:/i, '');
+                    byArxiv.set(normArxiv(val), it);
+                }
+            }
+        });
 
-        // 建立 归一化标识 -> LibraryItem 的近似映射（优先 exact 等值）
         const normToPaper = new Map<string, LibraryItem>();
         for (const norm of uniqueNormalized) {
-            // 直接匹配（如果后端返回相同 paperId 字符串）
-            if (paperIdToItem.has(norm)) {
-                normToPaper.set(norm, paperIdToItem.get(norm)!);
-            }
+            if (byPaperId.has(norm)) { normToPaper.set(norm, byPaperId.get(norm)!); continue; }
+            const mDoi = norm.match(/^DOI:(.+)$/i);
+            if (mDoi) { const key = normDoi(mDoi[1]); if (byDoi.has(key)) { normToPaper.set(norm, byDoi.get(key)!); continue; } }
+            const mAx = norm.match(/^ARXIV:(.+)$/i);
+            if (mAx) { const key = normArxiv(mAx[1]); if (byArxiv.has(key)) { normToPaper.set(norm, byArxiv.get(key)!); continue; } }
         }
 
         // 对未命中的标识降级成单条调用（并发限制）

@@ -20,7 +20,7 @@ export const webDiscovery: WebDiscoveryAPI = {
                     { kind: 'S2', value: paperId } as const,
                     ...(it.doi ? ([{ kind: 'DOI', value: String(it.doi) }] as const) : [])
                 ] as unknown as DiscoveryCandidate['extracted'];
-                console.log('it', it);
+                // try { console.debug('[webDiscovery] candidate from backend search', { paperId, hasDoi: !!it.doi }); } catch { /* noop */ }
                 return {
                     id: `s_${paperId || idx}`,
                     title: it.title,
@@ -69,7 +69,7 @@ export const webDiscovery: WebDiscoveryAPI = {
         const uniqueIds = Array.from(new Set(nonUrl.map(x => x.id)));
 
         // 先尝试批量获取
-        let batch: Array<{ paperId: string }> = [];
+        let batch: Array<{ paperId: string; doi?: string | null }> = [];
         try {
             // 后端批量接口无需编码；内部会处理 DOI 的编码
             const items = await backendApiService.getPapersBatch(uniqueIds);
@@ -77,13 +77,58 @@ export const webDiscovery: WebDiscoveryAPI = {
         } catch { /* 忽略整体失败，降级到单条查询 */ }
 
         const foundIds = new Set(batch.map(i => i.paperId));
-        const idToPaper = new Map(batch.map(i => [i.paperId, i] as const));
+        const idToPaper = new Map<string, any>();
+        const byPaperId = new Map<string, any>();
+        const byDoi = new Map<string, any>();
+        const byArxiv = new Map<string, any>();
+        const normDoi = (s: string) => String(s || '').trim().toLowerCase();
+        const normArxiv = (s: string) => String(s || '').trim().toLowerCase();
+        for (const it of batch) {
+            if (!it) continue;
+            if ((it as any).paperId) {
+                byPaperId.set(String((it as any).paperId), it);
+                idToPaper.set(String((it as any).paperId), it);
+            }
+            const d = (it as any).doi as string | undefined;
+            if (d && typeof d === 'string') {
+                const v = d.trim();
+                if (/^10\./i.test(v)) {
+                    byDoi.set(normDoi(v), it);
+                    idToPaper.set(`DOI:${normDoi(v)}`, it);
+                } else if (/^\d{4}\.\d{4,5}(v\d+)?$/i.test(v) || /^arxiv:/i.test(v)) {
+                    const val = v.replace(/^arxiv:/i, '');
+                    byArxiv.set(normArxiv(val), it);
+                    idToPaper.set(`ARXIV:${normArxiv(val)}`, it);
+                }
+            }
+        }
+
+        const resolveBatch = (identifier: string): any | undefined => {
+            if (!identifier) return undefined;
+            const s = String(identifier);
+            const mDoi = s.match(/^DOI:(.+)$/i);
+            if (mDoi) return byDoi.get(normDoi(mDoi[1]));
+            const mAx = s.match(/^ARXIV:(.+)$/i);
+            if (mAx) return byArxiv.get(normArxiv(mAx[1]));
+            return byPaperId.get(s) || byPaperId.get(decodeURIComponent(s));
+        };
 
         // 找到哪些标识未覆盖（根据 paperId 匹配较难，退回按传入标识补查）
-        const missingIdentifiers = uniqueIds.filter(id => {
-            // 若批量返回的 paperId 恰为相同字符串，视为命中
-            return !batch.some(b => b.paperId === id);
-        });
+        const missingIdentifiers = uniqueIds.filter(id => !resolveBatch(id));
+
+        try {
+            console.debug('[webDiscovery] resolveToPaperIds batch summary', {
+                requested: uniqueIds.length,
+                batchReturned: batch.length,
+                missing: missingIdentifiers.length
+            });
+            if (missingIdentifiers.length > 0) {
+                try {
+                    const { toast } = require('sonner');
+                    toast.message(`部分候选未在批量命中，已降级单条解析（${missingIdentifiers.length} 项）`, { description: '建议优先使用 DOI 或 arXiv 标识，以提升命中率与速度' });
+                } catch { /* ignore toast */ }
+            }
+        } catch { /* noop */ }
 
         // 降级并行：限制并发，避免压垮后端
         const concurrency = 4;
@@ -109,6 +154,7 @@ export const webDiscovery: WebDiscoveryAPI = {
                 if (lit?.paperId) {
                     foundIds.add(lit.paperId);
                     idToPaper.set(lit.paperId, lit as any);
+                    idToPaper.set(identifier, lit as any);
                 }
             } catch { /* 单条失败忽略 */ }
         });
@@ -117,7 +163,7 @@ export const webDiscovery: WebDiscoveryAPI = {
         const resolved: Array<{ candidateId: string; paperId: string }> = [];
         for (const { c, id } of nonUrl) {
             // 直接匹配结果：优先 exact 同字符串的 paperId，其次任何返回的 paperId
-            const exact = idToPaper.get(id as any);
+            const exact = idToPaper.get(id as any) || resolveBatch(id);
             if (exact?.paperId) {
                 resolved.push({ candidateId: c.id, paperId: exact.paperId });
                 continue;

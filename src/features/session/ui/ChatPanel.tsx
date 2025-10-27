@@ -4,6 +4,8 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { MessageComposer } from '@/components/ui';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -16,16 +18,18 @@ import { ArchiveManager } from '@/lib/archive/manager';
 import { useLiteratureStore } from '@/features/literature/data-access/stores';
 const getRepo = () => ArchiveManager.getServices().sessionRepository;
 import { DirectionProposalCard } from './DirectionProposalCard';
+import { StageCard } from './StageCard';
 // import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { StreamCard } from '@/components/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronLeft, X, Search, Send, AtSign, BookOpen, FileText, FileStack } from 'lucide-react';
+import { ChevronLeft, X, Search, Send, AtSign, BookOpen, FileText, FileStack, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { literatureDataAccess } from '@/features/literature/data-access';
 // import { SessionStatusStrip } from './SessionStatusStrip';
 import { SessionStageIndicator } from './SessionStageIndicator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 interface ChatPanelProps {
     sessionId: SessionId;
@@ -33,7 +37,8 @@ interface ChatPanelProps {
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail }) => {
-    const messages = useSessionStore(s => s.getMessages(sessionId));
+    const getMessages = useSessionStore(s => s.getMessages);
+    const messages = getMessages(sessionId);
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const toggleGraphPanel = useSessionStore(s => s.toggleGraphPanel);
     const [userInput, setUserInput] = React.useState('');
@@ -72,12 +77,62 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
         }
     }, [meta.report, messages, selectedRefs]);
 
+    // Mentions state (for MessageComposer)
+    const [mentionOpen, setMentionOpen] = React.useState(false);
+    const [mentionQuery, setMentionQuery] = React.useState('');
+    const [litResults, setLitResults] = React.useState<any[]>([]);
+    const [repResults, setRepResults] = React.useState<any[]>([]);
+    const [mentionLoading, setMentionLoading] = React.useState(false);
+
+    // Debounced search for mentions (local library + reports)
+    React.useEffect(() => {
+        let cancelled = false;
+        const q = mentionQuery.trim();
+        if (!mentionOpen) return;
+        const t = setTimeout(async () => {
+            if (!q) { setLitResults([]); setRepResults([]); return; }
+            setMentionLoading(true);
+            try {
+                const [litPage, reps] = await Promise.all([
+                    literatureDataAccess.literatures
+                        .search({ searchTerm: q }, { field: 'createdAt', order: 'desc' }, 1, 8)
+                        .catch(() => ({ items: [] })),
+                    getRepo().searchReports({ query: q, limit: 8 }).catch(() => [])
+                ]);
+                const friendly = Array.isArray(litPage?.items)
+                    ? (litPage.items as any[]).map((it: any) => it?.literature || it).filter(Boolean)
+                    : [];
+                if (!cancelled) { setLitResults(friendly); setRepResults(reps || []); }
+            } finally { if (!cancelled) setMentionLoading(false); }
+        }, 250);
+        return () => { cancelled = true; clearTimeout(t); };
+    }, [mentionQuery, mentionOpen]);
+
+    const addRef = (ref: ArtifactRef) => {
+        const key = `${ref.kind}:${ref.id}`;
+        const setKeys = new Set(selectedRefs.map(r => `${r.kind}:${r.id}`));
+        if (setKeys.has(key)) return;
+        setSelectedRefs(prev => [...prev, ref]);
+    };
+
+    const handleSelectRef = (ref: ArtifactRef) => {
+        addRef(ref);
+        const lastAt = userInput.lastIndexOf('@');
+        if (lastAt >= 0) {
+            let end = lastAt + 1;
+            while (end < userInput.length && !/\s/.test(userInput[end])) end++;
+            const newVal = (userInput.slice(0, lastAt) + userInput.slice(end)).replace(/\s+$/, '');
+            setUserInput(newVal);
+        }
+        setMentionOpen(false);
+        setMentionQuery('');
+    };
+
     // Remove "新一轮研究" button behavior from ChatPanel; new round will be driven by deep toggle + next message
 
     const sendUserMessage = async () => {
         const text = userInput.trim();
         if (!text) return;
-        try { console.debug('[ui][chat_panel][send_click]', { sessionId, textLen: text.length, refs: selectedRefs?.length || 0 }); } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'SendMessage', ts: Date.now(), params: { sessionId, text }, inputRefs: selectedRefs } as any);
         setUserInput('');
         // 如果 Deep 模式开启且方向未确认，chat.orchestrator 不会生成普通回复；direction.supervisor 会用这条消息触发提案
@@ -85,7 +140,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
 
     const toggleDeep = async (enabled: boolean) => {
         setDeep(enabled);
-        try { console.debug('[ui][chat_panel][toggle_deep]', { sessionId, enabled }); } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ToggleDeepResearch', ts: Date.now(), params: { sessionId, enabled } } as any);
     };
 
@@ -101,9 +155,48 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
     const canResumeProposal = Boolean(deep && !directionConfirmed && !Boolean(meta?.direction?.awaitingDecision) && lastUserText.trim());
     const onResumeProposal = async () => {
         if (!canResumeProposal) return;
+        try {
+            (window as any).__diagMark?.('cmd:ProposeDirection:dispatch', { sessionId });
+        } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: lastUserText } } as any);
     };
     const awaitingDecision = Boolean(meta?.direction?.awaitingDecision);
+    const awaitingClarification = Boolean(meta?.direction?.awaitingClarification);
+    // Helpers for reference chip labels
+    const getLiterature = useLiteratureStore(s => s.getLiterature);
+    const [reportTitles, setReportTitles] = React.useState<Record<string, string>>({});
+    React.useEffect(() => {
+        let cancelled = false;
+        const run = async () => {
+            const tasks = (selectedRefs || []).filter(r => r.kind === 'report_final').map(async (r) => {
+                const key = String(r.id);
+                if (reportTitles[key]) return;
+                try {
+                    const a = await getRepo().getArtifact(key);
+                    if (!cancelled) setReportTitles(prev => ({ ...prev, [key]: String((a?.meta || {}).title || '') }));
+                } catch { /* ignore */ }
+            });
+            await Promise.all(tasks);
+        };
+        void run();
+        return () => { cancelled = true; };
+    }, [selectedRefs]);
+    const formatRefLabel = React.useCallback((r: ArtifactRef): string => {
+        if (r.kind === 'literature') {
+            const item = getLiterature(String(r.id));
+            const title = item?.literature?.title;
+            return title ? `文献: ${title.slice(0, 16)}...` : `文献:${String(r.id).slice(0, 12)}`;
+        }
+        if (r.kind === 'report_final') {
+            const title = reportTitles[String(r.id)];
+            return title ? `报告: ${title.slice(0, 16)}...` : `报告:${String(r.id).slice(0, 12)}`;
+        }
+        return `${r.kind}:${String(r.id).slice(0, 12)}`;
+    }, [getLiterature, reportTitles]);
+    const removeRef = (ref: ArtifactRef) => {
+        const key = `${ref.kind}:${ref.id}`;
+        setSelectedRefs(prev => prev.filter(r => `${r.kind}:${r.id}` !== key));
+    };
     return (
         // <div></div>
         <Card className="relative h-full md:h-[calc(100vh-5rem)] flex flex-col">
@@ -152,10 +245,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                     </div>
                 </div>
                 {/* Awaiting decision hint */}
-                {awaitingDecision && (
+                {(awaitingDecision || awaitingClarification) && (
                     <div className="px-2 py-1 text-[12px] rounded bg-blue-50 text-blue-700 border border-blue-200">
-                        {/* 已生成“研究方向提案”，请在下方“需要决定”卡片中确认或细化，以继续下一步。 */}
-                        已生成“研究方向提案”，请在下方“需要决定”卡片中确认，以继续下一步。
+                        {awaitingClarification ? '需要您的补充信息：请先在下方回答问题，以便继续生成方向提案。' : '已生成“研究方向提案”，请在下方“需要决定”卡片中确认或细化，以继续下一步。'}
                     </div>
                 )}
                 {/* {!awaitingDecision && canResumeProposal && (
@@ -192,6 +284,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                                 <div className="text-xs text-muted-foreground mb-1">{m.role} · {new Date(m.createdAt).toLocaleTimeString()}</div>
                                 {m.id.startsWith('proposal_') ? (
                                     <DirectionProposalCard sessionId={sessionId} content={m.content} status={m.status} />
+                                ) : m.id.startsWith('clarify_') ? (
+                                    <ClarificationCard sessionId={sessionId} content={m.content} />
                                 ) : m.id.startsWith('graph_thinking_') ? (
                                     <GraphThinkingCard status={m.status} content={m.content} />
                                 ) : m.id.startsWith('plan_') ? (
@@ -217,23 +311,141 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                             <DecisionCard sessionId={sessionId} />
                         </div>
                     )}
+                    {awaitingClarification && (
+                        <div className="p-3">
+                            <ClarificationInputCard sessionId={sessionId} />
+                        </div>
+                    )}
                     {/* 取消底部常驻的 GraphDecisionCard，改为消息驱动 */}
                     {messages.length === 0 && (
                         <div className="p-4 text-sm text-muted-foreground">还没有消息，输入内容试试</div>
                     )}
                 </div>
 
-                <ComposerBar
-                    value={userInput}
-                    onChange={setUserInput}
-                    onSend={sendUserMessage}
-                    deep={deep}
-                    onToggleDeep={toggleDeep}
-                    awaitingDecision={awaitingDecision}
-                    selectedRefs={selectedRefs}
-                    onRefsChange={setSelectedRefs}
-                    onOpenDetail={onOpenDetail}
-                />
+                <div className="p-3">
+                    <div className="max-w-2xl md:max-w-3xl mx-auto">
+                        <MessageComposer
+                            value={userInput}
+                            onChange={setUserInput}
+                            onSend={sendUserMessage}
+                            placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认…' : '输入你的问题（普通对话）或让我们找到研究方向'}
+                            variant="chat"
+                            density="compact"
+                            sendKeyScheme="enterToSend"
+                            minRows={1}
+                            maxRows={8}
+                            textareaClassName="text-sm leading-5"
+                            leftTools={(
+                                <button
+                                    type="button"
+                                    title="Deep Research"
+                                    aria-label="Deep Research"
+                                    onClick={() => toggleDeep(!deep)}
+                                    className={cn(
+                                        'inline-flex items-center gap-1.5 rounded-full text-xs px-2.5 py-1 border transition-all',
+                                        deep
+                                            ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 shadow-sm'
+                                            : 'bg-white/80 dark:bg-slate-900/60 text-muted-foreground border-border hover:bg-white'
+                                    )}
+                                >
+                                    <Search className="w-3 h-3" />
+                                    <span>Deep Research</span>
+                                </button>
+                            )}
+                            rightTools={(
+                                <Button size="sm" className="h-8 w-8 rounded-full p-0" onClick={sendUserMessage} title="发送">
+                                    <Send className="w-4 h-4" />
+                                </Button>
+                            )}
+                            helperText={<span className="text-xs text-muted-foreground hidden md:inline">按 <b>Enter</b> 发送，<b>Shift+Enter</b> 换行</span>}
+                            mentionEnabled
+                            mentionOpen={mentionOpen}
+                            onMentionOpenChange={setMentionOpen}
+                            mentionQuery={mentionQuery}
+                            onMentionQueryChange={setMentionQuery}
+                            mentionTriggerTitle="添加参考 (@)"
+                            renderMentionContent={({ query, close }) => (
+                                <div className="space-y-2">
+                                    <Input autoFocus placeholder="搜索文献/报告…" value={mentionQuery} onChange={(e) => setMentionQuery(e.target.value)} />
+                                    <div className="text-xs text-muted-foreground">按 Enter 发送消息；使用 @ 添加上下文参考</div>
+                                    <div className="max-h-64 overflow-auto space-y-2">
+                                        {mentionLoading && <div className="px-1 py-1 text-xs text-muted-foreground">正在搜索…</div>}
+                                        {litResults && litResults.length > 0 && (
+                                            <div>
+                                                <div className="px-1 py-1 text-xs font-medium text-muted-foreground">文献</div>
+                                                <div className="space-y-1">
+                                                    {litResults.map((it: any) => (
+                                                        <button
+                                                            key={it.paperId}
+                                                            type="button"
+                                                            className="w-full text-left px-2 py-1 rounded hover:bg-muted"
+                                                            onClick={() => { handleSelectRef({ kind: 'literature', id: it.paperId }); close(); }}
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm truncate">{it.title || it.paperId}</div>
+                                                                    <div className="text-[11px] text-muted-foreground truncate">{(it.authors || []).slice(0, 3).join(', ')}{it.year ? ` · ${it.year}` : ''}</div>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {repResults && repResults.length > 0 && (
+                                            <div>
+                                                <div className="px-1 py-1 text-xs font-medium text-muted-foreground">报告</div>
+                                                <div className="space-y-1">
+                                                    {repResults.map((a: any) => (
+                                                        <button
+                                                            key={a.id}
+                                                            type="button"
+                                                            className="w-full text-left px-2 py-1 rounded hover:bg-muted"
+                                                            onClick={() => { handleSelectRef({ kind: 'report_final', id: a.id }); close(); }}
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <FileText className="w-3.5 h-3.5 text-purple-600" />
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm truncate">{String((a.meta || {}).title || a.id)}</div>
+                                                                    <div className="text-[11px] text-muted-foreground truncate">{String(a.data || '').slice(0, 80)}</div>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {!mentionLoading && mentionQuery.trim() && litResults.length === 0 && repResults.length === 0 && (
+                                            <div className="px-1 py-1 text-xs text-muted-foreground">无结果</div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        />
+                        {/* Selected references chips */}
+                        {selectedRefs.length > 0 && (
+                            <div className="mt-2 px-1 flex items-center gap-2 flex-wrap">
+                                {selectedRefs.map((r) => (
+                                    <Badge key={`${r.kind}:${r.id}`} variant="secondary" className="flex items-center gap-0">
+                                        <button
+                                            type="button"
+                                            className="inline-flex items-center gap-1 hover:underline"
+                                            title={formatRefLabel(r)}
+                                            onClick={() => { if (r.kind === 'literature' && onOpenDetail) onOpenDetail(String(r.id)); }}
+                                        >
+                                            {r.kind === 'literature' ? <BookOpen className="w-3 h-3" /> : r.kind === 'report_final' ? <FileText className="w-3 h-3" /> : null}
+                                            {formatRefLabel(r)}
+                                        </button>
+                                        <button type="button" className="ml-1 hover:text-red-600" onClick={() => removeRef(r)}>
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </Badge>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </CardContent>
         </Card>
     );
@@ -410,8 +622,14 @@ const ComposerBar: React.FC<{
     onRefsChange: (refs: ArtifactRef[]) => void;
     onOpenDetail?: (paperId: string) => void;
 }> = ({ value, onChange, onSend, deep, onToggleDeep, awaitingDecision, selectedRefs, onRefsChange, onOpenDetail }) => {
-    const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
+    const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        // Enter 发送，Shift+Enter 换行，忽略输入法组合键
+        if (e.key === 'Enter' && !e.shiftKey) {
+            const anyEvt = e.nativeEvent as any;
+            if (anyEvt && anyEvt.isComposing) return;
+            e.preventDefault();
+            onSend();
+        }
     };
 
     const [mentionOpen, setMentionOpen] = React.useState(false);
@@ -544,16 +762,15 @@ const ComposerBar: React.FC<{
                     title="Deep Research"
                     onClick={() => onToggleDeep(!deep)}
                     className={cn(
-                        'absolute left-2 inline-flex items-center gap-1 rounded-full text-xs px-2 py-0.5 border',
-                        deep ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-muted text-muted-foreground border-transparent'
+                        'absolute left-2 top-1 inline-flex items-center gap-1.5 rounded-full text-xs px-2.5 py-0.5 border shadow-sm',
+                        deep ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white/80 dark:bg-slate-900/60 text-muted-foreground border-border'
                     )}
                 >
                     <Search className="w-3 h-3" />
                     <span>Deep Research</span>
                 </button>
-                <Input
-                    className="pl-32 pr-28"
-                    // placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认/细化方向…' : '输入你的问题（普通对话）或让我们找到研究方向'}
+                <Textarea
+                    className="pl-32 pr-24 rounded-2xl min-h-[44px] h-11 max-h-40 resize-none py-2.5"
                     placeholder={awaitingDecision ? '已生成方向提案：请先在上方确认…' : '输入你的问题（普通对话）或让我们找到研究方向'}
                     value={value}
                     onChange={(e) => handleInputChange(e.target.value)}
@@ -578,7 +795,7 @@ const ComposerBar: React.FC<{
                 />
                 <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
                     <PopoverTrigger asChild>
-                        <Button size="sm" variant="ghost" className="absolute right-10" title="添加参考 (@)" onClick={() => setMentionOpen(!mentionOpen)}>
+                        <Button size="sm" variant="ghost" className="absolute right-12 top-1" title="添加参考 (@)" onClick={() => setMentionOpen(!mentionOpen)}>
                             <AtSign className="w-4 h-4" />
                         </Button>
                     </PopoverTrigger>
@@ -642,7 +859,7 @@ const ComposerBar: React.FC<{
                         </div>
                     </PopoverContent>
                 </Popover>
-                <Button size="sm" className="absolute right-2" onClick={onSend}>
+                <Button size="sm" className="absolute right-2 top-1 h-8 w-8 rounded-full p-0" onClick={onSend} title="发送">
                     <Send className="w-4 h-4" />
                 </Button>
             </div>
@@ -653,27 +870,29 @@ const ComposerBar: React.FC<{
 
 const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
     const [submitting, setSubmitting] = React.useState(false);
+    const [feedback, setFeedback] = React.useState('');
     const onConfirm = async () => {
         if (submitting) return;
         setSubmitting(true);
         try {
             await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'confirm' } } as any);
-        } finally {
-            // UI will hide this card when awaitingDecision is cleared; keep disabled briefly to avoid bursts
-            setTimeout(() => setSubmitting(false), 1200);
-        }
+        } finally { setTimeout(() => setSubmitting(false), 1200); }
     };
-    // const [feedback, setFeedback] = React.useState('');
-    // const onConfirm = async () => {
-    //     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'confirm' } } as any);
-    // };
-    // const onRefine = async () => {
-    //     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'refine', feedback } } as any);
-    //     setFeedback('');
-    // };
-    // const onCancel = async () => {
-    //     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'cancel' } } as any);
-    // };
+    const onRefine = async () => {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'refine', feedback } } as any);
+            setFeedback('');
+        } finally { setTimeout(() => setSubmitting(false), 1200); }
+    };
+    const onCancel = async () => {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'cancel' } } as any);
+        } finally { setTimeout(() => setSubmitting(false), 600); }
+    };
     return (
         <Card className="border rounded-md">
             <CardHeader className="py-2" variant="blue">
@@ -681,14 +900,52 @@ const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
             </CardHeader>
             <CardContent className="space-y-2">
                 <div className="text-sm">是否确认当前研究方向？</div>
+                <Textarea placeholder="如需细化，可输入补充/反馈（可留空直接确认）" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
                 <div className="flex gap-2">
                     <Button size="sm" onClick={onConfirm} disabled={submitting}>确认</Button>
+                    <Button size="sm" variant="secondary" onClick={onRefine} disabled={submitting || !feedback.trim()}>细化</Button>
+                    <Button size="sm" variant="ghost" onClick={onCancel} disabled={submitting}>取消</Button>
                 </div>
-                {/* Input placeholder="如需细化，可输入补充/反馈" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+            </CardContent>
+        </Card>
+    );
+};
+
+const ClarificationCard: React.FC<{ sessionId: SessionId; content: string }> = ({ sessionId, content }) => {
+    return (
+        <Card className="border rounded-md">
+            <CardHeader className="py-2" variant="orange">
+                <CardTitle className="text-sm">需要补充信息</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+                <Markdown text={content} />
+            </CardContent>
+        </Card>
+    );
+};
+
+const ClarificationInputCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
+    const [text, setText] = React.useState('');
+    const [submitting, setSubmitting] = React.useState(false);
+    const onSubmit = async () => {
+        const t = text.trim();
+        if (!t || submitting) return;
+        setSubmitting(true);
+        try {
+            await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'refine', feedback: t } } as any);
+            setText('');
+        } finally { setTimeout(() => setSubmitting(false), 800); }
+    };
+    return (
+        <Card className="border rounded-md">
+            <CardHeader className="py-2" variant="orange">
+                <CardTitle className="text-sm">请回答以上问题以继续</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+                <Textarea placeholder="请补充目标/范围/对象/时间/来源/输出等信息…" value={text} onChange={(e) => setText(e.target.value)} />
                 <div className="flex gap-2">
-                    <Button size="sm" onClick={onConfirm}>确认</Button>
-                    <Button size="sm" variant="secondary" onClick={onRefine}>细化</Button>
-                    <Button size="sm" variant="ghost" onClick={onCancel}>取消</Button> */}
+                    <Button size="sm" onClick={onSubmit} disabled={submitting || !text.trim()}>提交补充</Button>
+                </div>
             </CardContent>
         </Card>
     );
@@ -698,8 +955,18 @@ const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) =>
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const info = (session as any)?.meta?.graphDecision || {};
     const locked = Boolean((session as any)?.meta?.graphDecision?.locked);
+    const [submitting, setSubmitting] = React.useState(false);
     const onConfirm = async () => {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            (window as any).__diagMark?.('cmd:GenerateReport:dispatch', { sessionId });
+            console.debug('[ui][cmd] GenerateReport', { sessionId });
+            toast.message('已提交：生成报告');
+        } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any);
+        // 短暂保持提交中的视觉反馈；随后将由事件驱动 UI 状态
+        setTimeout(() => setSubmitting(false), 1500);
     };
     return (
         <Card className="border rounded-md">
@@ -710,8 +977,19 @@ const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) =>
                 <div className="text-md mb-2">是否接受当前图谱？（节点 {info.nodes ?? '-'}，边 {info.edges ?? '-'}）</div>
                 <div className="text-xs text-muted-foreground mb-3">可随时手动修改/添加节点</div>
                 <div className="flex gap-2">
-                    <Button size="sm" onClick={onConfirm} disabled={locked}>确认并生成报告</Button>
+                    <Button size="sm" onClick={onConfirm} disabled={locked || submitting}>
+                        {submitting ? (
+                            <span className="inline-flex items-center gap-1">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> 正在提交…
+                            </span>
+                        ) : '确认并生成报告'}
+                    </Button>
                 </div>
+                {(submitting || locked) && (
+                    <div className="text-xs text-muted-foreground">
+                        {submitting ? '已提交，正在准备生成报告…' : '已锁定：正在生成报告…'}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
@@ -875,36 +1153,51 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
 
     return (
         <div className="space-y-3">
-            <StreamCard
-                title="报告 · 大纲"
-                status={(outlineStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
-                headerVariant="purple"
-            >
-                <StreamMarkdown
-                    source={{ type: 'selector', get: () => ({ text: outlineText || '', running: status === 'streaming' || outlineStatus === 'streaming' }) }}
-                    pendingHint="⏳ 正在生成大纲…"
-                />
-            </StreamCard>
-            <StreamCard
-                title="报告 · 扩写"
-                status={(expandStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
-                headerVariant="purple"
-            >
-                <StreamMarkdown
-                    source={{ type: 'selector', get: () => ({ text: draftText || '', running: status === 'streaming' || expandStatus === 'streaming' }) }}
-                    pendingHint="⏳ 正在扩写…"
-                />
-            </StreamCard>
-            <StreamCard
-                title="报告 · 摘要"
-                status={(abstractStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
-                headerVariant="purple"
-            >
-                <StreamMarkdown
-                    source={{ type: 'selector', get: () => ({ text: abstractText || '', running: status === 'streaming' || abstractStatus === 'streaming' }) }}
-                    pendingHint="⏳ 正在生成摘要…"
-                />
-            </StreamCard>
+            {outlineStatus ? (
+                <StageCard
+                    sessionId={sessionId}
+                    stage="outline"
+                    messageId={messageId}
+                    title="报告 · 大纲"
+                    status={outlineStatus as any}
+                    headerVariant="purple"
+                >
+                    <StreamMarkdown
+                        source={{ type: 'selector', get: () => ({ text: outlineText || '', running: outlineStatus === 'streaming' }) }}
+                        pendingHint="⏳ 正在生成大纲…"
+                    />
+                </StageCard>
+            ) : null}
+            {expandStatus ? (
+                <StageCard
+                    sessionId={sessionId}
+                    stage="expand"
+                    messageId={messageId}
+                    title="报告 · 扩写"
+                    status={expandStatus as any}
+                    headerVariant="purple"
+                >
+                    <StreamMarkdown
+                        source={{ type: 'selector', get: () => ({ text: draftText || '', running: expandStatus === 'streaming' }) }}
+                        pendingHint="⏳ 正在扩写…"
+                    />
+                </StageCard>
+            ) : null}
+            {abstractStatus ? (
+                <StageCard
+                    sessionId={sessionId}
+                    stage="abstract"
+                    messageId={messageId}
+                    title="报告 · 摘要"
+                    status={abstractStatus as any}
+                    headerVariant="purple"
+                >
+                    <StreamMarkdown
+                        source={{ type: 'selector', get: () => ({ text: abstractText || '', running: abstractStatus === 'streaming' }) }}
+                        pendingHint="⏳ 正在生成摘要…"
+                    />
+                </StageCard>
+            ) : null}
 
             <StreamCard
                 title="报告"
@@ -916,6 +1209,11 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                             <>
                                 <span className="text-xs text-muted-foreground">大纲 / 扩写 / 摘要</span>
                                 <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopReport', ts: Date.now(), params: { sessionId } } as any)}>停止</Button>
+                            </>
+                        ) : status === 'aborted' ? (
+                            <>
+                                <Button size="sm" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'ResumeReport', ts: Date.now(), params: { sessionId } } as any)}>继续</Button>
+                                <Button size="sm" variant="secondary" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any)}>重新生成</Button>
                             </>
                         ) : (
                             <Button size="sm" variant="secondary" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any)}>重试生成</Button>

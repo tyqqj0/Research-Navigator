@@ -75,6 +75,14 @@ function ensureInstance(sessionId: SessionId): InstanceRec {
                             try { console.error('[orch][direction][exec_complete_error]', ORCH_ID, { sessionId, error: String(err) }); } catch { }
                         }
                     },
+                    onNeedsClarification: (questions: string) => {
+                        try {
+                            console.debug('[orch][direction][needs_clarification]', ORCH_ID, { sessionId, runId, qLen: questions?.length });
+                            curr.service.send({ type: 'PROPOSAL_NEEDS_CLARIFICATION', questions });
+                        } catch (err) {
+                            try { console.error('[orch][direction][needs_clarification_error]', ORCH_ID, { sessionId, error: String(err) }); } catch { }
+                        }
+                    },
                     onAborted: (reason: string) => {
                         try { console.warn('[orch][direction][exec_aborted]', ORCH_ID, { sessionId, runId, reason }); } catch { }
                         void emit({ id: newId(), type: 'DirectionProposalAborted', ts: Date.now(), sessionId, payload: { runId, version: ctx.version, reason } });
@@ -99,6 +107,15 @@ function ensureInstance(sessionId: SessionId): InstanceRec {
             const runId = curr.runId || crypto.randomUUID();
             void emit({ id: newId(), type: 'DirectionProposed', ts: Date.now(), sessionId, payload: { runId, proposalText: ctx.lastProposal, version } });
             void emit({ id: newId(), type: 'DecisionRequested', ts: Date.now(), sessionId, payload: { kind: 'direction', runId, version } });
+        }
+        // Clarification branch: when entering clarifying, publish questions and set awaitingClarification flag
+        const enteredClarifying = state.matches('clarifying') && !(prev && (prev as any).matches && (prev as any).matches('clarifying'));
+        if (enteredClarifying) {
+            const version = ctx.version;
+            const runId = curr.runId || crypto.randomUUID();
+            try { console.debug('[orch][direction][entered_clarifying]', ORCH_ID, { sessionId, version }); } catch { }
+            const questions = String((ctx as any).questions || '请补充您的意图，例如目标、范围、时间、来源与输出期望。');
+            void emit({ id: newId(), type: 'DirectionClarificationRequested', ts: Date.now(), sessionId, payload: { runId, version, questions } } as any);
         }
         const enteredDone = (state as any).status === 'done' && !(prev && (prev as any).status === 'done');
         if (enteredDone) {
