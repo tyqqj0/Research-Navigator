@@ -12,31 +12,40 @@ export const directionXmlTemplate = `
 
 export function buildDirectionPrompt(input: { userQuery: string; version: number; feedback?: string }) {
     const { userQuery, version, feedback } = input;
-    // 如果用户意图不清晰，则不要输出标记<direction>，而是询问用户意图。
-    const prefix = version > 1
-        ? `已收到用户反馈，请在保留有效内容的基础上进行改写，并再次给出完整 <direction> 标记与报告：\n${feedback || ''}`
-        : `你是一名研究策划助理。你需要判断用户意图是否清晰，如果清晰，则输出一个报告：仅需在第一行输出一个标记 <direction>，随后紧跟完整报告内容（可用 Markdown 分节、列表、加粗等）。
-            写作建议（可参考）：
-            - 标题
-                - 研究网站（列出重点来源）
-            - 分析结果（范围、方法、对象、场景的边界）
-            - 关键问题（3 - 5 个）
-            - 建议与下一步（3 - 5 条）
-            - 年份范围
-                - 论证依据（简述理由）
+    // 统一规则：
+    // - 若意图清晰：第一行输出 <direction>，后续输出完整方向说明（Markdown 分节即可）
+    // - 若意图不清晰：不要输出 <direction>，只输出“澄清问题”（项目列表，具体可回答的要点）
+    // - 不要输出任何额外标签或元信息（如“报告：”“原始输入：”“意图标签：”等）
+    const base = `你是一名研究策划助理。判断用户意图是否清晰：
+清晰 → 第一行必须仅为 <direction>，随后给出完整方向说明（结构化 Markdown）：
+- 标题
+- 研究网站（列出重点来源）
+- 分析结果（边界：范围/方法/对象/场景）
+- 关键问题（3-5）
+- 建议与下一步（3-5）
+- 年份范围与论证依据（简述理由）
 
-            严格要求：
-            - 第一行必须是 < direction >
-                - 内容尽量结构化，使用 Markdown 即可
-        `;
+不清晰 → 不要输出 <direction>。只输出“澄清问题”：
+- 用项目符号列出需要补充的具体信息点（目标/范围/时间/数据来源/预期输出等）
+- 内容简洁、可操作，避免泛泛而谈
+
+严禁：
+- 不要输出“报告：”“原始用户输入：”“意图标签：”等多余字段
+- 不要输出 </direction>（无需闭合），且除第一行外不要再出现 <direction> 标记。
+`;
+    const refine = version > 1 ? `基于用户补充/反馈进行改写：
+- 保留有效信息并提升清晰度与可执行性
+- 若仍然不清晰，继续输出“澄清问题”；若已清晰，则按上面的“清晰”规范输出（第一行 <direction>）
+
+用户补充：
+${feedback || ''}
+` : '';
     return [
-        prefix,
-        '',
+        base,
+        refine,
         '用户意图：',
-        userQuery,
-        // '',
-        // directionXmlTemplate
-    ].join('\n');
+        userQuery
+    ].filter(Boolean).join('\n');
 }
 
 export function extractDirectionText(fullText: string): string {

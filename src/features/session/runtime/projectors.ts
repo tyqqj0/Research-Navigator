@@ -143,17 +143,11 @@ export function applyEventToProjection(e: SessionEvent) {
 
     // Direction phase projection additions (minimal):
     if (e.type === 'DirectionProposalStarted') {
-        const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
-        try {
-            const list = (useSessionStore.getState() as any).messagesBySession.get(sid) || [];
-            const exists = list.find((m: any) => m.id === msgId);
-            if (!exists) store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts });
-        } catch { store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content: '', status: 'streaming', createdAt: e.ts }); }
+        // 改为占位：不再预先创建“提案”消息，直到确认是有效提案
         return;
     }
     if (e.type === 'DirectionProposalDelta') {
-        const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
-        store.appendToMessage(msgId, sid, e.payload.delta);
+        // 忽略 delta：只有在确认 <direction> 后再一次性展示
         return;
     }
     if (e.type === 'DirectionProposed') {
@@ -174,6 +168,32 @@ export function applyEventToProjection(e: SessionEvent) {
         }
         return;
     }
+    if (e.type === 'DirectionClarificationRequested') {
+        const sid = e.sessionId!;
+        const msgId = `clarify_${(e as any).payload.runId}_${e.payload.version}`;
+        const content = (e as any)?.payload?.questions || '请补充您的意图，例如目标、范围、时间、来源与输出期望。';
+        try {
+            const list = (useSessionStore.getState() as any).messagesBySession.get(sid) || [];
+            const exists = list.find((m: any) => m.id === msgId);
+            if (!exists) store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content, status: 'done', createdAt: e.ts });
+        } catch {
+            store.addMessage({ id: msgId, sessionId: sid, role: 'assistant', content, status: 'done', createdAt: e.ts });
+        }
+        // 如果之前已创建占位的 proposal 消息，则标记为 aborted，避免与澄清卡并存
+        try {
+            const pMsgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
+            store.markMessage(pMsgId, sid, { status: 'aborted' } as any);
+        } catch { /* ignore */ }
+        // mark awaitingClarification in meta
+        try {
+            const s = (useSessionStore.getState() as any).sessions.get(sid);
+            if (s) {
+                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), version: e.payload.version, awaitingClarification: true, awaitingDecision: false } }, updatedAt: e.ts } as any;
+                store.upsertSession(next);
+            }
+        } catch { /* ignore */ }
+        return;
+    }
     if (e.type === 'DirectionProposalAborted') {
         const sid = e.sessionId!; const msgId = `proposal_${(e as any).payload.runId}_${e.payload.version}`;
         try { store.markMessage(msgId, sid, { status: 'aborted' }); } catch { }
@@ -183,7 +203,7 @@ export function applyEventToProjection(e: SessionEvent) {
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
             if (s) {
-                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), version: e.payload.version, awaitingDecision: true } }, updatedAt: e.ts } as any;
+                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), version: e.payload.version, awaitingDecision: true, awaitingClarification: false } }, updatedAt: e.ts } as any;
                 store.upsertSession(next);
             }
         } catch { /* ignore */ }
@@ -195,7 +215,7 @@ export function applyEventToProjection(e: SessionEvent) {
         try {
             const s = (useSessionStore.getState() as any).sessions.get(e.sessionId!);
             if (s) {
-                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), awaitingDecision: false } }, updatedAt: e.ts } as any;
+                const next = { ...s, meta: { ...s.meta, direction: { ...(s.meta?.direction || {}), awaitingDecision: false, awaitingClarification: false } }, updatedAt: e.ts } as any;
                 store.upsertSession(next);
             }
         } catch { /* ignore */ }

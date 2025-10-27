@@ -110,6 +110,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'ProposeDirection', ts: Date.now(), params: { sessionId, userQuery: lastUserText } } as any);
     };
     const awaitingDecision = Boolean(meta?.direction?.awaitingDecision);
+    const awaitingClarification = Boolean(meta?.direction?.awaitingClarification);
     // Helpers for reference chip labels
     const getLiterature = useLiteratureStore(s => s.getLiterature);
     const [reportTitles, setReportTitles] = React.useState<Record<string, string>>({});
@@ -193,10 +194,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                     </div>
                 </div>
                 {/* Awaiting decision hint */}
-                {awaitingDecision && (
+                {(awaitingDecision || awaitingClarification) && (
                     <div className="px-2 py-1 text-[12px] rounded bg-blue-50 text-blue-700 border border-blue-200">
-                        {/* 已生成“研究方向提案”，请在下方“需要决定”卡片中确认或细化，以继续下一步。 */}
-                        已生成“研究方向提案”，请在下方“需要决定”卡片中确认，以继续下一步。
+                        {awaitingClarification ? '需要您的补充信息：请先在下方回答问题，以便继续生成方向提案。' : '已生成“研究方向提案”，请在下方“需要决定”卡片中确认或细化，以继续下一步。'}
                     </div>
                 )}
                 {/* {!awaitingDecision && canResumeProposal && (
@@ -233,6 +233,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                                 <div className="text-xs text-muted-foreground mb-1">{m.role} · {new Date(m.createdAt).toLocaleTimeString()}</div>
                                 {m.id.startsWith('proposal_') ? (
                                     <DirectionProposalCard sessionId={sessionId} content={m.content} status={m.status} />
+                                ) : m.id.startsWith('clarify_') ? (
+                                    <ClarificationCard sessionId={sessionId} content={m.content} />
                                 ) : m.id.startsWith('graph_thinking_') ? (
                                     <GraphThinkingCard status={m.status} content={m.content} />
                                 ) : m.id.startsWith('plan_') ? (
@@ -256,6 +258,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, onOpenDetail })
                     {awaitingDecision && (
                         <div className="p-3">
                             <DecisionCard sessionId={sessionId} />
+                        </div>
+                    )}
+                    {awaitingClarification && (
+                        <div className="p-3">
+                            <ClarificationInputCard sessionId={sessionId} />
                         </div>
                     )}
                     {/* 取消底部常驻的 GraphDecisionCard，改为消息驱动 */}
@@ -748,27 +755,29 @@ const ComposerBar: React.FC<{
 
 const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
     const [submitting, setSubmitting] = React.useState(false);
+    const [feedback, setFeedback] = React.useState('');
     const onConfirm = async () => {
         if (submitting) return;
         setSubmitting(true);
         try {
             await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'confirm' } } as any);
-        } finally {
-            // UI will hide this card when awaitingDecision is cleared; keep disabled briefly to avoid bursts
-            setTimeout(() => setSubmitting(false), 1200);
-        }
+        } finally { setTimeout(() => setSubmitting(false), 1200); }
     };
-    // const [feedback, setFeedback] = React.useState('');
-    // const onConfirm = async () => {
-    //     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'confirm' } } as any);
-    // };
-    // const onRefine = async () => {
-    //     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'refine', feedback } } as any);
-    //     setFeedback('');
-    // };
-    // const onCancel = async () => {
-    //     await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'cancel' } } as any);
-    // };
+    const onRefine = async () => {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'refine', feedback } } as any);
+            setFeedback('');
+        } finally { setTimeout(() => setSubmitting(false), 1200); }
+    };
+    const onCancel = async () => {
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'cancel' } } as any);
+        } finally { setTimeout(() => setSubmitting(false), 600); }
+    };
     return (
         <Card className="border rounded-md">
             <CardHeader className="py-2" variant="blue">
@@ -776,14 +785,52 @@ const DecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
             </CardHeader>
             <CardContent className="space-y-2">
                 <div className="text-sm">是否确认当前研究方向？</div>
+                <Textarea placeholder="如需细化，可输入补充/反馈（可留空直接确认）" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
                 <div className="flex gap-2">
                     <Button size="sm" onClick={onConfirm} disabled={submitting}>确认</Button>
+                    <Button size="sm" variant="secondary" onClick={onRefine} disabled={submitting || !feedback.trim()}>细化</Button>
+                    <Button size="sm" variant="ghost" onClick={onCancel} disabled={submitting}>取消</Button>
                 </div>
-                {/* Input placeholder="如需细化，可输入补充/反馈" value={feedback} onChange={(e) => setFeedback(e.target.value)} />
+            </CardContent>
+        </Card>
+    );
+};
+
+const ClarificationCard: React.FC<{ sessionId: SessionId; content: string }> = ({ sessionId, content }) => {
+    return (
+        <Card className="border rounded-md">
+            <CardHeader className="py-2" variant="orange">
+                <CardTitle className="text-sm">需要补充信息</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+                <Markdown text={content} />
+            </CardContent>
+        </Card>
+    );
+};
+
+const ClarificationInputCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) => {
+    const [text, setText] = React.useState('');
+    const [submitting, setSubmitting] = React.useState(false);
+    const onSubmit = async () => {
+        const t = text.trim();
+        if (!t || submitting) return;
+        setSubmitting(true);
+        try {
+            await commandBus.dispatch({ id: crypto.randomUUID(), type: 'DecideDirection', ts: Date.now(), params: { sessionId, action: 'refine', feedback: t } } as any);
+            setText('');
+        } finally { setTimeout(() => setSubmitting(false), 800); }
+    };
+    return (
+        <Card className="border rounded-md">
+            <CardHeader className="py-2" variant="orange">
+                <CardTitle className="text-sm">请回答以上问题以继续</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+                <Textarea placeholder="请补充目标/范围/对象/时间/来源/输出等信息…" value={text} onChange={(e) => setText(e.target.value)} />
                 <div className="flex gap-2">
-                    <Button size="sm" onClick={onConfirm}>确认</Button>
-                    <Button size="sm" variant="secondary" onClick={onRefine}>细化</Button>
-                    <Button size="sm" variant="ghost" onClick={onCancel}>取消</Button> */}
+                    <Button size="sm" onClick={onSubmit} disabled={submitting || !text.trim()}>提交补充</Button>
+                </div>
             </CardContent>
         </Card>
     );

@@ -130,6 +130,8 @@ export type SessionEvent =
     | EventEnvelope<'DirectionProposalDelta', { runId: string; version: number; delta: string }>
     | EventEnvelope<'DirectionProposed', { runId: string; proposalText: string; version: number }>
     | EventEnvelope<'DirectionProposalAborted', { runId: string; version: number; reason?: string }>
+    // Clarification path when <direction> is missing
+    | EventEnvelope<'DirectionClarificationRequested', { runId: string; version: number; questions: string }>
     | EventEnvelope<'DecisionRequested', { kind: 'direction'; runId: string; version: number }>
     | EventEnvelope<'DirectionDecisionRecorded', { runId: string; action: 'confirm' | 'refine' | 'cancel'; feedback?: string; version: number }>
     | EventEnvelope<'DirectionConfirmed', { runId: string; directionSpec: string; version: number }>

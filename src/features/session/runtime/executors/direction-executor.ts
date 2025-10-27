@@ -1,6 +1,6 @@
 import { startTextStream } from '@/lib/ai/streaming/start';
 import { resolveModelForPurpose } from '@/lib/settings/ai';
-import { buildDirectionPrompt, parseDirectionXml } from '../prompts/direction';
+import { buildDirectionPrompt } from '../prompts/direction';
 
 export interface DirectionRun { abort(): void }
 export interface DirectionCallbacks {
@@ -8,6 +8,7 @@ export interface DirectionCallbacks {
     onComplete: (text: string) => void;
     onAborted?: (reason: string) => void;
     onError: (message: string) => void;
+    onNeedsClarification?: (questions: string) => void;
 }
 
 function buildPrompt(input: { userQuery: string; version: number; feedback?: string }) { return buildDirectionPrompt(input); }
@@ -24,15 +25,18 @@ export const directionExecutor = {
                 const stream = startTextStream({ prompt }, { signal: controller.signal, modelOverride: model, temperature: 0.6 });
                 for await (const ev of stream) {
                     if (ev.type === 'start') { try { console.debug('[exec][direction][stream][start]'); } catch { } }
-                    if (ev.type === 'delta') { buf += ev.text; try { opts.onDelta?.(ev.text); } catch { } }
+                    // 不再向外抛出 delta，避免在判定阶段把“澄清问题”当成提案内容渲染
+                    if (ev.type === 'delta') { buf += ev.text; }
                     else if (ev.type === 'done') {
                         try { console.debug('[exec][direction][stream][done]', { total: buf.length }); } catch { }
-                        // 尝试解析 XML，不强制要求成功；若成功则回传整段文本
-                        const parsed = parseDirectionXml(buf);
-                        if (!parsed.ok) {
-                            // 附加一个轻量提示，后续可由 orchestrator 触发澄清
+                        // 严格要求：必须包含 <direction> 标记，否则走澄清分支
+                        const hasMarker = buf.toLowerCase().includes('<direction>');
+                        if (!hasMarker) {
+                            const fallback = buf.trim() || '请补充您的意图，例如目标、范围、时间、来源与输出期望。';
+                            try { opts.onNeedsClarification?.(fallback); } catch { }
+                        } else {
+                            opts.onComplete(buf);
                         }
-                        opts.onComplete(buf);
                     }
                     else if (ev.type === 'error') { try { console.debug('[exec][direction][stream][error]', ev.message); } catch { } opts.onError(ev.message); }
                     else if (ev.type === 'aborted') { try { console.debug('[exec][direction][stream][aborted]'); } catch { } opts.onAborted?.('aborted'); }
