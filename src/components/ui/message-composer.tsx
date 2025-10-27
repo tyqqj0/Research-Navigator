@@ -92,7 +92,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         )}>
             <div
                 className={cn(
-                    "relative w-full border bg-white dark:bg-slate-950/60",
+                    "relative w-full border theme-background-secondary dark:bg-slate-950/60",
                     "focus-within:ring-2 focus-within:ring-blue-500",
                     "transition-shadow",
                     resolvedRadius === "xl" ? "rounded-3xl" : "rounded-2xl",
@@ -106,7 +106,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 )}>
                     {/* Inline adornments */}
                     {leftAdornment ? (
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center text-muted-foreground">
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center text-muted-foreground ">
                             {leftAdornment}
                         </div>
                     ) : null}

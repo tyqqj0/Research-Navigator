@@ -110,7 +110,7 @@ export default function ResearchPage() {
                     <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
                         {/* 搜索面板 */}
                         <div className="max-w-4xl mx-auto">
-                            <Card className="mb-8 rounded-[28px] md:rounded-[32px] overflow-hidden backdrop-blur-sm bg-gradient-to-br from-blue-50/40 to-purple-50/40 dark:from-blue-950/15 dark:to-purple-950/15 border shadow-lg">
+                            <Card className="mb-8 rounded-[28px] md:rounded-[32px] overflow-hidden backdrop-blur-sm bg-gradient-to-br from-blue-100/90 to-purple-100/90 dark:from-blue-950/40 dark:to-purple-950/40 border shadow-lg">
                                 <CardContent className="p-6 md:p-8">
                                     <div className="text-center mb-8">
                                         <h1 className="text-3xl md:text-4xl font-bold mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -162,6 +162,7 @@ export default function ResearchPage() {
 
                         {/* 推荐面板 */}
                         <div>
+                            <div className="h-48" /> {/* 空白间隔 */}
                             <div className="flex items-center gap-2 mb-6">
                                 <Sparkles className="w-5 h-5 text-amber-500" />
                                 <h2 className="text-xl font-semibold">灵感发现</h2>
@@ -217,8 +218,8 @@ export default function ResearchPage() {
                                                     </span>
                                                 ))}
                                             </div>
-                        </CardContent>
-                    </Card>
+                                        </CardContent>
+                                    </Card>
                                 ))}
                             </div>
                         </div>
@@ -242,10 +243,10 @@ export default function ResearchPage() {
                             }}
                         >
                             <SessionList />
-            </div>
+                        </div>
                     </SheetContent>
                 </Sheet>
-        </MainLayout>
+            </MainLayout>
         </ProtectedLayout>
     );
 }
