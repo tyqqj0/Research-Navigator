@@ -12,8 +12,8 @@ export function startDirectionSupervisor() {
     eventBus.subscribe(async (e: SessionEvent) => {
         const sessionId = e.sessionId!;
         try {
-            // 跳过GraphThinkingDelta或ReportOutlineDelta的日志
-            if (e.type !== 'GraphThinkingDelta' && e.type !== 'ReportOutlineDelta') {
+            // 跳过*Delta类型事件的日志
+            if (!e.type.endsWith('Delta')) {
                 try { console.debug('[supervisor][direction][event]', e.type, { sessionId }); } catch { }
             }
         } catch { }

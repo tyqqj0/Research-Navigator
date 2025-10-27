@@ -18,10 +18,11 @@ import { ArchiveManager } from '@/lib/archive/manager';
 import { useLiteratureStore } from '@/features/literature/data-access/stores';
 const getRepo = () => ArchiveManager.getServices().sessionRepository;
 import { DirectionProposalCard } from './DirectionProposalCard';
+import { StageCard } from './StageCard';
 // import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { StreamCard } from '@/components/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronLeft, X, Search, Send, AtSign, BookOpen, FileText, FileStack } from 'lucide-react';
+import { ChevronLeft, X, Search, Send, AtSign, BookOpen, FileText, FileStack, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { literatureDataAccess } from '@/features/literature/data-access';
@@ -792,13 +793,18 @@ const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) =>
     const session = useSessionStore(s => s.sessions.get(sessionId));
     const info = (session as any)?.meta?.graphDecision || {};
     const locked = Boolean((session as any)?.meta?.graphDecision?.locked);
+    const [submitting, setSubmitting] = React.useState(false);
     const onConfirm = async () => {
+        if (submitting) return;
+        setSubmitting(true);
         try {
             (window as any).__diagMark?.('cmd:GenerateReport:dispatch', { sessionId });
             console.debug('[ui][cmd] GenerateReport', { sessionId });
             toast.message('已提交：生成报告');
         } catch { /* noop */ }
         await commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any);
+        // 短暂保持提交中的视觉反馈；随后将由事件驱动 UI 状态
+        setTimeout(() => setSubmitting(false), 1500);
     };
     return (
         <Card className="border rounded-md">
@@ -809,8 +815,19 @@ const GraphDecisionCard: React.FC<{ sessionId: SessionId }> = ({ sessionId }) =>
                 <div className="text-md mb-2">是否接受当前图谱？（节点 {info.nodes ?? '-'}，边 {info.edges ?? '-'}）</div>
                 <div className="text-xs text-muted-foreground mb-3">可随时手动修改/添加节点</div>
                 <div className="flex gap-2">
-                    <Button size="sm" onClick={onConfirm} disabled={locked}>确认并生成报告</Button>
+                    <Button size="sm" onClick={onConfirm} disabled={locked || submitting}>
+                        {submitting ? (
+                            <span className="inline-flex items-center gap-1">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> 正在提交…
+                            </span>
+                        ) : '确认并生成报告'}
+                    </Button>
                 </div>
+                {(submitting || locked) && (
+                    <div className="text-xs text-muted-foreground">
+                        {submitting ? '已提交，正在准备生成报告…' : '已锁定：正在生成报告…'}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
@@ -974,36 +991,51 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
 
     return (
         <div className="space-y-3">
-            <StreamCard
-                title="报告 · 大纲"
-                status={(outlineStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
-                headerVariant="purple"
-            >
-                <StreamMarkdown
-                    source={{ type: 'selector', get: () => ({ text: outlineText || '', running: status === 'streaming' || outlineStatus === 'streaming' }) }}
-                    pendingHint="⏳ 正在生成大纲…"
-                />
-            </StreamCard>
-            <StreamCard
-                title="报告 · 扩写"
-                status={(expandStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
-                headerVariant="purple"
-            >
-                <StreamMarkdown
-                    source={{ type: 'selector', get: () => ({ text: draftText || '', running: status === 'streaming' || expandStatus === 'streaming' }) }}
-                    pendingHint="⏳ 正在扩写…"
-                />
-            </StreamCard>
-            <StreamCard
-                title="报告 · 摘要"
-                status={(abstractStatus as any) || (status === 'streaming' ? 'streaming' : undefined)}
-                headerVariant="purple"
-            >
-                <StreamMarkdown
-                    source={{ type: 'selector', get: () => ({ text: abstractText || '', running: status === 'streaming' || abstractStatus === 'streaming' }) }}
-                    pendingHint="⏳ 正在生成摘要…"
-                />
-            </StreamCard>
+            {outlineStatus ? (
+                <StageCard
+                    sessionId={sessionId}
+                    stage="outline"
+                    messageId={messageId}
+                    title="报告 · 大纲"
+                    status={outlineStatus as any}
+                    headerVariant="purple"
+                >
+                    <StreamMarkdown
+                        source={{ type: 'selector', get: () => ({ text: outlineText || '', running: outlineStatus === 'streaming' }) }}
+                        pendingHint="⏳ 正在生成大纲…"
+                    />
+                </StageCard>
+            ) : null}
+            {expandStatus ? (
+                <StageCard
+                    sessionId={sessionId}
+                    stage="expand"
+                    messageId={messageId}
+                    title="报告 · 扩写"
+                    status={expandStatus as any}
+                    headerVariant="purple"
+                >
+                    <StreamMarkdown
+                        source={{ type: 'selector', get: () => ({ text: draftText || '', running: expandStatus === 'streaming' }) }}
+                        pendingHint="⏳ 正在扩写…"
+                    />
+                </StageCard>
+            ) : null}
+            {abstractStatus ? (
+                <StageCard
+                    sessionId={sessionId}
+                    stage="abstract"
+                    messageId={messageId}
+                    title="报告 · 摘要"
+                    status={abstractStatus as any}
+                    headerVariant="purple"
+                >
+                    <StreamMarkdown
+                        source={{ type: 'selector', get: () => ({ text: abstractText || '', running: abstractStatus === 'streaming' }) }}
+                        pendingHint="⏳ 正在生成摘要…"
+                    />
+                </StageCard>
+            ) : null}
 
             <StreamCard
                 title="报告"
@@ -1015,6 +1047,11 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                             <>
                                 <span className="text-xs text-muted-foreground">大纲 / 扩写 / 摘要</span>
                                 <Button size="sm" variant="ghost" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'StopReport', ts: Date.now(), params: { sessionId } } as any)}>停止</Button>
+                            </>
+                        ) : status === 'aborted' ? (
+                            <>
+                                <Button size="sm" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'ResumeReport', ts: Date.now(), params: { sessionId } } as any)}>继续</Button>
+                                <Button size="sm" variant="secondary" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any)}>重新生成</Button>
                             </>
                         ) : (
                             <Button size="sm" variant="secondary" onClick={() => commandBus.dispatch({ id: crypto.randomUUID(), type: 'GenerateReport', ts: Date.now(), params: { sessionId } } as any)}>重试生成</Button>

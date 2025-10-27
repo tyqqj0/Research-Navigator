@@ -17,18 +17,58 @@ declare const globalThis: any;
 if (!(globalThis as any).__reportOrchestratorRegistered) {
     (globalThis as any).__reportOrchestratorRegistered = true;
 
-    // Per-session run guard
-    if (!(globalThis as any).__reportRunning) (globalThis as any).__reportRunning = new Map<string, { abort(): void }>();
-    const running: Map<string, { abort(): void }> = (globalThis as any).__reportRunning;
+    // Per-session run guard (track abort and current messageId/stage)
+    if (!(globalThis as any).__reportRunning) (globalThis as any).__reportRunning = new Map<string, { abort(): void; messageId?: string; stage?: 'outline' | 'expand' | 'abstract' }>();
+    const running: Map<string, { abort(): void; messageId?: string; stage?: 'outline' | 'expand' | 'abstract' }> = (globalThis as any).__reportRunning;
 
     commandBus.register(async (cmd: SessionCommand) => {
         if (cmd.type !== 'GenerateReport' && cmd.type !== 'StopReport' && cmd.type !== 'ResumeReport' && cmd.type !== 'RegenerateReportStage') return;
 
         if (cmd.type === 'StopReport') {
-            const run = running.get(cmd.params.sessionId);
-            if (run) { try { run.abort(); } catch { } }
+            const sessionId = cmd.params.sessionId;
+            const run = running.get(sessionId);
+            if (run) {
+                try { run.abort(); } catch { /* noop */ }
+                // Best-effort: mark report message aborted for UI consistency
+                if (run.messageId) {
+                    try { await emit({ id: newId(), type: 'AssistantMessageAborted', ts: Date.now(), sessionId, payload: { messageId: run.messageId, reason: 'user' } } as any); } catch { /* noop */ }
+                }
+            } else {
+                // After refresh, running map may be empty. Try to locate the streaming report message from store and mark it aborted.
+                try {
+                    const { useSessionStore } = await import('../../data-access/session-store');
+                    const storeApi: any = useSessionStore.getState();
+                    const list: any[] = (storeApi.messagesBySession.get(sessionId) || []) as any[];
+                    const last = [...list].reverse().find(m => String(m.id || '').startsWith('report_') && m.status === 'streaming');
+                    if (last?.id) {
+                        try { await emit({ id: newId(), type: 'AssistantMessageAborted', ts: Date.now(), sessionId, payload: { messageId: last.id, reason: 'user' } } as any); } catch { /* noop */ }
+                    }
+                } catch { /* ignore store probing errors */ }
+            }
             // Clear running flag immediately to avoid stale lock preventing retries
-            try { running.delete(cmd.params.sessionId); } catch { }
+            try { running.delete(sessionId); } catch { /* noop */ }
+            try { const { toast } = require('sonner'); toast.message('已停止报告生成'); } catch { /* noop */ }
+            return;
+        }
+        if (cmd.type === 'ResumeReport' || cmd.type === 'RegenerateReportStage') {
+            const sessionId = cmd.params.sessionId as string;
+            const stage: 'outline' | 'expand' | 'abstract' | undefined = (cmd as any).params?.stage;
+            let messageId: string | undefined = (cmd as any).params?.messageId;
+
+            // Fallback: if messageId missing, try to find the latest report message in store
+            if (!messageId) {
+                try {
+                    const { useSessionStore } = await import('../../data-access/session-store');
+                    const storeApi: any = useSessionStore.getState();
+                    const list: any[] = (storeApi.messagesBySession.get(sessionId) || []) as any[];
+                    const last = [...list].reverse().find(m => String(m.id || '').startsWith('report_'));
+                    if (last?.id) messageId = last.id;
+                } catch { /* ignore */ }
+            }
+
+            // For now, regenerate from the requested stage by dispatching GenerateReport which will rebuild all stages.
+            // In future, we can load artifacts and skip earlier stages.
+            await commandBus.dispatch({ id: newId(), type: 'GenerateReport', ts: Date.now(), params: { sessionId, messageId, fromStage: stage } } as any);
             return;
         }
 
@@ -41,6 +81,9 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
                 try { running.get(sessionId)?.abort(); } catch { }
                 try { running.delete(sessionId); } catch { }
             }
+
+            // Immediate feedback
+            try { const { toast } = require('sonner'); toast.message('开始生成报告…'); } catch { }
 
             // Prepare prompt (includes cite map and bibtex)
             let messages: string[] = [];
@@ -58,7 +101,9 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
                 return;
             }
 
-            const reportMid = `report_${cmd.id}`;
+            const reportMid = (cmd as any).params?.messageId && String((cmd as any).params.messageId).startsWith('report_')
+                ? (cmd as any).params.messageId
+                : `report_${cmd.id}`;
             await emit({ id: newId(), type: 'ReportGenerationStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid, citeKeys, bibtexByKey } as any });
 
             const thinkingModel = resolveModelForPurpose('thinking');
@@ -67,11 +112,12 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
 
             // install abort handle for this session
             let currentController: AbortController | null = null;
-            const run = { abort: () => { try { currentController?.abort(); } catch { } } };
+            const run = { abort: () => { try { currentController?.abort(); } catch { } }, messageId: reportMid, stage: 'outline' as const };
             running.set(sessionId, run);
 
             // Outline stage
             await emit({ id: newId(), type: 'ReportOutlineStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
+            try { const r = running.get(sessionId); if (r) r.stage = 'outline'; } catch { /* noop */ }
             try { (globalThis as any).__diagMark?.('orch:report:outline:start', { sessionId, reportMid }); } catch { }
             currentController = new AbortController();
             const outlineStream = startTextStream(
@@ -99,6 +145,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
 
             // Expansion stage
             await emit({ id: newId(), type: 'ReportExpandStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
+            try { const r = running.get(sessionId); if (r) r.stage = 'expand'; } catch { /* noop */ }
             try { (globalThis as any).__diagMark?.('orch:report:expand:start', { sessionId, reportMid }); } catch { }
             const expandPrompt = [
                 '基于以下大纲与图谱数据，请逐节扩写成完整中文报告（请使用 Markdown 格式）。要求：',
@@ -137,6 +184,7 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
 
             // Abstract stage
             await emit({ id: newId(), type: 'ReportAbstractStarted', ts: Date.now(), sessionId, payload: { messageId: reportMid } as any });
+            try { const r = running.get(sessionId); if (r) r.stage = 'abstract'; } catch { /* noop */ }
             try { (globalThis as any).__diagMark?.('orch:report:abstract:start', { sessionId, reportMid }); } catch { }
             const abstractPrompt = [
                 '请基于以下完整报告生成“单段落”中文学术摘要（150-220字）。只输出摘要正文一段，不要标题，不要列点：',
@@ -191,7 +239,6 @@ if (!(globalThis as any).__reportOrchestratorRegistered) {
             emit({ id: newId(), type: 'ReportGenerationCompleted', ts: Date.now(), sessionId, payload: { messageId: reportMid } } as any);
             try { (globalThis as any).__diagMark?.('orch:report:completed', { sessionId, reportMid }); } catch { }
 
-            try { const { toast } = require('sonner'); toast.message('开始生成报告…'); } catch { }
             running.delete(sessionId);
             return;
         }
