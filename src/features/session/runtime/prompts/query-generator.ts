@@ -22,12 +22,12 @@ ${briefs || '(none)'}
 Constraints:
 - Output exactly two parts:
   1) Rationale: ≤ 2 sentences, why this sub-query matters now
-  2) Query: a single short query of 3-8 words, no quotes, no trailing punctuation, include concrete terms
+  2) Query: a single short query of 3-8 words, no quotes, no trailing punctuation, no Year range, include concrete terms, in English
 - If no good context, still propose a concrete sub-topic, avoid generic words like "trend overview"
 
 Format:
-Rationale: <your brief rationale>
-Query: <short query>`;
+Rationale: <your brief rationale in English>
+Query: <short query in English>`;
 }
 
 
