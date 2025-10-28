@@ -15,21 +15,39 @@ export const webDiscovery: WebDiscoveryAPI = {
             // 请求必要字段（最小候选展示）
             // 注意：后端不支持 'doi' 作为可选字段，移除以避免 500
             const fields = ['paperId', 'title', 'year', 'authors', 'venue', 'url'];
-            const req = {
+            const baseReq = {
                 query,
                 limit,
                 offset: 0,
                 fields,
-                // 策略：不使用本地索引，直接后端/远端搜索；不做标题强匹配（自然语言搜索）
-                preferLocal: false,
+                // 默认优先远端（S2 官方），必要时回退本地
                 fallbackToS2: true,
                 matchTitle,
                 year,
                 venue,
                 fieldsOfStudy
             } as const;
-            try { console.debug('[webDiscovery] calling backend search', req); } catch { /* noop */ }
-            const res = await backendApiService.searchPapersHits(req as any);
+
+            // 三重 fallback：
+            // 1) 远端（preferLocal=false）
+            // 2) 远端再试一次（preferLocal=false）
+            // 3) 启用本地优先（preferLocal=true）
+            const attempt = async (preferLocal: boolean) => {
+                const req = { ...baseReq, preferLocal } as any;
+                try { console.debug('[webDiscovery] calling backend search', req); } catch { /* noop */ }
+                return backendApiService.searchPapersHits(req);
+            };
+
+            let res;
+            try {
+                res = await attempt(false);
+            } catch (e1) {
+                try {
+                    res = await attempt(false);
+                } catch (e2) {
+                    res = await attempt(true);
+                }
+            }
             const candidates: DiscoveryCandidate[] = (res.hits || []).map((hit: any, idx: number) => {
                 const it = hit.item || {};
                 const paperId = String(it.paperId || it.id || '');

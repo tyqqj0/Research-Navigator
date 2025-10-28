@@ -1025,7 +1025,7 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
         return set;
     }, [citeKeys, bibtexByKey]);
 
-    // Preprocess: strip model-supplied References/BibTeX, map numeric [n] -> [@key] when possible
+    // Preprocess: strip model-supplied References/BibTeX, map numeric citations -> [@key] when possible
     const preprocessed = React.useMemo(() => {
         let txt = content || '';
         const numToKey = new Map<number, string>();
@@ -1037,7 +1037,7 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
         if (refsHeadingIdx >= 0) {
             const headToEnd = txt.slice(refsHeadingIdx);
             // Extract [n]Key lines
-            const lineRe = /^\s*\[(\d+)\]\s*([A-Za-z][A-Za-z0-9_]*)/gm;
+            const lineRe = /^\s*\[(\d+)\]\s*([A-Za-z][A-Za-z0-9_-]*)/gm;
             let lm: RegExpExecArray | null;
             while ((lm = lineRe.exec(headToEnd)) !== null) {
                 const num = parseInt(lm[1], 10);
@@ -1049,7 +1049,7 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
         }
         // Fallback: if no heading, try to glean keys from trailing @article blocks order [1..]
         if (numToKey.size === 0) {
-            const bibKeyRe = /@article\{\s*([A-Za-z][A-Za-z0-9_]*)\s*,[\s\S]*?\}/gi;
+            const bibKeyRe = /@article\{\s*([A-Za-z][A-Za-z0-9_-]*)\s*,[\s\S]*?\}/gi;
             const keys: string[] = [];
             let bm: RegExpExecArray | null;
             while ((bm = bibKeyRe.exec(content || '')) !== null) {
@@ -1062,8 +1062,29 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                 txt = txt.replace(bibKeyRe, '').trimEnd();
             }
         }
-        // Replace numeric citations with [@key]
+        // Replace numeric citations: ranges [1-3]/[1–3], lists [1,2,3], and single [1]
         if (numToKey.size > 0) {
+            // Ranges
+            txt = txt.replace(/\[(\d+)\s*[–-]\s*(\d+)\]/g, (m: string, aStr: string, bStr: string) => {
+                const a = parseInt(aStr, 10), b = parseInt(bStr, 10);
+                if (!Number.isFinite(a) || !Number.isFinite(b) || a > b || b - a > 10) return '';
+                const keys: string[] = [];
+                for (let i = a; i <= b; i++) {
+                    const k = numToKey.get(i);
+                    if (k && allKnownKeys.has(k)) keys.push(`[@${k}]`);
+                }
+                return keys.length > 0 ? keys.join('') : '';
+            });
+            // Lists
+            txt = txt.replace(/\[((?:\d+\s*,\s*)*\d+)\]/g, (m: string, list: string) => {
+                const keys = list
+                    .split(/\s*,\s*/)
+                    .map(s => parseInt(s, 10))
+                    .map(n => numToKey.get(n))
+                    .filter(k => !!k && allKnownKeys.has(k!)) as string[];
+                return keys.length > 0 ? keys.map(k => `[@${k}]`).join('') : '';
+            });
+            // Single
             txt = txt.replace(/\[(\d+)\]/g, (m: string, nStr: string) => {
                 const n = parseInt(nStr, 10);
                 const key = numToKey.get(n);
@@ -1079,7 +1100,7 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
     const { rendered, numbering } = React.useMemo(() => {
         const numberingMap = new Map<string, number>();
         let nextNum = 1;
-        const pattern = /\[(?:@)?([A-Za-z][A-Za-z0-9_]*)\]/g;
+        const pattern = /\[(?:@)?([A-Za-z][A-Za-z0-9_-]*)\]/g;
         const replaced = preprocessed.text.replace(pattern, (m: string, key: string) => {
             if (allKnownKeys.has(key)) {
                 if (!numberingMap.has(key)) numberingMap.set(key, nextNum++);
@@ -1088,7 +1109,22 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
             }
             return '';
         });
-        return { rendered: replaced, numbering: numberingMap };
+        // Clean up unmatched citation-like leftovers (avoid touching markdown links)
+        let cleaned = replaced
+            // footnotes
+            .replace(/\[\^\d+\]/g, '')
+            // simple single-token cites like [@key] or [key]
+            .replace(/\[(?:@)?[A-Za-z][A-Za-z0-9_-]*\](?!\()/g, '')
+            // numeric lists/ranges remnants like [1,2] or [1-3]
+            .replace(/\[(?:\d+\s*(?:[–-]\s*\d+)?(?:\s*,\s*\d+)*)\](?!\()/g, '')
+            // multi-cite brackets like [@k1; @k2] or [@k1, @k2]
+            .replace(/\[[^\]]*@[^\]]*[;,][^\]]*\](?!\()/g, '')
+            // URL/colon-like brackets e.g. [https://...], [doi:...], [url:...]
+            .replace(/\[\s*https?:\/\/[^\]]+\](?!\()/gi, '')
+            .replace(/\[\s*(?:doi:|arxiv:|url:)[^\]]+\](?!\()/gi, '')
+            // generic colon payloads not followed by link target
+            .replace(/\[[^\]]+:[^\]]+\](?!\()/g, '');
+        return { rendered: cleaned, numbering: numberingMap };
     }, [preprocessed.text, allKnownKeys]);
 
     const references = React.useMemo(() => {

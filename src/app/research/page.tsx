@@ -339,7 +339,7 @@ export default function ResearchPage() {
 
                         {/* 推荐面板 */}
                         <div>
-                            <div className="h-48" /> {/* 空白间隔 */}
+                            <div className="h-40" /> {/* 空白间隔 */}
                             <div className="flex items-center gap-2 mb-6">
                                 <Sparkles className="w-5 h-5 text-amber-500" />
                                 <h2 className="text-xl font-semibold">灵感发现</h2>
