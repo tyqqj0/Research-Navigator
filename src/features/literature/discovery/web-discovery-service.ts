@@ -1,26 +1,37 @@
 import type { WebDiscoveryAPI, DiscoveryResult, DiscoveryCandidate } from './types';
-import { tavilySearch } from './adapters/tavily-adapter';
-import { buildCandidatesFromWebResults } from './id-extractor';
+// Tavily 回退已移除
 import { backendApiService } from '../data-access/services/backend-api-service';
 import { literatureEntry } from '../data-access';
 
 export const webDiscovery: WebDiscoveryAPI = {
     async searchWeb(query, opts) {
-        // 优先走后端搜索（无需 Tavily Key），失败时回退 Tavily
+        // 仅走后端搜索（不再回退 Tavily）
         const limit = Math.max(1, Math.min(opts?.limit || 8, 50));
+        const matchTitle = opts?.matchTitle ?? false;
+        const year = opts?.year;
+        const venue = opts?.venue;
+        const fieldsOfStudy = opts?.fieldsOfStudy;
         try {
-            // 请求必要字段（后端 mapper 会将 venue 归一到 publication）
-            const fields = ['paperId', 'title', 'year', 'authors', 'venue', 'url', 'doi'];
-            const res = await backendApiService.searchPapers({
+            // 请求必要字段（最小候选展示）
+            // 注意：后端不支持 'doi' 作为可选字段，移除以避免 500
+            const fields = ['paperId', 'title', 'year', 'authors', 'venue', 'url'];
+            const req = {
                 query,
                 limit,
                 offset: 0,
                 fields,
-                // 策略：优先本地，未命中回退 S2；不做标题强匹配（自然语言搜索）
-                preferLocal: true,
+                // 策略：不使用本地索引，直接后端/远端搜索；不做标题强匹配（自然语言搜索）
+                preferLocal: false,
                 fallbackToS2: true,
-            });
-            const candidates: DiscoveryCandidate[] = (res.results || []).map((it: any, idx: number) => {
+                matchTitle,
+                year,
+                venue,
+                fieldsOfStudy
+            } as const;
+            try { console.debug('[webDiscovery] calling backend search', req); } catch { /* noop */ }
+            const res = await backendApiService.searchPapersHits(req as any);
+            const candidates: DiscoveryCandidate[] = (res.hits || []).map((hit: any, idx: number) => {
+                const it = hit.item || {};
                 const paperId = String(it.paperId || it.id || '');
                 const url: string = it.url || `https://www.semanticscholar.org/paper/${paperId}`;
                 const site = (() => { try { return new URL(url).hostname; } catch { return undefined; } })();
@@ -41,7 +52,11 @@ export const webDiscovery: WebDiscoveryAPI = {
                     site,
                     extracted,
                     bestIdentifier: paperId || undefined,
-                    confidence: 0.95
+                    // 当后端未提供得分时，用 rank-based 简单置信度
+                    confidence: typeof hit?.score === 'number' ? 0.95 : (1 - (idx / Math.max(1, limit))),
+                    score: hit?.score,
+                    rank: hit?.rank ?? (idx + 1),
+                    highlights: hit?.highlights
                 } as DiscoveryCandidate;
             });
             try {
@@ -50,16 +65,14 @@ export const webDiscovery: WebDiscoveryAPI = {
             } catch { /* noop */ }
             return { query, candidates } as DiscoveryResult;
         } catch (err) {
-            // 回退 Tavily：保持兼容旧的候选展示
-            const items = await tavilySearch(query, { maxResults: opts?.limit, includeDomains: opts?.includeDomains });
-            const candidates = buildCandidatesFromWebResults(query, items);
+            // 不再回退到外部搜索，直接返回空候选
             try {
-                const total = candidates.length;
-                const withBest = candidates.filter(c => !!c.bestIdentifier).length;
-                const onlyUrl = candidates.filter(c => c.bestIdentifier && /^URL:/i.test(c.bestIdentifier)).length;
-                console.debug('[webDiscovery] tavily fallback result', { query, limit: opts?.limit, includeDomains: opts?.includeDomains, total, withBest, onlyUrl });
+                console.warn('[webDiscovery] backend search failed, returning empty candidates', {
+                    query,
+                    error: (err as any)?.message
+                });
             } catch { /* noop */ }
-            return { query, candidates } as DiscoveryResult;
+            return { query, candidates: [] } as DiscoveryResult;
         }
     },
 

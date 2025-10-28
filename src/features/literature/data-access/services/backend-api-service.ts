@@ -7,6 +7,7 @@
  */
 
 import { LibraryItem, ExtendedLibraryItem } from '../models';
+import type { PaperSearchParams, SearchHit } from '../models';
 
 // ⛳ 已移除旧的解析与批处理类型与方法，切换到 S2 风格 /api/v1/paper 接口
 
@@ -354,23 +355,7 @@ export class BackendApiService {
     /**
      * 🔍 搜索论文（S2风格）
      */
-    async searchPapers(query: {
-        query: string;
-        offset?: number;
-        limit?: number;
-        fields?: string[] | string;
-        // 可选过滤与策略参数（向后端透传，未知参数将被忽略）
-        year?: number | string;
-        publicationDateOrYear?: string;
-        venue?: string | string[];
-        fieldsOfStudy?: string | string[];
-        publicationTypes?: string | string[];
-        openAccessPdf?: boolean;
-        minCitationCount?: number | string;
-        matchTitle?: boolean;
-        preferLocal?: boolean;
-        fallbackToS2?: boolean;
-    }): Promise<{
+    async searchPapers(query: PaperSearchParams): Promise<{
         results: LibraryItem[];
         total: number;
         query: any;
@@ -379,47 +364,13 @@ export class BackendApiService {
         try {
             console.log('[BackendAPI] Searching papers:', query);
 
-            const params = new URLSearchParams();
-            if (query.query) params.set('query', query.query);
-            if (typeof query.offset === 'number') params.set('offset', String(query.offset));
-            if (typeof query.limit === 'number') params.set('limit', String(Math.max(1, Math.min(Number(query.limit) || 0, 100))));
-            // 统一处理 fields：支持 string 或 string[]
-            const rawFields = Array.isArray(query.fields)
-                ? query.fields
-                : (typeof query.fields === 'string' ? query.fields.split(',').map(s => s.trim()).filter(Boolean) : []);
-            if (rawFields.length > 0) {
-                // 后端要求传 venue，否则 500；同时容忍 publication→venue
-                const sanitized = rawFields.map(f => f === 'publication' ? 'venue' : f);
-                // 去重，避免重复字段
-                const unique = Array.from(new Set(sanitized));
-                params.set('fields', unique.join(','));
-            }
-            // 过滤与策略参数（后端未知将忽略）
-            if (query.publicationDateOrYear) params.set('publicationDateOrYear', String(query.publicationDateOrYear));
-            if (query.year != null) params.set('year', String(query.year));
-            if (query.venue) {
-                const venues = Array.isArray(query.venue) ? query.venue : String(query.venue).split(',').map(s => s.trim()).filter(Boolean);
-                if (venues.length) params.set('venue', venues.join(','));
-            }
-            if (query.fieldsOfStudy) {
-                const fos = Array.isArray(query.fieldsOfStudy) ? query.fieldsOfStudy : String(query.fieldsOfStudy).split(',').map(s => s.trim()).filter(Boolean);
-                if (fos.length) params.set('fieldsOfStudy', fos.join(','));
-            }
-            if (query.publicationTypes) {
-                const types = Array.isArray(query.publicationTypes) ? query.publicationTypes : String(query.publicationTypes).split(',').map(s => s.trim()).filter(Boolean);
-                if (types.length) params.set('publicationTypes', types.join(','));
-            }
-            if (query.openAccessPdf === true) params.set('open_access', '1');
-            if (query.minCitationCount != null) params.set('min_citation_count', String(query.minCitationCount));
-            if (query.matchTitle === true) params.set('match_title', '1');
-            if (query.preferLocal === true) params.set('prefer_local', '1');
-            if (query.fallbackToS2 === true) params.set('fallback_to_s2', '1');
+            const params = this.buildSearchParams(query);
 
             // 带指数退避的轻量重试（最多 3 次），仅针对网络/超时类错误
             let lastError: any;
             for (let attempt = 1; attempt <= 3; attempt += 1) {
                 try {
-                    const response = await this.apiRequest('GET', `/api/v1/paper/search?${params.toString()}`);
+                    const response = await this.apiRequest('GET', `/api/v1/paper/search?${this.stringifyParamsStrict(params)}`);
                     // 兼容空响应或非 JSON 响应
                     const list = Array.isArray(response)
                         ? response
@@ -461,6 +412,198 @@ export class BackendApiService {
             console.error('[BackendAPI] Paper search failed:', error);
             throw new Error('Failed to search papers');
         }
+    }
+
+    /**
+     * 🧱 参数构造器：将宽松的 PaperSearchParams 规范化为 URLSearchParams
+     */
+    private buildSearchParams(query: PaperSearchParams): URLSearchParams {
+        const params = new URLSearchParams();
+        if (query.query) params.set('query', query.query);
+        if (typeof query.offset === 'number') params.set('offset', String(query.offset));
+        if (typeof query.limit === 'number') {
+            const safe = Math.max(1, Math.min(Number(query.limit) || 0, 100));
+            params.set('limit', String(safe));
+        }
+
+        const rawFields = Array.isArray(query.fields)
+            ? query.fields
+            : (typeof query.fields === 'string' ? query.fields.split(',').map(s => s.trim()).filter(Boolean) : []);
+        if (rawFields.length > 0) {
+            // 后端不支持 doi 字段筛选，统一移除；并将 publication 规范化为 venue
+            const sanitized = rawFields
+                .map(f => f === 'publication' ? 'venue' : f)
+                .filter(f => f !== 'doi');
+            const ensureId = sanitized.includes('paperId') ? sanitized : [...sanitized, 'paperId'];
+            const unique = Array.from(new Set(ensureId));
+            params.set('fields', unique.join(','));
+        }
+
+        if (query.publicationDateOrYear) params.set('publicationDateOrYear', String(query.publicationDateOrYear));
+        if (query.year != null) params.set('year', String(query.year));
+        if (query.venue) {
+            const venues = Array.isArray(query.venue) ? query.venue : String(query.venue).split(',').map(s => s.trim()).filter(Boolean);
+            if (venues.length) params.set('venue', venues.join(','));
+        }
+        if (query.fieldsOfStudy) {
+            const fos = Array.isArray(query.fieldsOfStudy) ? query.fieldsOfStudy : String(query.fieldsOfStudy).split(',').map(s => s.trim()).filter(Boolean);
+            if (fos.length) params.set('fieldsOfStudy', fos.join(','));
+        }
+        if (query.publicationTypes) {
+            const types = Array.isArray(query.publicationTypes) ? query.publicationTypes : String(query.publicationTypes).split(',').map(s => s.trim()).filter(Boolean);
+            if (types.length) params.set('publicationTypes', types.join(','));
+        }
+        if (query.openAccessPdf === true) params.set('open_access', '1');
+        if (query.minCitationCount != null) params.set('min_citation_count', String(query.minCitationCount));
+        if (typeof query.matchTitle === 'boolean') params.set('match_title', String(!!query.matchTitle));
+        // 显式控制 prefer_local：默认 false，用户显式开启时为 true
+        params.set('prefer_local', String(query.preferLocal === true));
+        if (typeof query.fallbackToS2 === 'boolean') params.set('fallback_to_s2', String(!!query.fallbackToS2));
+        return params;
+    }
+
+    /**
+     * 将 URLSearchParams 严格序列化：使用 %20 而非 + 表示空格，
+     * 以避免部分后端/网关对 + 解析不一致导致的搜索差异。
+     */
+    private stringifyParamsStrict(params: URLSearchParams): string {
+        return params.toString().replace(/\+/g, '%20');
+    }
+
+    /**
+     * 🔎 返回命中结构（带可选得分/排名/高亮）
+     */
+    async searchPapersHits(query: PaperSearchParams): Promise<{
+        hits: Array<SearchHit>;
+        total: number;
+        query: any;
+        searchTime: number;
+    }> {
+        const params = this.buildSearchParams(query);
+        // 解析 fields 以供最小映射使用（与 buildSearchParams 行为保持一致）
+        const fieldsSpec = (() => {
+            const src = Array.isArray(query.fields)
+                ? query.fields
+                : (typeof query.fields === 'string' ? query.fields.split(',').map(s => s.trim()).filter(Boolean) : []);
+            if (src.length === 0) return undefined;
+            const sanitized = src.map(f => f === 'publication' ? 'venue' : f);
+            return Array.from(new Set(['paperId', ...sanitized]));
+        })();
+        let lastError: any;
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+            try {
+                const response = await this.apiRequest('GET', `/api/v1/paper/search?${this.stringifyParamsStrict(params)}`);
+                const list = Array.isArray(response)
+                    ? response
+                    : (Array.isArray(response?.data)
+                        ? response.data
+                        : (Array.isArray(response?.results) ? response.results : []));
+
+                const total = typeof response?.total === 'number'
+                    ? response.total
+                    : (typeof response?.total_results === 'number'
+                        ? response.total_results
+                        : (Array.isArray(list) ? list.length : 0));
+
+                const hits: Array<SearchHit> = (list || []).map((raw: any, idx: number) => {
+                    const item = this.mapSearchResult(raw, fieldsSpec);
+                    const score = typeof raw?.score === 'number' ? raw.score : (typeof raw?._score === 'number' ? raw._score : undefined);
+                    const highlightsRaw = raw?.highlights || raw?.highlight;
+                    const highlights = highlightsRaw && typeof highlightsRaw === 'object' ? {
+                        title: Array.isArray(highlightsRaw.title) ? highlightsRaw.title : undefined,
+                        abstract: Array.isArray(highlightsRaw.abstract) ? highlightsRaw.abstract : undefined,
+                        authors: Array.isArray(highlightsRaw.authors) ? highlightsRaw.authors : undefined,
+                        venue: Array.isArray(highlightsRaw.venue) ? highlightsRaw.venue : undefined,
+                    } : undefined;
+                    const source = raw?.source || raw?._index || undefined;
+                    return { item, score, rank: idx + 1, highlights, source };
+                });
+
+                return {
+                    hits,
+                    total,
+                    query: (response && (response as any).query) || { query: query.query },
+                    searchTime: (response && ((response as any).search_time_ms || (response as any).searchTime)) || 0
+                };
+            } catch (err: any) {
+                lastError = err;
+                const msg = String(err?.message || '');
+                const isRetryable = msg.includes('Network timeout') || msg.includes('Network error');
+                if (attempt < 3 && isRetryable) {
+                    const base = 200;
+                    const backoff = base * Math.pow(2, attempt - 1);
+                    const jitter = Math.floor(Math.random() * 120);
+                    try { await new Promise(r => setTimeout(r, backoff + jitter)); } catch { /* noop */ }
+                    continue;
+                }
+                break;
+            }
+        }
+        console.error('[BackendAPI] Paper search (hits) failed after retries:', lastError);
+        throw new Error('Failed to search papers');
+    }
+
+    /**
+     * 🧭 仅映射最小命中项：paperId + 按需字段
+     */
+    private mapSearchResult(backendData: any, fieldsSpec?: string[] | undefined): any /* MinimalSearchItem */ {
+        if (!backendData || typeof backendData !== 'object') {
+            throw new Error('Invalid backend search hit');
+        }
+        const paperId = backendData.paperId || backendData.paper_id || backendData.id;
+        if (!paperId) {
+            throw new Error('Search hit missing paperId');
+        }
+        const want = new Set<string>((fieldsSpec || []).map(s => String(s)));
+        // 默认输出字段（当未指定 fields 时）
+        const defaults = ['title', 'year', 'authors', 'venue', 'url', 'doi'];
+        const fields = (fieldsSpec && want.size > 0) ? Array.from(want) : defaults;
+
+        const out: any = { paperId: String(paperId) };
+
+        for (const f of fields) {
+            if (f === 'paperId') continue; // 已填充
+            switch (f) {
+                case 'title':
+                    if (backendData.title != null) out.title = backendData.title;
+                    break;
+                case 'year':
+                    if (typeof backendData.year === 'number') out.year = backendData.year;
+                    break;
+                case 'authors': {
+                    const authorsRaw = backendData.authors;
+                    if (Array.isArray(authorsRaw)) {
+                        const arr = authorsRaw
+                            .map((a: any) => (a && typeof a === 'object') ? (a.name || a.fullName || a.display_name || a.displayName || a.author_name) : a)
+                            .filter((x: any) => typeof x === 'string' && x.trim().length > 0);
+                        if (arr.length) out.authors = arr;
+                    }
+                    break;
+                }
+                case 'venue': {
+                    const v = backendData.venue || backendData.publication || backendData.publicationVenue?.name;
+                    if (v) out.venue = v;
+                    break;
+                }
+                case 'url': {
+                    const u = backendData.url || backendData.s2Url || backendData.openAccessPdf?.url;
+                    if (u) out.url = u;
+                    break;
+                }
+                case 'doi': {
+                    const d = backendData.doi || backendData.externalIds?.DOI;
+                    if (d) out.doi = d;
+                    break;
+                }
+                default: {
+                    // 透传简单字段，避免强映射为 LibraryItem
+                    const val = (backendData as any)[f];
+                    if (val !== undefined) out[f] = val;
+                }
+            }
+        }
+
+        return out;
     }
 
     // ==================== 缓存 API ====================
@@ -535,8 +678,31 @@ export class BackendApiService {
             clearTimeout(timeout);
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(`API Error ${response.status}: ${errorData.message || response.statusText}`);
+                let errorJson: any = undefined;
+                let errorText: string | undefined = undefined;
+                try {
+                    errorJson = await response.json();
+                } catch {
+                    try {
+                        errorText = await response.text();
+                    } catch { /* noop */ }
+                }
+                try {
+                    const errorBodyPreview = errorJson
+                        ? (() => { try { const s = JSON.stringify(errorJson); return s.length > 1000 ? s.slice(0, 1000) + '…' : s; } catch { return undefined; } })()
+                        : ((errorText || '').slice(0, 500));
+                    console.error('[BackendAPI][response-error]', {
+                        method,
+                        url,
+                        status: response.status,
+                        statusText: response.statusText,
+                        errorBodyPreview
+                    });
+                } catch { /* noop */ }
+                const message = (errorJson && typeof errorJson === 'object' && (errorJson as any).message)
+                    ? (errorJson as any).message
+                    : response.statusText;
+                throw new Error(`API Error ${response.status}: ${message}`);
             }
 
             const contentType = response.headers.get('content-type') || undefined;

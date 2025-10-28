@@ -201,6 +201,12 @@ export type PaginatedResult<T> = {
     totalPages: number;
 };
 
+// 🔎 搜索参数与命中结果类型
+export type {
+    PaperSearchParams,
+    SearchHit,
+} from './search.types';
+
 // 🏭 模型工厂类
 export class LibraryItemFactory {
     static createLibraryItem(input: CreateLibraryItemInput): LibraryItem {
