@@ -376,13 +376,17 @@ export class BackendApiService {
                         ? response
                         : (Array.isArray(response?.data)
                             ? response.data
-                            : (Array.isArray(response?.results) ? response.results : []));
+                            : (Array.isArray(response?.results)
+                                ? response.results
+                                : (Array.isArray(response?.papers) ? response.papers : [])));
 
                     const total = typeof response?.total === 'number'
                         ? response.total
                         : (typeof response?.total_results === 'number'
                             ? response.total_results
-                            : (Array.isArray(list) ? list.length : 0));
+                            : (typeof response?.count === 'number'
+                                ? response.count
+                                : (Array.isArray(list) ? list.length : 0)));
 
                     const mapped = (list || []).map((item: any) => this.mapBackendToFrontend(item));
                     return {
@@ -497,13 +501,17 @@ export class BackendApiService {
                     ? response
                     : (Array.isArray(response?.data)
                         ? response.data
-                        : (Array.isArray(response?.results) ? response.results : []));
+                        : (Array.isArray(response?.results)
+                            ? response.results
+                            : (Array.isArray(response?.papers) ? response.papers : [])));
 
                 const total = typeof response?.total === 'number'
                     ? response.total
                     : (typeof response?.total_results === 'number'
                         ? response.total_results
-                        : (Array.isArray(list) ? list.length : 0));
+                        : (typeof response?.count === 'number'
+                            ? response.count
+                            : (Array.isArray(list) ? list.length : 0)));
 
                 const hits: Array<SearchHit> = (list || []).map((raw: any, idx: number) => {
                     const item = this.mapSearchResult(raw, fieldsSpec);
