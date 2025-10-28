@@ -358,7 +358,18 @@ export class BackendApiService {
         query: string;
         offset?: number;
         limit?: number;
-        fields?: string[];
+        fields?: string[] | string;
+        // 可选过滤与策略参数（向后端透传，未知参数将被忽略）
+        year?: number | string;
+        publicationDateOrYear?: string;
+        venue?: string | string[];
+        fieldsOfStudy?: string | string[];
+        publicationTypes?: string | string[];
+        openAccessPdf?: boolean;
+        minCitationCount?: number | string;
+        matchTitle?: boolean;
+        preferLocal?: boolean;
+        fallbackToS2?: boolean;
     }): Promise<{
         results: LibraryItem[];
         total: number;
@@ -371,14 +382,38 @@ export class BackendApiService {
             const params = new URLSearchParams();
             if (query.query) params.set('query', query.query);
             if (typeof query.offset === 'number') params.set('offset', String(query.offset));
-            if (typeof query.limit === 'number') params.set('limit', String(query.limit));
-            if (query.fields && query.fields.length > 0) {
-                // 后端要求传 venue，否则 500；同时我们仍会在响应映射时容忍 publication/venue
-                const sanitized = query.fields.map(f => f === 'publication' ? 'venue' : f);
+            if (typeof query.limit === 'number') params.set('limit', String(Math.max(1, Math.min(Number(query.limit) || 0, 100))));
+            // 统一处理 fields：支持 string 或 string[]
+            const rawFields = Array.isArray(query.fields)
+                ? query.fields
+                : (typeof query.fields === 'string' ? query.fields.split(',').map(s => s.trim()).filter(Boolean) : []);
+            if (rawFields.length > 0) {
+                // 后端要求传 venue，否则 500；同时容忍 publication→venue
+                const sanitized = rawFields.map(f => f === 'publication' ? 'venue' : f);
                 // 去重，避免重复字段
                 const unique = Array.from(new Set(sanitized));
                 params.set('fields', unique.join(','));
             }
+            // 过滤与策略参数（后端未知将忽略）
+            if (query.publicationDateOrYear) params.set('publicationDateOrYear', String(query.publicationDateOrYear));
+            if (query.year != null) params.set('year', String(query.year));
+            if (query.venue) {
+                const venues = Array.isArray(query.venue) ? query.venue : String(query.venue).split(',').map(s => s.trim()).filter(Boolean);
+                if (venues.length) params.set('venue', venues.join(','));
+            }
+            if (query.fieldsOfStudy) {
+                const fos = Array.isArray(query.fieldsOfStudy) ? query.fieldsOfStudy : String(query.fieldsOfStudy).split(',').map(s => s.trim()).filter(Boolean);
+                if (fos.length) params.set('fieldsOfStudy', fos.join(','));
+            }
+            if (query.publicationTypes) {
+                const types = Array.isArray(query.publicationTypes) ? query.publicationTypes : String(query.publicationTypes).split(',').map(s => s.trim()).filter(Boolean);
+                if (types.length) params.set('publicationTypes', types.join(','));
+            }
+            if (query.openAccessPdf === true) params.set('open_access', '1');
+            if (query.minCitationCount != null) params.set('min_citation_count', String(query.minCitationCount));
+            if (query.matchTitle === true) params.set('match_title', '1');
+            if (query.preferLocal === true) params.set('prefer_local', '1');
+            if (query.fallbackToS2 === true) params.set('fallback_to_s2', '1');
 
             // 带指数退避的轻量重试（最多 3 次），仅针对网络/超时类错误
             let lastError: any;

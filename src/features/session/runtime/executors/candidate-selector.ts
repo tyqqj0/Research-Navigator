@@ -143,6 +143,10 @@ async function fetchCandidateMetadata(
                     const searchRes = await backendApiService.searchPapers({
                         query: candidate.title,
                         limit: 1,
+                        // 标题精确回退，优先本地，失败回退 S2
+                        matchTitle: true,
+                        preferLocal: false, // 前期先不能用本地数据库
+                        fallbackToS2: true,
                         fields: ['paperId', 'title', 'year', 'publicationDate', 'citationCount', 'influentialCitationCount', 'isOpenAccess', 'venue']
                     });
                     if (searchRes.results && searchRes.results.length > 0) {

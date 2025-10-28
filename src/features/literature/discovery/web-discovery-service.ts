@@ -9,9 +9,17 @@ export const webDiscovery: WebDiscoveryAPI = {
         // 优先走后端搜索（无需 Tavily Key），失败时回退 Tavily
         const limit = Math.max(1, Math.min(opts?.limit || 8, 50));
         try {
-            // 请求 venue 字段（后端 mapper 会将 venue 归一到 publication）
-            const fields = ['paperId', 'title', 'year', 'authors', 'venue', 'url'];
-            const res = await backendApiService.searchPapers({ query, limit, offset: 0, fields });
+            // 请求必要字段（后端 mapper 会将 venue 归一到 publication）
+            const fields = ['paperId', 'title', 'year', 'authors', 'venue', 'url', 'doi'];
+            const res = await backendApiService.searchPapers({
+                query,
+                limit,
+                offset: 0,
+                fields,
+                // 策略：优先本地，未命中回退 S2；不做标题强匹配（自然语言搜索）
+                preferLocal: true,
+                fallbackToS2: true,
+            });
             const candidates: DiscoveryCandidate[] = (res.results || []).map((it: any, idx: number) => {
                 const paperId = String(it.paperId || it.id || '');
                 const url: string = it.url || `https://www.semanticscholar.org/paper/${paperId}`;
