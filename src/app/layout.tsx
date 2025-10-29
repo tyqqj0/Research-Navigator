@@ -8,6 +8,7 @@ import "@/lib/immer-config";
 import { Toaster } from "@/components/ui";
 import { OAuthClientProvider } from "@/components/providers/OAuthClientProvider";
 import ClientDiagnostics from "@/components/ClientDiagnostics";
+import { Analytics } from "@vercel/analytics/react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,6 +46,7 @@ export default function RootLayout({
                 {children}
                 {/* Global toast portal */}
                 <Toaster richColors expand />
+                <Analytics />
               </ArchiveProvider>
             </OAuthClientProvider>
           ) : (
@@ -53,6 +55,7 @@ export default function RootLayout({
               {children}
               {/* Global toast portal */}
               <Toaster richColors expand />
+              <Analytics />
             </ArchiveProvider>
           )}
         </ThemeProvider>
