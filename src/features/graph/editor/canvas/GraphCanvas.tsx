@@ -8,7 +8,7 @@ import { useGraphStore } from '@/features/graph/data-access/graph-store';
 import type { GraphDataSource, GraphSnapshot } from '@/features/graph/data-access';
 import { graphStoreDataSource } from '@/features/graph/data-access/graph-store';
 import type { PaperSummary } from '../paper-catalog';
-import { ALLOWED_RELATIONS, RELATION_LABELS, RELATION_COLORS } from '@/features/graph/config/relations';
+import { ALLOWED_RELATIONS, RELATION_LABELS, RELATION_COLORS, RELATION_CATEGORIES, RELATION_CATEGORY_LABELS, RELATION_CATEGORY_COLORS, getRelationCategory } from '@/features/graph/config/relations';
 
 interface GraphCanvasProps {
     graphId: string;
@@ -109,6 +109,9 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
     const [edgeMenu, setEdgeMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null);
     const [edgeEdit, setEdgeEdit] = useState<{ edgeId: string; relation: string; x: number; y: number } | null>(null);
     const [edgeHover, setEdgeHover] = useState<{ edgeId: string; x: number; y: number } | null>(null);
+    // 3-category legend visibility filters
+    const [visibleCats, setVisibleCats] = useState<Record<'support' | 'refute' | 'related', boolean>>({ support: true, refute: true, related: true });
+    const toggleCat = useCallback((c: 'support' | 'refute' | 'related') => setVisibleCats(v => ({ ...v, [c]: !v[c] })), []);
 
     // background panning state
     const [panning, setPanning] = useState<{ start: Pos; scrollLeft: number; scrollTop: number } | null>(null);
@@ -869,7 +872,11 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                             </marker>
                         ))}
                     </defs>
-                    {edges.map((e) => {
+                    {edges.filter((e) => {
+                        const rel = (e.relation as any) || 'related';
+                        const cat = getRelationCategory(rel);
+                        return visibleCats[cat];
+                    }).map((e) => {
                         const p1 = nodePos[e.from];
                         const p2 = nodePos[e.to];
                         if (!p1 || !p2) return null;
@@ -881,6 +888,14 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                         const active = selectedEdgeId === e.id;
                         const rel = (e.relation as keyof typeof RELATION_COLORS) || 'related';
                         const color = RELATION_COLORS[rel] || 'var(--color-foreground-tertiary)';
+                        const cat = getRelationCategory(rel as any);
+                        const dashed = cat === 'related';
+                        const meta = (e.meta || {}) as any;
+                        const confRaw = typeof meta?.confidence === 'number' ? meta.confidence : undefined;
+                        const conf = Math.max(0, Math.min(1, typeof confRaw === 'number' ? confRaw : 0.5));
+                        const strokeOpacity = active ? 0.98 : (0.65 + conf * 0.3);
+                        const widthBase = active ? 2.2 : 1.6;
+                        const strokeWidth = widthBase + conf * 1.2;
                         const marker = nodeUi.mode === 'nano' ? `arrow-${rel}-small` : `arrow-${rel}`;
                         return (
                             <g key={e.id}>
@@ -889,7 +904,9 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                                     d={d}
                                     fill="none"
                                     stroke={active ? 'var(--color-primary)' : color}
-                                    strokeWidth={active ? 3 : 2}
+                                    strokeWidth={strokeWidth}
+                                    strokeOpacity={strokeOpacity}
+                                    strokeDasharray={dashed ? '6 6' : undefined}
                                     markerEnd={`url(#${marker})`}
                                     pointerEvents="none"
                                 />
@@ -967,7 +984,7 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                                 nodeRenderer({ nodeId: n.id, title: nodeUi.mode === 'full' ? title : shortTitle, dateStr, scale: nodeUi.scale, selected: selectedNodeId === n.id })
                             ) : (
                                 nodeUi.mode === 'nano' ? (
-                                    <div className={`px-2 py-1 rounded-full border text-[11px] font-semibold grid place-items-center`} style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', backgroundColor: 'var(--color-background-primary)', minWidth: 28, fontSize: '17px' }}>
+                                    <div className={`px-2 py-1 rounded-full border text-[11px] font-semibold grid place-items-center`} style={{ borderColor: 'var(--color-border-primary)', color: 'var(--color-foreground)', backgroundColor: 'var(--color-background-primary)', minWidth: 28, fontSize: '17px' }}>
                                         {words.slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('')}
                                     </div>
                                 ) : (
@@ -1016,17 +1033,23 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                     );
                 })()}
 
-                {/* in-canvas mini legend for edge colors */}
+                {/* in-canvas mini legend with 3-category toggles */}
                 <div className="absolute right-2 top-2 bg-white/80 backdrop-blur rounded border px-2 py-1 z-40">
-                    <div className="text-[10px] text-muted-foreground mb-1">关系图例</div>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                        {ALLOWED_RELATIONS.map(r => (
-                            <div key={r} className="flex items-center gap-1">
-                                <span className="inline-block w-3 h-0.5" style={{ backgroundColor: RELATION_COLORS[r] }} />
-                                <span className="text-[11px] whitespace-nowrap">{RELATION_LABELS[r as keyof typeof RELATION_LABELS] || r}</span>
-                            </div>
-                        ))}
+                    <div className="text-[10px] text-muted-foreground mb-1">关系图例（点击切换）</div>
+                    <div className="flex items-center gap-3">
+                        {RELATION_CATEGORIES.map((c) => {
+                            const color = RELATION_CATEGORY_COLORS[c];
+                            const dashed = c === 'related';
+                            const on = visibleCats[c];
+                            return (
+                                <button key={c} className="flex items-center gap-1 text-[11px]" onClick={() => toggleCat(c)} title={`切换：${RELATION_CATEGORY_LABELS[c]}`}>
+                                    <span className="inline-block w-6" style={{ opacity: on ? 1 : 0.35, borderTop: `${2}px ${dashed ? 'dashed' : 'solid'} ${color}` }} />
+                                    <span className={on ? '' : 'text-muted-foreground'}>{RELATION_CATEGORY_LABELS[c]}</span>
+                                </button>
+                            );
+                        })}
                     </div>
+                    <div className="text-[10px] text-muted-foreground mt-1">粗细=强度，虚线=相关/引用</div>
                 </div>
 
                 {/* edge context menu / editor */}

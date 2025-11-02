@@ -58,15 +58,56 @@ export function normalizeRelation(input: unknown): Relation {
 }
 
 
-// Suggested UI colors for relation types (soft, high-contrast palette)
-export const RELATION_COLORS: Record<Relation, string> = {
-    citation: '#64748B',   // slate-500
-    extends: '#16A34A',    // green-600
-    contrasts: '#EF4444',  // red-500
-    same_topic: '#0EA5E9', // sky-500
-    applies: '#F59E0B',    // amber-500
-    influences: '#8B5CF6', // violet-500
-    related: '#94A3B8'     // slate-400
+// Three-category visual system
+export type RelationCategory = 'support' | 'refute' | 'related';
+
+export const RELATION_CATEGORIES: RelationCategory[] = ['support', 'refute', 'related'];
+
+export const RELATION_CATEGORY_LABELS: Record<RelationCategory, string> = {
+    support: '支持',
+    refute: '反驳',
+    related: '相关/引用'
 };
+
+// Category colors (light/dark friendly choices)
+export const RELATION_CATEGORY_COLORS: Record<RelationCategory, string> = {
+    support: '#2563EB', // blue-600
+    refute: '#E11D48',  // rose-600
+    related: '#9CA3AF'  // gray-400/500
+};
+
+// Map fine-grained relations into 3 categories
+export const RELATION_CATEGORY: Record<Relation, RelationCategory> = {
+    citation: 'related',
+    extends: 'support',
+    contrasts: 'refute',
+    same_topic: 'related',
+    applies: 'support',
+    influences: 'support',
+    related: 'related'
+};
+
+export function getRelationCategory(r: Relation): RelationCategory {
+    return RELATION_CATEGORY[r] ?? 'related';
+}
+
+export function getRelationColor(r: Relation): string {
+    return RELATION_CATEGORY_COLORS[getRelationCategory(r)];
+}
+
+// Back-compat color map per relation now collapsed to 3-category palette
+export const RELATION_COLORS: Record<Relation, string> = {
+    citation: getRelationColor('citation'),
+    extends: getRelationColor('extends'),
+    contrasts: getRelationColor('contrasts'),
+    same_topic: getRelationColor('same_topic'),
+    applies: getRelationColor('applies'),
+    influences: getRelationColor('influences'),
+    related: getRelationColor('related')
+};
+
+export function isRelatedDashed(r: Relation): boolean {
+    return getRelationCategory(r) === 'related';
+}
 
 
