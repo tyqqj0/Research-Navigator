@@ -9,7 +9,7 @@ import { aiQueryGeneratorExecutor } from '../executors/ai-query-generator-execut
 import { pruneExecutor } from '../executors/prune-executor';
 import { paperMetadataExecutor } from '../executors/paper-metadata-executor';
 import { graphBuilderExecutor } from '../executors/graph-builder-executor';
-import { rankAndPickCandidates } from '../executors/candidate-selector';
+import { rankAndPickCandidates } from '../executors/candidate-selector-v2';
 import { ArchiveManager } from '@/lib/archive/manager';
 const getRepo = () => ArchiveManager.getServices().sessionRepository;
 import { runtimeConfig } from '@/features/session/runtime/runtime-config';

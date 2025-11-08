@@ -1067,13 +1067,13 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
             // Ranges
             txt = txt.replace(/\[(\d+)\s*[–-]\s*(\d+)\]/g, (m: string, aStr: string, bStr: string) => {
                 const a = parseInt(aStr, 10), b = parseInt(bStr, 10);
-                if (!Number.isFinite(a) || !Number.isFinite(b) || a > b || b - a > 10) return '';
+                if (!Number.isFinite(a) || !Number.isFinite(b) || a > b || b - a > 10) return m;
                 const keys: string[] = [];
                 for (let i = a; i <= b; i++) {
                     const k = numToKey.get(i);
                     if (k && allKnownKeys.has(k)) keys.push(`[@${k}]`);
                 }
-                return keys.length > 0 ? keys.join('') : '';
+                return keys.length > 0 ? keys.join('') : m;
             });
             // Lists
             txt = txt.replace(/\[((?:\d+\s*,\s*)*\d+)\]/g, (m: string, list: string) => {
@@ -1082,13 +1082,13 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                     .map(s => parseInt(s, 10))
                     .map(n => numToKey.get(n))
                     .filter(k => !!k && allKnownKeys.has(k!)) as string[];
-                return keys.length > 0 ? keys.map(k => `[@${k}]`).join('') : '';
+                return keys.length > 0 ? keys.map(k => `[@${k}]`).join('') : m;
             });
             // Single
             txt = txt.replace(/\[(\d+)\]/g, (m: string, nStr: string) => {
                 const n = parseInt(nStr, 10);
                 const key = numToKey.get(n);
-                return key && allKnownKeys.has(key) ? `[@${key}]` : '';
+                return key && allKnownKeys.has(key) ? `[@${key}]` : m;
             });
         }
         // Remove any stray bibtex blocks leftover anywhere
@@ -1107,23 +1107,20 @@ const ReportCard: React.FC<{ sessionId: SessionId; messageId: string; status: an
                 const n = numberingMap.get(key)!;
                 return `[${n}]`;
             }
-            return '';
+            // preserve unknown tokens like [Note] and [ref]
+            return m;
         });
-        // Clean up unmatched citation-like leftovers (avoid touching markdown links)
+        // Clean up only clearly citation-like leftovers (avoid touching normal brackets and markdown links)
         let cleaned = replaced
-            // footnotes
+            // footnotes like [^1]
             .replace(/\[\^\d+\]/g, '')
-            // simple single-token cites like [@key] or [key]
-            .replace(/\[(?:@)?[A-Za-z][A-Za-z0-9_-]*\](?!\()/g, '')
-            // numeric lists/ranges remnants like [1,2] or [1-3]
-            .replace(/\[(?:\d+\s*(?:[–-]\s*\d+)?(?:\s*,\s*\d+)*)\](?!\()/g, '')
+            // dangling @-style cites like [@key] not followed by a link target
+            .replace(/\[@[A-Za-z][A-Za-z0-9_-]*\](?!\()/g, '')
             // multi-cite brackets like [@k1; @k2] or [@k1, @k2]
             .replace(/\[[^\]]*@[^\]]*[;,][^\]]*\](?!\()/g, '')
-            // URL/colon-like brackets e.g. [https://...], [doi:...], [url:...]
+            // URL-like or doi/arxiv bracket not followed by link target
             .replace(/\[\s*https?:\/\/[^\]]+\](?!\()/gi, '')
-            .replace(/\[\s*(?:doi:|arxiv:|url:)[^\]]+\](?!\()/gi, '')
-            // generic colon payloads not followed by link target
-            .replace(/\[[^\]]+:[^\]]+\](?!\()/g, '');
+            .replace(/\[\s*(?:doi:|arxiv:|url:)[^\]]+\](?!\()/gi, '');
         return { rendered: cleaned, numbering: numberingMap };
     }, [preprocessed.text, allKnownKeys]);
 
