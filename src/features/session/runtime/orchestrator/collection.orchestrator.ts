@@ -14,6 +14,8 @@ import { ArchiveManager } from '@/lib/archive/manager';
 const getRepo = () => ArchiveManager.getServices().sessionRepository;
 import { runtimeConfig } from '@/features/session/runtime/runtime-config';
 import { literatureDataAccess } from '@/features/literature/data-access';
+import { importanceService } from '@/features/literature/importance';
+import { setNodeImportanceScore, setMainlineNode } from '@/features/graph/utils/graph-utils';
 import { interpret, StateFrom } from 'xstate';
 import { collectionMachine } from './collection.machine';
 import { useSessionStore } from '../../data-access/session-store';
@@ -386,11 +388,96 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 try { const { toast } = require('sonner'); toast.message('当前图为空，跳过关系图构建'); } catch { /* noop */ }
                 return;
             }
+
+            // Phase 0: Calculate importance scores for all papers
+            const paperIds = papers.map(p => p.id);
+            let importanceScores: Map<string, number> = new Map();
+            try {
+                const scored = await importanceService.scoreForPaperIds(paperIds);
+                for (const item of scored) {
+                    importanceScores.set(item.paperId, item.score);
+                }
+                try { console.debug('[orch][collection] importance scores calculated', { count: scored.length }); } catch { /* noop */ }
+            } catch (err) {
+                try { console.warn('[orch][collection] failed to calculate importance scores', err); } catch { /* noop */ }
+            }
+
+            // Update nodes with importance scores in graph
+            try {
+                const useGraphStore = await loadGraphStoreSafely('BuildGraph:updateImportanceScores');
+                if (useGraphStore) {
+                    const gs = useGraphStore.getState();
+                    const curr = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
+                    const graphId = curr?.meta?.graphId;
+                    if (graphId) {
+                        for (const [paperId, score] of importanceScores.entries()) {
+                            try {
+                                const graph = gs.getGraphById(graphId);
+                                const node = graph?.nodes?.[paperId];
+                                if (node) {
+                                    const updatedNode = setNodeImportanceScore(node, score);
+                                    // addNode will overwrite existing node with same id
+                                    await gs.addNode(updatedNode, { graphId });
+                                }
+                            } catch { /* ignore individual node update errors */ }
+                        }
+                    }
+                }
+            } catch { /* ignore graph store errors */ }
+
+            // Fetch briefs with importance scores
+            const briefs = await paperMetadataExecutor.fetchBriefs(paperIds);
+            const briefsWithScores = briefs.map(b => ({
+                ...b,
+                importanceScore: importanceScores.get(b.id)
+            }));
+
+            // Phase 0.5: Select mainline papers
+            let mainlinePaperIds: string[] = [];
+            try {
+                await emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version: Date.now(), phase: 0, delta: '正在选择研究主线论文...\n' } as any });
+                const mainlineResult = await graphBuilderExecutor.thinkingPhase0Mainline(
+                    briefsWithScores,
+                    { onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version: Date.now(), phase: 0, delta: d } as any }) }
+                );
+                await getRepo().putArtifact(mainlineResult as Artifact);
+                mainlinePaperIds = mainlineResult.data.mainline;
+
+                // Update nodes with mainline flag in graph
+                try {
+                    const useGraphStore = await loadGraphStoreSafely('BuildGraph:updateMainlineFlags');
+                    if (useGraphStore) {
+                        const gs = useGraphStore.getState();
+                        const curr = (useSessionStore as any)?.getState?.().sessions?.get(sessionId);
+                        const graphId = curr?.meta?.graphId;
+                        if (graphId) {
+                            for (const paperId of mainlinePaperIds) {
+                                try {
+                                    const graph = gs.getGraphById(graphId);
+                                    const node = graph?.nodes?.[paperId];
+                                    if (node) {
+                                        const updatedNode = setMainlineNode(node, true);
+                                        // addNode will overwrite existing node with same id
+                                        await gs.addNode(updatedNode, { graphId });
+                                    }
+                                } catch { /* ignore individual node update errors */ }
+                            }
+                        }
+                    }
+                } catch { /* ignore graph store errors */ }
+
+                try { console.debug('[orch][collection] mainline selected', { count: mainlinePaperIds.length, ids: mainlinePaperIds }); } catch { /* noop */ }
+            } catch (err) {
+                try { console.warn('[orch][collection] failed to select mainline', err); } catch { /* noop */ }
+                // Fallback: use top papers by importance score
+                const sorted = briefsWithScores.sort((a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0));
+                mainlinePaperIds = sorted.slice(0, Math.min(5, sorted.length)).map(b => b.id);
+            }
+
             // Two-stage thinking with streaming UI
             const version = Date.now();
             await emit({ id: newId(), type: 'GraphThinkingStarted', ts: Date.now(), sessionId, payload: { version } as any });
             // Phase 1: semantic grouping & storyline
-            const briefs = await paperMetadataExecutor.fetchBriefs(papers.map(p => p.id));
             const p1 = await graphBuilderExecutor.thinkingPhase1(briefs, { onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 1, delta: d } as any }) });
             await getRepo().putArtifact(p1 as Artifact);
             // Phase 2: Title-based natural language relations with rationale/tags/evidence
@@ -399,7 +486,13 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
                 const intro = '\n\n（以下基于上一阶段的语义分群与主线，产出候选关系）\n';
                 await emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 2, delta: intro } as any });
             } catch { /* noop */ }
-            const p2 = await graphBuilderExecutor.thinkingPhase2TextTitles(briefs, { onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 2, delta: d } as any }) });
+            const p2 = await graphBuilderExecutor.thinkingPhase2TextTitles(
+                briefs,
+                {
+                    onDelta: (d) => emit({ id: newId(), type: 'GraphThinkingDelta', ts: Date.now(), sessionId, payload: { version, phase: 2, delta: d } as any }),
+                    mainlinePaperIds
+                }
+            );
             await getRepo().putArtifact(p2 as Artifact);
             await emit({ id: newId(), type: 'GraphThinkingCompleted', ts: Date.now(), sessionId, payload: { version, phase1ArtifactId: p1.id, phase2ArtifactId: p2.id } as any });
             // Backward compatibility event
@@ -422,7 +515,7 @@ if ((globalThis as any).__collectionOrchestratorRegisteredOnce !== true) {
             const edges = await graphBuilderExecutor.structureEdgesFromText(
                 p2.data,
                 idMap,
-                { titles, maxEdges: (runtimeConfig as any).GRAPH_JSONL_MAX_EDGES ?? 300 }
+                { titles, maxEdges: (runtimeConfig as any).GRAPH_JSONL_MAX_EDGES ?? 300, mainlinePaperIds }
             );
             await getRepo().putArtifact(edges as Artifact);
             await emit({ id: newId(), type: 'GraphEdgesStructured', ts: Date.now(), sessionId, payload: { edgeArtifactId: edges.id, size: edges.data.length } });
