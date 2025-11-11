@@ -111,3 +111,68 @@ export function isRelatedDashed(r: Relation): boolean {
 }
 
 
+// Node scaling configuration for mainline and importance-based sizing
+export interface NodeScalingConfig {
+    // Mainline node scaling: maps baseScale [0.55, 1.0] to [minMainlineScale, maxMainlineScale]
+    mainline: {
+        minScale: number;  // Minimum scale for mainline nodes (should be >= micro level 0.78)
+        maxScale: number;  // Maximum scale for mainline nodes
+    };
+    // Non-mainline node importance adjustment
+    importance: {
+        adjustmentRange: number;  // ±adjustmentRange percentage (e.g., 0.4 = ±40%)
+    };
+    // Base scale range (from nodeUi.scale)
+    baseScaleRange: {
+        min: number;  // nano: 0.55
+        max: number;  // full: 1.0
+    };
+}
+
+export const NODE_SCALING_CONFIG: NodeScalingConfig = {
+    mainline: {
+        minScale: 0.95,  // Increased from 0.78, ensuring mainline is always larger than non-mainline
+        maxScale: 1.5,   // Increased from 1.3, 50% larger than full scale
+    },
+    importance: {
+        adjustmentRange: 0.4,  // ±40% adjustment based on importance score
+    },
+    baseScaleRange: {
+        min: 0.65,  // Increased from 0.55, nano level
+        max: 1.0,   // full level
+    },
+};
+
+/**
+ * Calculate effective scale for a node based on base scale, mainline status, and importance score
+ * Ensures: non-mainline nodes always have scale <= mainline nodes
+ */
+export function calculateNodeScale(
+    baseScale: number,
+    isMainline: boolean,
+    importanceScore: number | undefined,
+    config: NodeScalingConfig = NODE_SCALING_CONFIG
+): number {
+    if (isMainline) {
+        // Mainline nodes: map baseScale [min, max] to [minMainlineScale, maxMainlineScale]
+        const { min, max } = config.baseScaleRange;
+        const { minScale, maxScale } = config.mainline;
+        const normalized = (baseScale - min) / (max - min); // 0 to 1
+        return minScale + normalized * (maxScale - minScale);
+    } else {
+        // Non-mainline nodes: adjust based on importance score
+        let adjustedScale = baseScale;
+
+        if (importanceScore !== undefined) {
+            // Map importance score [0, 1] to adjustment [-adjustmentRange, +adjustmentRange]
+            // 0.5 maps to 0 (no adjustment), 1.0 maps to +adjustmentRange, 0.0 maps to -adjustmentRange
+            const adjustment = (importanceScore - 0.5) * 2 * config.importance.adjustmentRange;
+            adjustedScale = baseScale * (1 + adjustment);
+        }
+
+        // Ensure non-mainline nodes never exceed mainline minimum scale
+        const maxAllowed = config.mainline.minScale;
+        return Math.min(adjustedScale, maxAllowed);
+    }
+}
+

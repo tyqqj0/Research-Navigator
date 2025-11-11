@@ -8,7 +8,8 @@ import { useGraphStore } from '@/features/graph/data-access/graph-store';
 import type { GraphDataSource, GraphSnapshot } from '@/features/graph/data-access';
 import { graphStoreDataSource } from '@/features/graph/data-access/graph-store';
 import type { PaperSummary } from '../paper-catalog';
-import { ALLOWED_RELATIONS, RELATION_LABELS, RELATION_COLORS, RELATION_CATEGORIES, RELATION_CATEGORY_LABELS, RELATION_CATEGORY_COLORS, getRelationCategory } from '@/features/graph/config/relations';
+import { ALLOWED_RELATIONS, RELATION_LABELS, RELATION_COLORS, RELATION_CATEGORIES, RELATION_CATEGORY_LABELS, RELATION_CATEGORY_COLORS, getRelationCategory, calculateNodeScale } from '@/features/graph/config/relations';
+import { isMainlineNode, getNodeImportanceScore } from '@/features/graph/utils/graph-utils';
 
 interface GraphCanvasProps {
     graphId: string;
@@ -221,6 +222,14 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
         if (ppy < 410) return { scale: 0.9, mode: 'compact' as const, handleSize: 8, showDate: true };
         return { scale: 1.0, mode: 'full' as const, handleSize: 10, showDate: true };
     }, [timeline.pxPerYear]);
+
+    // Helper function to calculate effective scale for a node
+    const getNodeEffectiveScale = useCallback((node: typeof nodes[0] | undefined): number => {
+        if (!node) return nodeUi.scale;
+        const isMainline = isMainlineNode(node);
+        const importanceScore = getNodeImportanceScore(node);
+        return calculateNodeScale(nodeUi.scale, isMainline, importanceScore);
+    }, [nodeUi.scale]);
 
     // density curve data for axis (minimal version)
     const axisDensity = useMemo(() => {
@@ -591,7 +600,10 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
         if (!containerRef.current) return;
         const p = nodePos[fromId];
         if (!p) return;
-        const half = NODE_HALF_HEIGHT * nodeUi.scale;
+        // Calculate effective scale for this node
+        const node = nodes.find(n => n.id === fromId);
+        const nodeScale = getNodeEffectiveScale(node);
+        const half = NODE_HALF_HEIGHT * nodeScale;
         const anchor: Pos = { x: p.x, y: p.y + (side === 'top' ? -half : half) };
         setLinking({ fromId, start: anchor, current: anchor });
     };
@@ -880,9 +892,15 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                         const p1 = nodePos[e.from];
                         const p2 = nodePos[e.to];
                         if (!p1 || !p2) return null;
-                        const half = NODE_HALF_HEIGHT * nodeUi.scale;
-                        const sx = p1.x, sy = p1.y + half;
-                        const tx = p2.x, ty = p2.y - half;
+                        // Calculate effective scales for both nodes
+                        const node1 = nodes.find(n => n.id === e.from);
+                        const node2 = nodes.find(n => n.id === e.to);
+                        const scale1 = getNodeEffectiveScale(node1);
+                        const scale2 = getNodeEffectiveScale(node2);
+                        const half1 = NODE_HALF_HEIGHT * scale1;
+                        const half2 = NODE_HALF_HEIGHT * scale2;
+                        const sx = p1.x, sy = p1.y + half1;
+                        const tx = p2.x, ty = p2.y - half2;
                         const my = (sy + ty) / 2;
                         const d = `M ${sx} ${sy} C ${sx} ${my} ${tx} ${my} ${tx} ${ty}`;
                         const active = selectedEdgeId === e.id;
@@ -952,11 +970,29 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                     const maxWords = nodeUi.mode === 'micro' ? 2 : (nodeUi.mode === 'compact' ? 4 : 8);
                     const shortTitle = words.slice(0, maxWords).join(' ');
                     const dateStr = summary?.publicationDate ? new Date(summary.publicationDate).toISOString().slice(0, 10) : (summary?.year ? String(summary.year) : '');
+
+                    // Calculate effective scale based on mainline status and importance
+                    const effectiveScale = getNodeEffectiveScale(n);
+                    const isMainline = isMainlineNode(n);
+
+                    // Determine border color: gold for mainline, default for others
+                    const getBorderColor = () => {
+                        if (selectedNodeId === n.id) return 'var(--color-primary)';
+                        if (isMainline) return '#D4AF37'; // Gold color for mainline nodes
+                        return 'var(--color-border-primary)';
+                    };
+
+                    // Determine background color: gold for mainline, default for others
+                    const getBackgroundColor = () => {
+                        if (isMainline) return '#FFD700'; // Gold background for mainline nodes (#FFD700 is a brighter gold)
+                        return 'var(--color-background-primary)';
+                    };
+
                     return (
                         <div
                             key={n.id}
                             className="absolute select-none"
-                            style={{ left: pos.x, top: pos.y, transform: `translate(-50%, -50%) scale(${nodeUi.scale})`, transition: 'transform 120ms ease' }}
+                            style={{ left: pos.x, top: pos.y, transform: `translate(-50%, -50%) scale(${effectiveScale})`, transition: 'transform 120ms ease' }}
                             onMouseDown={(e) => { onMouseDownNode(n.id, e); onNodeSelect?.(n.id); }}
                             onMouseUp={(e) => {
                                 // complete linking first
@@ -981,16 +1017,16 @@ export const GraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasProps>((p
                             }}
                         >
                             {nodeRenderer ? (
-                                nodeRenderer({ nodeId: n.id, title: nodeUi.mode === 'full' ? title : shortTitle, dateStr, scale: nodeUi.scale, selected: selectedNodeId === n.id })
+                                nodeRenderer({ nodeId: n.id, title: nodeUi.mode === 'full' ? title : shortTitle, dateStr, scale: effectiveScale, selected: selectedNodeId === n.id })
                             ) : (
                                 nodeUi.mode === 'nano' ? (
-                                    <div className={`px-2 py-1 rounded-full border text-[11px] font-semibold grid place-items-center`} style={{ borderColor: 'var(--color-border-primary)', color: 'var(--color-foreground)', backgroundColor: 'var(--color-background-primary)', minWidth: 28, fontSize: '17px' }}>
+                                    <div className={`px-2 py-1 rounded-full border text-[11px] font-semibold grid place-items-center`} style={{ borderColor: getBorderColor(), color: isMainline ? '#000' : 'var(--color-foreground)', backgroundColor: getBackgroundColor(), minWidth: 28, fontSize: '17px' }}>
                                         {words.slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('')}
                                     </div>
                                 ) : (
-                                    <div className={`px-3 py-2 rounded-md shadow border text-sm min-w-[140px] ${selectedNodeId === n.id ? 'ring-2' : ''} relative`} style={{ backgroundColor: 'var(--color-background-primary)', borderColor: selectedNodeId === n.id ? 'var(--color-primary)' : 'var(--color-border-primary)', boxShadow: selectedNodeId === n.id ? '0 0 0 2px var(--color-primary) inset' : undefined }}>
-                                        <div className="font-medium truncate max-w-[200px]">{nodeUi.mode === 'full' ? title : shortTitle}</div>
-                                        {nodeUi.showDate && (<div className="text-xs text-muted-foreground truncate">{dateStr}</div>)}
+                                    <div className={`px-3 py-2 rounded-md shadow border text-sm min-w-[140px] ${selectedNodeId === n.id ? 'ring-2' : ''} relative`} style={{ backgroundColor: getBackgroundColor(), borderColor: getBorderColor(), boxShadow: selectedNodeId === n.id ? '0 0 0 2px var(--color-primary) inset' : undefined }}>
+                                        <div className="font-medium truncate max-w-[200px]" style={{ color: isMainline ? '#000' : 'var(--color-foreground)' }}>{nodeUi.mode === 'full' ? title : shortTitle}</div>
+                                        {nodeUi.showDate && (<div className="text-xs truncate" style={{ color: isMainline ? '#333' : 'var(--color-muted-foreground)' }}>{dateStr}</div>)}
                                         {/* handles for linking (top/bottom) */}
                                         <div className="absolute left-1/2 -translate-x-1/2 -top-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: (handleBaseSize ?? nodeUi.handleSize), height: (handleBaseSize ?? nodeUi.handleSize), backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'top', e)} title="拖动以连线" />
                                         <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 rounded-full shadow cursor-crosshair hover:scale-110 transition-transform" style={{ width: (handleBaseSize ?? nodeUi.handleSize), height: (handleBaseSize ?? nodeUi.handleSize), backgroundColor: 'var(--color-primary)' }} onMouseDown={(e) => startLink(n.id, 'bottom', e)} title="拖动以连线" />
